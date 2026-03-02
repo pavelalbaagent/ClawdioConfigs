@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clawdio.local/contracts/n8n/workflow-result.schema.json",
+  "title": "N8N Workflow Result",
+  "type": "object",
+  "required": [
+    "workflow_id",
+    "run_id",
+    "status",
+    "next_action",
+    "summary"
+  ],
+  "properties": {
+    "workflow_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "needs_approval",
+        "deferred",
+        "failed"
+      ]
+    },
+    "next_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "wait_user",
+        "retry",
+        "manual_handoff",
+        "approve_write"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "writes_attempted": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "writes_blocked": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "latency_ms": {
+          "type": "number"
+        },
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimated_cost_usd": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

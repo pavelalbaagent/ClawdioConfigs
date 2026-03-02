@@ -1,29 +1,33 @@
 # Integrations Backlog and Priority
 
-## Tier 1: Start here
+Use this backlog together with [docs/20-integration-connection-structure.md](/Users/palba/Projects/Clawdio/docs/20-integration-connection-structure.md) and [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
 
-1. Gmail read/send with minimal scopes.
-2. Google Drive read/write for working documents.
-3. Personal task manager integration for reminders.
-4. Agent task manager integration for delegated work.
+## Tier 1: Baseline (lean_manual)
 
-## Tier 2: After core stability
+1. Gmail read/send with approval gate.
+2. Drive root-folder file operations.
+3. GitHub read/write (approval-gated writes).
+4. Personal task manager (single provider selected).
+5. Agent task manager (single provider selected).
+6. n8n webhook bridge.
 
-1. Calendar sync for deadlines and reminders.
-2. Notes/knowledge base integration.
-3. Lightweight dashboard for approvals and status.
+## Tier 2: Productivity upgrades
 
-## Tier 3: Optional or high-risk
+1. Calendar sync for planning and reminders.
+2. Better search provider for web browsing.
+3. Web dashboard for approvals and task visibility.
 
-1. LinkedIn integration with strict compliance review.
-2. Social posting tools with manual approval gates.
-3. Experimental automation connectors.
+## Tier 3: Optional/high-risk
+
+1. LinkedIn integration (manual-review mode first).
+2. Social publishing connectors.
+3. Additional automation hubs beyond n8n.
 
 ## Integration acceptance criteria
 
 1. Scope is documented and minimal.
-2. Revocation procedure exists.
-3. Logging and alerting are enabled.
-4. Fallback behavior is defined.
-5. Cost impact is estimated.
-
+2. Env/token requirements are tracked in `.env.example`.
+3. Revocation procedure exists.
+4. Logging and alerting are enabled.
+5. Fallback behavior is defined.
+6. Cost impact and default profile are documented.

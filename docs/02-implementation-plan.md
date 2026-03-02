@@ -37,11 +37,12 @@
 
 ## Phase 5: Integrations
 
-1. Enable Gmail and Drive with minimal scopes first.
-2. Add personal task manager integration.
-3. Add separate formal task manager for agent work queue.
-4. Add LinkedIn integration only if terms and auth method are compliant and stable.
-5. Exit criteria: each integration has explicit permissions and a rollback path.
+1. Choose profile in `config/integrations.yaml` (`lean_manual` first).
+2. Enable Gmail and Drive with minimal scopes first.
+3. Add GitHub, personal task manager, and agent task manager.
+4. Add n8n only for deterministic automation glue and approved write actions.
+5. Add LinkedIn only if terms and auth method are compliant and stable.
+6. Exit criteria: each integration has explicit permissions, env vars, and rollback path.
 
 ## Phase 6: Model routing and budget enforcement
 
@@ -53,9 +54,10 @@
 ## Phase 7: Sub-agent policy rollout
 
 1. Implement spawn rules from `docs/04-agent-ops-and-subagents.md`.
-2. Enforce TTL and result schema for all sub-agent runs.
-3. Keep high-cost tasks approval-gated.
-4. Exit criteria: no uncontrolled fan-out, no silent cost explosions.
+2. Apply session lifecycle controls from `config/session_policy.yaml`.
+3. Enforce TTL and result schema for all sub-agent runs.
+4. Keep high-cost tasks approval-gated.
+5. Exit criteria: no uncontrolled fan-out, no silent cost explosions.
 
 ## Phase 8: Validation and go-live
 
@@ -63,4 +65,3 @@
 2. Simulate API quota exhaustion and verify fallback behavior.
 3. Test Tailscale failure and recovery scripts.
 4. Exit criteria: pass checklist and cut over from old OpenClaw.
-

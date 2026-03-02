@@ -1,0 +1,43 @@
+session_lifecycle:
+  default_context_window_tokens: 10000
+  summarize_when_context_tokens_over: 8500
+  checkpoint_every_turns: 20
+  checkpoint_every_minutes: 45
+  idle_reset_minutes: 120
+  summarize_when:
+    - topic_switch_major
+    - before_subagent_spawn
+    - before_session_end
+    - repeated_rate_limit_errors
+  restart_when:
+    - integration_auth_changed
+    - repeated_tool_failures_over_3
+    - unresolved_error_loop
+  preserve_on_restart:
+    - current_objective
+    - open_tasks
+    - integration_state
+    - budget_state
+
+spawn_controls:
+  max_parallel_subagents: 2
+  ttl_minutes_default: 45
+  ttl_minutes_max: 180
+  checkpoint_before_spawn: true
+  collapse_results_into_summary: true
+  spawn_requires:
+    - objective
+    - allowed_tools
+    - lane
+    - output_schema
+    - stop_condition
+    - ttl_minutes
+
+handoff:
+  write_checkpoints_to: telemetry/session-checkpoints.ndjson
+  summary_template:
+    - objective
+    - key_context
+    - decisions
+    - blockers
+    - next_actions

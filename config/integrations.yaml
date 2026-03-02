@@ -1,31 +1,261 @@
+profiles:
+  active_profile: lean_manual
+  definitions:
+    lean_manual:
+      description: Minimal onboarding with manual approval before external side effects.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+        - personal_task_manager
+        - agent_task_manager
+        - n8n
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    standard_productive:
+      description: Daily-driver profile with calendar and digests enabled.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+        - personal_task_manager
+        - agent_task_manager
+        - n8n
+        - calendar
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    full_auto_candidate:
+      description: Highest automation profile. Enable only after stable observability.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+        - personal_task_manager
+        - agent_task_manager
+        - n8n
+        - calendar
+        - linkedin
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+
 integrations:
+  web_browsing:
+    enabled: true
+    execution_mode: manual_assist
+    provider: browser_plus_search_api
+    auth_type: api_key_optional
+    required_env: []
+    optional_env:
+      - OPENCLAW_SEARCH_API_KEY
+      - BRAVE_SEARCH_API_KEY
+      - SERPAPI_API_KEY
+    read_actions:
+      - search
+      - open_url
+      - extract_content
+    write_actions: []
+    cost_class: low
+
   gmail:
     enabled: true
+    execution_mode: semi_auto
+    provider: google_workspace
     auth_type: oauth
+    required_env:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_REFRESH_TOKEN
+      - GMAIL_USER_EMAIL
     scopes:
       - https://www.googleapis.com/auth/gmail.readonly
       - https://www.googleapis.com/auth/gmail.send
+    read_actions:
+      - read_threads
+      - classify_inbox
+    write_actions:
+      - draft_reply
+      - send_reply_with_approval
+    cost_class: low
 
   drive:
     enabled: true
+    execution_mode: semi_auto
+    provider: google_workspace
     auth_type: oauth
+    required_env:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_REFRESH_TOKEN
+      - GOOGLE_DRIVE_ROOT_FOLDER_ID
     scopes:
       - https://www.googleapis.com/auth/drive.file
+      - https://www.googleapis.com/auth/drive.metadata.readonly
+    read_actions:
+      - list_files
+      - read_file
+    write_actions:
+      - create_file
+      - update_file_with_approval
+    cost_class: low
+
+  github:
+    enabled: true
+    execution_mode: semi_auto
+    provider: github
+    auth_type: pat_or_app
+    required_env:
+      - GITHUB_TOKEN
+      - GITHUB_OWNER
+    optional_env:
+      - GITHUB_REPO
+    scopes:
+      - repo
+      - read:org
+      - workflow
+    read_actions:
+      - issues_read
+      - prs_read
+      - code_read
+    write_actions:
+      - create_issue
+      - comment_pr
+      - push_changes_with_approval
+    cost_class: low
 
   linkedin:
     enabled: false
-    mode: manual_review_only
-    notes: enable only after terms and auth approach are validated
+    execution_mode: manual_review_only
+    provider: linkedin
+    auth_type: oauth_or_browser_session
+    required_env: []
+    optional_env:
+      - LINKEDIN_CLIENT_ID
+      - LINKEDIN_CLIENT_SECRET
+      - LINKEDIN_REDIRECT_URI
+    notes: keep disabled until compliance and permitted automation path are validated
+    read_actions:
+      - profile_lookup_manual
+    write_actions: []
+    cost_class: low
+
+  calendar:
+    enabled: false
+    execution_mode: semi_auto
+    provider: google_calendar
+    auth_type: oauth
+    required_env:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_REFRESH_TOKEN
+      - GOOGLE_CALENDAR_ID
+    scopes:
+      - https://www.googleapis.com/auth/calendar
+    read_actions:
+      - read_events
+    write_actions:
+      - create_event_with_approval
+      - update_event_with_approval
+    cost_class: low
 
   personal_task_manager:
     enabled: true
-    provider: todoist_or_google_tasks
-    mode: reminders_and_owner_tasks
+    execution_mode: semi_auto
+    provider_priority:
+      - todoist
+      - google_tasks
+      - asana
+    auth_type: api_key_or_oauth
+    required_env:
+      - PERSONAL_TASK_PROVIDER
+    provider_env_requirements:
+      todoist:
+        - TODOIST_API_TOKEN
+      google_tasks:
+        - GOOGLE_CLIENT_ID
+        - GOOGLE_CLIENT_SECRET
+        - GOOGLE_REFRESH_TOKEN
+      asana:
+        - ASANA_PERSONAL_ACCESS_TOKEN
+        - ASANA_WORKSPACE_GID
+    optional_env:
+      - TODOIST_API_TOKEN
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_REFRESH_TOKEN
+      - ASANA_PERSONAL_ACCESS_TOKEN
+      - ASANA_WORKSPACE_GID
+    read_actions:
+      - list_personal_tasks
+    write_actions:
+      - create_personal_task
+      - complete_personal_task
+      - defer_personal_task
+    cost_class: low
 
   agent_task_manager:
     enabled: true
-    provider: kanban_or_issue_tracker
-    mode: structured_agent_work_queue
+    execution_mode: semi_auto
+    provider_priority:
+      - asana
+      - github_projects
+      - linear
+    auth_type: api_key_or_pat
+    required_env:
+      - AGENT_TASK_PROVIDER
+    provider_env_requirements:
+      asana:
+        - ASANA_PERSONAL_ACCESS_TOKEN
+        - ASANA_WORKSPACE_GID
+      github_projects:
+        - GITHUB_TOKEN
+        - GITHUB_OWNER
+      linear:
+        - LINEAR_API_KEY
+        - LINEAR_TEAM_ID
+    optional_env:
+      - ASANA_PERSONAL_ACCESS_TOKEN
+      - ASANA_WORKSPACE_GID
+      - GITHUB_TOKEN
+      - GITHUB_OWNER
+      - LINEAR_API_KEY
+      - LINEAR_TEAM_ID
+    read_actions:
+      - list_agent_tasks
+      - get_agent_task
+    write_actions:
+      - create_agent_task
+      - update_agent_task_status
+    cost_class: low
+
+  n8n:
+    enabled: true
+    execution_mode: semi_auto
+    provider: n8n
+    auth_type: api_key
+    required_env:
+      - N8N_BASE_URL
+      - N8N_API_KEY
+      - N8N_WEBHOOK_SECRET
+    optional_env:
+      - N8N_DEFAULT_WORKFLOW_ID
+    read_actions:
+      - list_workflows
+      - get_execution_status
+    write_actions:
+      - trigger_workflow_with_approval
+    cost_class: low
+    workflow_contracts_file: contracts/n8n/workflow-contracts.yaml
+    modules:
+      inbox_router: true
+      personal_reminders: true
+      agent_task_sync: true
+      news_digest: false
 
 tool_clis:
   codex_cli:
@@ -33,6 +263,9 @@ tool_clis:
     command: codex
     timeout_seconds: 300
     max_output_chars: 20000
+    required_env: []
+    optional_env:
+      - OPENAI_API_KEY
     approval_required_for:
       - L3_heavy
       - destructive_operation
@@ -42,11 +275,20 @@ tool_clis:
     command: gemini
     timeout_seconds: 300
     max_output_chars: 20000
+    required_env: []
+    optional_env:
+      - GEMINI_API_KEY
     approval_required_for:
       - destructive_operation
+
+integration_policy:
+  default_fail_mode: degrade_to_manual
+  require_explicit_approval_for_write_actions: true
+  max_auto_write_actions_per_hour: 8
+  healthcheck_interval_minutes: 15
 
 secrets:
   source: env_file
   env_file_path: /etc/openclaw/openclaw.env
+  env_template_path: .env.example
   rotate_days: 90
-

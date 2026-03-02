@@ -1,0 +1,128 @@
+version: 1
+updated_at: "2026-03-02"
+
+shared:
+  input_schema: contracts/n8n/webhook-envelope.schema.json
+  output_schema: contracts/n8n/workflow-result.schema.json
+  approval_channel: main
+  failure_channel: alerts
+  fallback_mode: manual_handoff
+
+workflows:
+  wf_inbox_router_v1:
+    enabled: true
+    module_toggle: inbox_router
+    trigger:
+      type: webhook
+      path: /openclaw/inbox
+      auth: n8n_webhook_secret
+    lane_policy:
+      default_lane: L0_no_model
+      escalation_lane: L1_low_cost
+      escalation_conditions:
+        - ambiguous_intent
+        - missing_required_fields
+    input_schema: contracts/n8n/webhook-envelope.schema.json
+    output_schema: contracts/n8n/workflow-result.schema.json
+    deterministic_steps:
+      - validate_signature
+      - normalize_event
+      - command_parse
+      - route_to_task_or_reminder
+    model_steps:
+      enabled: true
+      max_calls: 1
+      call_reason:
+        - rewrite_unclear_request
+    write_actions:
+      - create_personal_task
+      - create_agent_task
+      - create_reminder
+    approval_required_for:
+      - external_account_action
+      - destructive_operation
+
+  wf_personal_reminder_v1:
+    enabled: true
+    module_toggle: personal_reminders
+    trigger:
+      type: webhook
+      path: /openclaw/reminder
+      auth: n8n_webhook_secret
+    lane_policy:
+      default_lane: L0_no_model
+      escalation_lane: L1_low_cost
+      escalation_conditions:
+        - natural_language_time_parse_failed
+    input_schema: contracts/n8n/webhook-envelope.schema.json
+    output_schema: contracts/n8n/workflow-result.schema.json
+    deterministic_steps:
+      - parse_reminder_command
+      - schedule_reminder
+      - wait_for_reply
+      - handle_done_or_defer
+      - one_followup_after_1h_if_no_reply
+    model_steps:
+      enabled: false
+    write_actions:
+      - send_channel_message
+      - reschedule_reminder
+    approval_required_for: []
+
+  wf_agent_task_sync_v1:
+    enabled: true
+    module_toggle: agent_task_sync
+    trigger:
+      type: cron_and_webhook
+      cron: "*/15 * * * *"
+      path: /openclaw/agent-task-sync
+      auth: n8n_webhook_secret
+    lane_policy:
+      default_lane: L0_no_model
+      escalation_lane: L1_low_cost
+      escalation_conditions:
+        - status_mapping_failed
+    input_schema: contracts/n8n/webhook-envelope.schema.json
+    output_schema: contracts/n8n/workflow-result.schema.json
+    deterministic_steps:
+      - read_task_manager_updates
+      - map_external_status_to_internal_status
+      - update_agent_task_store
+      - emit_digest_change_event
+    model_steps:
+      enabled: false
+    write_actions:
+      - update_agent_task_status
+      - post_digest_update
+    approval_required_for:
+      - data_deletion
+
+  wf_news_digest_v1:
+    enabled: false
+    module_toggle: news_digest
+    trigger:
+      type: cron
+      cron: "0 18 * * *"
+      auth: n8n_internal_only
+    lane_policy:
+      default_lane: L1_low_cost
+      escalation_lane: L2_balanced
+      escalation_conditions:
+        - high_noise_input
+        - source_conflict
+    input_schema: contracts/n8n/webhook-envelope.schema.json
+    output_schema: contracts/n8n/workflow-result.schema.json
+    deterministic_steps:
+      - fetch_watchlist_sources
+      - deduplicate_items
+      - classify_by_topic
+    model_steps:
+      enabled: true
+      max_calls: 3
+      call_reason:
+        - summarize_daily_brief
+    write_actions:
+      - create_drive_digest_file
+      - send_digest_message
+    approval_required_for:
+      - external_post

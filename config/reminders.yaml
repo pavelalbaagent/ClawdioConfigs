@@ -1,0 +1,24 @@
+reminders:
+  enabled: true
+  default_timezone: America/Guayaquil
+  followup_interval_minutes: 60
+  max_auto_followups: 1
+  repeat_followups_until_response: false
+  auto_followup_mode: one_time_deferral
+  require_time_confirmation: true
+
+commands:
+  create_pattern: "remind me <message> at <time>"
+  done_keywords:
+    - done
+  defer_pattern: "defer until <time>"
+
+states:
+  - pending
+  - awaiting_reply
+  - done
+  - cancelled
+
+storage:
+  backend: json
+  state_file: /var/lib/openclaw/reminders-state.json

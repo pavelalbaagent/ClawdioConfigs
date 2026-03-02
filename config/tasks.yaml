@@ -1,6 +1,11 @@
 personal_tasks:
   enabled: true
-  system: todoist_or_google_tasks
+  system: provider_from_env
+  provider_env_key: PERSONAL_TASK_PROVIDER
+  supported_providers:
+    - todoist
+    - google_tasks
+    - asana
   capture_channel: telegram
   reminder_channel: telegram
   digest_time: "20:30"
@@ -11,7 +16,12 @@ personal_tasks:
 
 agent_tasks:
   enabled: true
-  system: kanban_or_issue_tracker
+  system: provider_from_env
+  provider_env_key: AGENT_TASK_PROVIDER
+  supported_providers:
+    - asana
+    - github_projects
+    - linear
   statuses:
     - new
     - planned
@@ -30,4 +40,3 @@ governance:
   agent_prefix: "a:"
   auto_archive_done_after_days: 14
   escalate_blocked_after_hours: 24
-

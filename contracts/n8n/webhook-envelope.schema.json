@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clawdio.local/contracts/n8n/webhook-envelope.schema.json",
+  "title": "N8N Webhook Envelope",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "source",
+    "space",
+    "actor",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "telegram",
+        "web_dashboard",
+        "gmail_inbox",
+        "n8n_internal",
+        "cron"
+      ]
+    },
+    "space": {
+      "type": "string",
+      "enum": [
+        "main",
+        "tasks",
+        "notes",
+        "projects",
+        "research",
+        "tools",
+        "config",
+        "news",
+        "alerts"
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
