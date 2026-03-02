@@ -1,0 +1,74 @@
+# Derived from clawdio-backups/openclaw.json on 2026-03-02.
+# Sanitized: no tokens, no secrets, no direct credentials.
+
+meta:
+  source_repo: pavelalbaagent/clawdio-backups
+  source_file: openclaw.json
+  derived_at: 2026-03-02
+
+agents:
+  default_primary_model: openai-codex/gpt-5.1-codex-mini
+  fallback_models:
+    - google/gemini-3-flash-preview
+    - anthropic/claude-sonnet-4-6
+  compaction_mode: safeguard
+  max_concurrent: 4
+  subagents_max_concurrent: 8
+
+gateway:
+  mode: local
+  bind: loopback
+  port: 18789
+  tailscale_mode: funnel
+  nodes_count: 1
+
+channels:
+  whatsapp:
+    enabled: true
+    dm_policy: allowlist
+    group_policy: allowlist
+    self_chat_mode: true
+    allowed_senders_count: 1
+    allowed_groups_count: 1
+    media_max_mb: 50
+  slack:
+    enabled: true
+    mode: socket
+    dm_policy: open
+    group_policy: open
+    channels_count: 18
+    streaming: off
+
+hooks:
+  enabled: true
+  path: /hooks
+  default_session_key: "hook:ingress"
+  presets:
+    - gmail
+  gmail:
+    listener_bind: 127.0.0.1
+    listener_port: 8788
+    tailscale_mode: funnel
+    tailscale_path: /gmail-pubsub
+    include_body: true
+    max_bytes: 20000
+    renew_every_minutes: 720
+    model: quick-primary
+    thinking: off
+
+commands:
+  native: auto
+  native_skills: auto
+  restart: true
+  owner_display: raw
+
+messages:
+  ack_reaction_scope: group-mentions
+
+session:
+  dm_scope: main
+
+tools:
+  sessions_visibility: all
+  agent_to_agent_enabled: true
+

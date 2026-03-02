@@ -1,0 +1,33 @@
+project:
+  name: openclaw-v2
+  environment: production
+
+owner:
+  name: Pavel
+  timezone: America/Guayaquil
+  locale: en-US
+
+communication:
+  default_language: en
+  tone: direct_pragmatic
+  verbosity: concise
+  require_confirmation_for:
+    - external_post
+    - destructive_action
+    - credential_scope_change
+
+runtime:
+  deploy_mode: vps_native
+  base_dir: /opt/openclaw
+  logs_dir: /var/log/openclaw
+  data_dir: /var/lib/openclaw
+
+limits:
+  request_timeout_seconds: 120
+  max_parallel_tasks: 3
+
+budgets:
+  daily_usd_cap: 5.0
+  monthly_usd_cap: 60.0
+  hard_stop_on_cap: true
+

@@ -1,0 +1,33 @@
+personal_tasks:
+  enabled: true
+  system: todoist_or_google_tasks
+  capture_channel: telegram
+  reminder_channel: telegram
+  digest_time: "20:30"
+  required_fields:
+    - title
+    - due_date
+    - priority
+
+agent_tasks:
+  enabled: true
+  system: kanban_or_issue_tracker
+  statuses:
+    - new
+    - planned
+    - running
+    - blocked
+    - done
+  required_fields:
+    - task_id
+    - objective
+    - owner_agent
+    - expected_output
+    - due_date
+
+governance:
+  personal_prefix: "p:"
+  agent_prefix: "a:"
+  auto_archive_done_after_days: 14
+  escalate_blocked_after_hours: 24
+

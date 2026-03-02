@@ -1,0 +1,27 @@
+network:
+  ssh_mode: tailscale_only
+  allow_public_ports: []
+  break_glass_script_dir: ~/scripts
+
+host:
+  run_as_non_root_user: true
+  auto_updates_enabled: true
+  firewall: ufw
+
+tool_execution:
+  allow_direct_shell: false
+  wrappers_required: true
+  enforce_timeout_seconds: 300
+  max_output_chars: 20000
+
+secrets:
+  committed_to_git: false
+  secret_source: /etc/openclaw/openclaw.env
+  rotate_every_days: 90
+
+audit:
+  enabled: true
+  log_file: /var/log/openclaw/audit.log
+  retention_days: 30
+  redact_sensitive_values: true
+

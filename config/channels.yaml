@@ -1,0 +1,26 @@
+channels:
+  primary_human_channel: telegram
+  secondary_human_channel: web_dashboard
+  enabled:
+    - telegram
+    - web_dashboard
+    - gmail_inbox
+  disabled:
+    - whatsapp
+
+notifications:
+  reminders:
+    enabled: true
+    channel: telegram
+    daily_digest_time: "20:30"
+  incidents:
+    enabled: true
+    channel: telegram
+
+commands:
+  status: status
+  budget: budget
+  add_task: add-task
+  run_agent_task: run-agent-task
+  approve: approve
+

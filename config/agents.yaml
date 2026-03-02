@@ -1,0 +1,50 @@
+agents:
+  coordinator:
+    enabled: true
+    default_lane: L1_low_cost
+    can_spawn_subagents: true
+    allowed_tools:
+      - task_router
+      - model_router
+      - integration_router
+
+  researcher:
+    enabled: true
+    default_lane: L1_low_cost
+    allowed_tools:
+      - web_retrieval
+      - summarizer
+
+  builder:
+    enabled: true
+    default_lane: L2_balanced
+    allowed_tools:
+      - codex_cli
+      - gemini_cli
+      - file_ops
+
+  ops_guard:
+    enabled: true
+    default_lane: L1_low_cost
+    allowed_tools:
+      - service_health
+      - alerting
+      - logs_reader
+
+spawn_policy:
+  max_active_subagents: 2
+  default_ttl_minutes: 45
+  spawn_when:
+    - task_estimate_over_30_minutes
+    - specialized_tooling_required
+    - isolation_required
+  never_spawn_when:
+    - quick_edit
+    - single_prompt_summary
+    - simple_status_query
+
+approval_required:
+  - L3_heavy
+  - external_account_action
+  - data_deletion
+

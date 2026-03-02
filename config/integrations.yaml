@@ -1,0 +1,52 @@
+integrations:
+  gmail:
+    enabled: true
+    auth_type: oauth
+    scopes:
+      - https://www.googleapis.com/auth/gmail.readonly
+      - https://www.googleapis.com/auth/gmail.send
+
+  drive:
+    enabled: true
+    auth_type: oauth
+    scopes:
+      - https://www.googleapis.com/auth/drive.file
+
+  linkedin:
+    enabled: false
+    mode: manual_review_only
+    notes: enable only after terms and auth approach are validated
+
+  personal_task_manager:
+    enabled: true
+    provider: todoist_or_google_tasks
+    mode: reminders_and_owner_tasks
+
+  agent_task_manager:
+    enabled: true
+    provider: kanban_or_issue_tracker
+    mode: structured_agent_work_queue
+
+tool_clis:
+  codex_cli:
+    enabled: true
+    command: codex
+    timeout_seconds: 300
+    max_output_chars: 20000
+    approval_required_for:
+      - L3_heavy
+      - destructive_operation
+
+  gemini_cli:
+    enabled: true
+    command: gemini
+    timeout_seconds: 300
+    max_output_chars: 20000
+    approval_required_for:
+      - destructive_operation
+
+secrets:
+  source: env_file
+  env_file_path: /etc/openclaw/openclaw.env
+  rotate_days: 90
+
