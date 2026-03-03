@@ -1,0 +1,360 @@
+version: 1
+owner: pavel
+updated_at_utc: '2026-02-28T13:05:00Z'
+report:
+  cadence:
+  - 07:00
+  - 1140
+  timezone: America/Guayaquil
+  sections:
+  - id: changes_that_matter
+    title: This changes what we do or how we do it
+  - id: important_insights
+    title: Important insights, noteworthy news
+  - id: save_for_reference
+    title: Save these videos/articles for future reference in X category
+  - id: watch_today
+    title: Watch this video(s) today
+  - id: future_project_ideas
+    title: Future project ideas
+categories:
+- agent-ops
+- model-routing-cost
+- security-hardening
+- workflow-automation
+- tools-releases
+- research-breakthroughs
+- project-ideas
+youtube:
+- url: https://www.youtube.com/channel/UCawZsQWqfGSbCI5yjkdVkTA
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  - model-routing-cost
+  channel_id: UCawZsQWqfGSbCI5yjkdVkTA
+  source_url: https://www.youtube.com/@matthew_berman
+  uploads_playlist_id: UUawZsQWqfGSbCI5yjkdVkTA
+- url: https://www.youtube.com/channel/UCYwLV1gDwzGbg7jXQ52bVnQ
+  priority: medium
+  categories:
+  - tools-releases
+  - project-ideas
+  channel_id: UCYwLV1gDwzGbg7jXQ52bVnQ
+  source_url: https://www.youtube.com/@UniverseofAIz
+  uploads_playlist_id: UUYwLV1gDwzGbg7jXQ52bVnQ
+- url: https://www.youtube.com/channel/UChpleBmo18P08aKCIgti38g
+  priority: medium
+  categories:
+  - workflow-automation
+  - project-ideas
+  channel_id: UChpleBmo18P08aKCIgti38g
+  source_url: https://www.youtube.com/@mreflow
+  uploads_playlist_id: UUhpleBmo18P08aKCIgti38g
+- url: https://www.youtube.com/channel/UC4JX40jDee_tINbkjycV4Sg
+  priority: high
+  categories:
+  - agent-ops
+  - security-hardening
+  - workflow-automation
+  channel_id: UC4JX40jDee_tINbkjycV4Sg
+  source_url: https://www.youtube.com/@TechWithTim
+  uploads_playlist_id: UU4JX40jDee_tINbkjycV4Sg
+- url: https://www.youtube.com/channel/UC2WmuBuFq6gL08QYG-JjXKw
+  priority: medium
+  categories:
+  - tools-releases
+  - project-ideas
+  channel_id: UC2WmuBuFq6gL08QYG-JjXKw
+  source_url: https://www.youtube.com/@intheworldofai
+  uploads_playlist_id: UU2WmuBuFq6gL08QYG-JjXKw
+- url: https://www.youtube.com/channel/UCwSozl89jl2zUDzQ4jGJD3g
+  priority: medium
+  categories:
+  - workflow-automation
+  - project-ideas
+  channel_id: UCwSozl89jl2zUDzQ4jGJD3g
+  source_url: https://www.youtube.com/@SkillLeapAI
+  uploads_playlist_id: UUwSozl89jl2zUDzQ4jGJD3g
+- url: https://www.youtube.com/channel/UCSxPE9PHHxQUEt6ajGmQyMA
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  channel_id: UCSxPE9PHHxQUEt6ajGmQyMA
+  source_url: https://www.youtube.com/@briancasel
+  uploads_playlist_id: UUSxPE9PHHxQUEt6ajGmQyMA
+- url: https://www.youtube.com/channel/UC_RovKmk0OCbuZjA8f08opw
+  priority: medium
+  categories:
+  - tools-releases
+  channel_id: UC_RovKmk0OCbuZjA8f08opw
+  source_url: https://www.youtube.com/@futurepedia_io
+  uploads_playlist_id: UU_RovKmk0OCbuZjA8f08opw
+- url: https://www.youtube.com/channel/UCsBjURrPoezykLs9EqgamOA
+  priority: medium
+  categories:
+  - tools-releases
+  - workflow-automation
+  channel_id: UCsBjURrPoezykLs9EqgamOA
+  source_url: https://www.youtube.com/@Fireship
+  uploads_playlist_id: UUsBjURrPoezykLs9EqgamOA
+- url: https://www.youtube.com/channel/UC8ENHE5xdFSwx71u3fDH5Xw
+  priority: medium
+  categories:
+  - project-ideas
+  - workflow-automation
+  channel_id: UC8ENHE5xdFSwx71u3fDH5Xw
+  source_url: https://www.youtube.com/@ThePrimeagen
+  uploads_playlist_id: UU8ENHE5xdFSwx71u3fDH5Xw
+- url: https://www.youtube.com/channel/UCv83tO5cePwHMt1952IVVHw
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  channel_id: UCv83tO5cePwHMt1952IVVHw
+  source_url: https://www.youtube.com/@jamesbriggs
+  uploads_playlist_id: UUv83tO5cePwHMt1952IVVHw
+- url: https://www.youtube.com/channel/UCHXa4OpASJEwrHrLeIzw7Yg
+  priority: medium
+  categories:
+  - workflow-automation
+  - project-ideas
+  channel_id: UCHXa4OpASJEwrHrLeIzw7Yg
+  source_url: https://www.youtube.com/@NicholasRenotte
+  uploads_playlist_id: UUHXa4OpASJEwrHrLeIzw7Yg
+- url: https://www.youtube.com/channel/UCBp3w4DCEC64FZr4k9ROxig
+  priority: medium
+  categories:
+  - research-breakthroughs
+  - tools-releases
+  channel_id: UCBp3w4DCEC64FZr4k9ROxig
+  source_url: https://www.youtube.com/@WeightsBiases
+  uploads_playlist_id: UUBp3w4DCEC64FZr4k9ROxig
+- url: https://www.youtube.com/channel/UCL54Kz1WSxe1ZY9BahF7bsw
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  channel_id: UCL54Kz1WSxe1ZY9BahF7bsw
+  source_url: https://www.youtube.com/@LangChainAI
+  uploads_playlist_id: UUL54Kz1WSxe1ZY9BahF7bsw
+- url: https://www.youtube.com/channel/UCeRjipR4_SsCddq9VZ2AeKg
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  channel_id: UCeRjipR4_SsCddq9VZ2AeKg
+  source_url: https://www.youtube.com/@LlamaIndex
+  uploads_playlist_id: UUeRjipR4_SsCddq9VZ2AeKg
+- url: https://www.youtube.com/channel/UCZHmQk67mSJgfCCTn7xBfew
+  priority: medium
+  categories:
+  - research-breakthroughs
+  channel_id: UCZHmQk67mSJgfCCTn7xBfew
+  source_url: https://www.youtube.com/@YannicKilcher
+  uploads_playlist_id: UUZHmQk67mSJgfCCTn7xBfew
+- url: https://www.youtube.com/channel/UCbfYPyITQ-7l4upoX8nvctg
+  priority: medium
+  categories:
+  - research-breakthroughs
+  channel_id: UCbfYPyITQ-7l4upoX8nvctg
+  source_url: https://www.youtube.com/@TwoMinutePapers
+  uploads_playlist_id: UUbfYPyITQ-7l4upoX8nvctg
+- url: https://www.youtube.com/channel/UCYO_jab_esuFRV4b17AJtAw
+  priority: low
+  categories:
+  - research-breakthroughs
+  channel_id: UCYO_jab_esuFRV4b17AJtAw
+  source_url: https://www.youtube.com/@3blue1brown
+  uploads_playlist_id: UUYO_jab_esuFRV4b17AJtAw
+- url: https://www.youtube.com/channel/UC9cn0TuPq4dnbTY-CBsm8XA
+  priority: medium
+  categories:
+  - tools-releases
+  - project-ideas
+  channel_id: UC9cn0TuPq4dnbTY-CBsm8XA
+  source_url: https://www.youtube.com/@a16z
+  uploads_playlist_id: UU9cn0TuPq4dnbTY-CBsm8XA
+- url: https://www.youtube.com/channel/UCcefcZRL2oaA_uBNeo5UOWg
+  priority: medium
+  categories:
+  - project-ideas
+  channel_id: UCcefcZRL2oaA_uBNeo5UOWg
+  source_url: https://www.youtube.com/@ycombinator
+  uploads_playlist_id: UUcefcZRL2oaA_uBNeo5UOWg
+- url: https://www.youtube.com/channel/UCaAx1xeTgF3rs4rBPDq6-Kw
+  priority: low
+  categories:
+  - workflow-automation
+  channel_id: UCaAx1xeTgF3rs4rBPDq6-Kw
+- url: https://www.youtube.com/channel/UCWI-ohtRu8eEeDj93hmUsUQ
+  priority: medium
+  categories:
+  - workflow-automation
+  - project-ideas
+  channel_id: UCWI-ohtRu8eEeDj93hmUsUQ
+  source_url: https://www.youtube.com/@CodingwithLewis
+  uploads_playlist_id: UUWI-ohtRu8eEeDj93hmUsUQ
+- url: https://www.youtube.com/channel/UCCfqyGl3nq_V0bo64CjZh8g
+  priority: medium
+  categories:
+  - security-hardening
+  - workflow-automation
+  channel_id: UCCfqyGl3nq_V0bo64CjZh8g
+- url: https://www.youtube.com/channel/UCbRP3c757lWg9M-U7TyEkXA
+  priority: medium
+  categories:
+  - tools-releases
+  - project-ideas
+  channel_id: UCbRP3c757lWg9M-U7TyEkXA
+blogs:
+- url: https://openai.com/news/rss.xml
+  priority: high
+  categories:
+  - tools-releases
+  - model-routing-cost
+  source_url: https://openai.com/news/
+- url: https://www.anthropic.com/news/rss.xml
+  priority: high
+  categories:
+  - tools-releases
+  - model-routing-cost
+  source_url: https://www.anthropic.com/news
+- url: https://deepmind.google/discover/blog/rss.xml
+  priority: high
+  categories:
+  - research-breakthroughs
+  source_url: https://deepmind.google/discover/blog/
+- url: https://blog.google/technology/ai/rss/
+  priority: medium
+  categories:
+  - tools-releases
+  source_url: https://blog.google/technology/ai/
+- url: https://huggingface.co/blog/feed.xml
+  priority: medium
+  categories:
+  - tools-releases
+  - research-breakthroughs
+  source_url: https://huggingface.co/blog
+- url: https://simonwillison.net/atom/everything/
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  source_url: https://simonwillison.net/
+- url: https://www.latent.space/rss/
+  priority: medium
+  categories:
+  - research-breakthroughs
+  - project-ideas
+  source_url: https://www.latent.space/
+- url: https://www.bensbites.com/rss.xml
+  priority: low
+  categories:
+  - tools-releases
+  source_url: https://www.bensbites.com/
+- url: https://www.deeplearning.ai/the-batch/feed/
+  priority: medium
+  categories:
+  - research-breakthroughs
+  source_url: https://www.deeplearning.ai/the-batch/
+- url: https://pub.towardsai.net/feed
+  priority: low
+  categories:
+  - project-ideas
+  source_url: https://pub.towardsai.net/
+x_users: []
+storage:
+  root: /home/pavel/.openclaw/workspace/intel
+  keep_days_raw: 30
+  keep_days_reports: 180
+ranking:
+  weights:
+    priority: 0.45
+    novelty: 0.25
+    strategic_impact: 0.3
+  watch_today_max_items: 3
+  save_for_reference_max_items: 5
+x_users_disabled:
+- handle: '@OpenAI'
+  priority: high
+  categories:
+  - tools-releases
+  - model-routing-cost
+  enabled: false
+- handle: '@AnthropicAI'
+  priority: high
+  categories:
+  - tools-releases
+  - model-routing-cost
+  enabled: false
+- handle: '@GoogleDeepMind'
+  priority: high
+  categories:
+  - research-breakthroughs
+  enabled: false
+- handle: '@karpathy'
+  priority: high
+  categories:
+  - research-breakthroughs
+  - project-ideas
+  enabled: false
+- handle: '@sama'
+  priority: medium
+  categories:
+  - tools-releases
+  enabled: false
+- handle: '@gdb'
+  priority: medium
+  categories:
+  - tools-releases
+  enabled: false
+- handle: '@Yampeleg'
+  priority: medium
+  categories:
+  - tools-releases
+  enabled: false
+- handle: '@hwchase17'
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  enabled: false
+- handle: '@jeremyphoward'
+  priority: medium
+  categories:
+  - research-breakthroughs
+  enabled: false
+- handle: '@swyx'
+  priority: medium
+  categories:
+  - project-ideas
+  enabled: false
+- handle: '@fchollet'
+  priority: medium
+  categories:
+  - research-breakthroughs
+  enabled: false
+- handle: '@rasbt'
+  priority: medium
+  categories:
+  - research-breakthroughs
+  enabled: false
+- handle: '@Teknium1'
+  priority: low
+  categories:
+  - tools-releases
+  enabled: false
+- handle: '@simonw'
+  priority: high
+  categories:
+  - agent-ops
+  - workflow-automation
+  enabled: false
+- handle: '@TheTuringPost'
+  priority: low
+  categories:
+  - tools-releases
+  - research-breakthroughs
+  enabled: false

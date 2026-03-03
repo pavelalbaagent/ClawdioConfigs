@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalInboundEvent",
+  "type": "object",
+  "required": [
+    "platform",
+    "channel_id",
+    "user_id",
+    "message_id",
+    "text",
+    "ts_utc"
+  ],
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": ["slack", "telegram", "whatsapp", "discord", "email", "web"]
+    },
+    "channel_id": { "type": "string" },
+    "user_id": { "type": "string" },
+    "message_id": { "type": "string" },
+    "thread_id": { "type": ["string", "null"] },
+    "text": { "type": "string" },
+    "ts_utc": { "type": "string", "format": "date-time" },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "url"],
+        "properties": {
+          "kind": { "type": "string" },
+          "url": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

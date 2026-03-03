@@ -1,0 +1,54 @@
+baseline:
+  required_files:
+    - SOUL.md
+    - USER.md
+    - MEMORY.md
+    - SESSION.md
+    - TODO.md
+    - HEARTBEAT.md
+    - memory/README.md
+    - memory/TEMPLATE.md
+  required_headings:
+    SOUL.md:
+      - Identity
+      - Mission
+      - Operating Principles
+      - Autonomy Boundaries
+      - Model Discipline
+    USER.md:
+      - Snapshot
+      - Communication Preferences
+      - Decision Preferences
+      - Routine and Time Constraints
+      - Domains and Interests
+      - Do Not Do
+    MEMORY.md:
+      - Stable Facts
+      - Strategic Goals
+      - Durable Preferences
+      - Active Constraints
+      - Open Loops
+      - Lessons Worth Keeping
+    SESSION.md:
+      - Current Objective
+      - Context Budget
+      - Working Notes
+      - Decisions This Session
+      - Next Handoff
+    TODO.md:
+      - Personal Tasks
+      - Agent Tasks
+      - Waiting / Blocked
+      - Done Recently
+    HEARTBEAT.md:
+      - Purpose
+      - Check Cadence
+      - Checklist
+      - Quiet Hours
+  max_lines:
+    SOUL.md: 120
+    USER.md: 160
+    MEMORY.md: 220
+    SESSION.md: 140
+    TODO.md: 180
+    HEARTBEAT.md: 120

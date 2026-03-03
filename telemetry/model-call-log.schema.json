@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelCallLogEntry",
+  "type": "object",
+  "required": [
+    "ts",
+    "task_id",
+    "lane",
+    "provider",
+    "model",
+    "prompt_tokens",
+    "completion_tokens",
+    "latency_ms",
+    "status"
+  ],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "task_id": { "type": "string" },
+    "lane": { "type": "string" },
+    "provider": { "type": "string" },
+    "model": { "type": "string" },
+    "prompt_tokens": { "type": "integer", "minimum": 0 },
+    "completion_tokens": { "type": "integer", "minimum": 0 },
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "status": { "type": "string", "enum": ["ok", "error", "fallback"] },
+    "fallback_reason": { "type": "string" },
+    "error_code": { "type": "string" },
+    "estimated_cost_usd": { "type": "number", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

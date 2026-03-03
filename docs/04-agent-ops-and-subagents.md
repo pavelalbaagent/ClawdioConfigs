@@ -25,6 +25,9 @@
 2. Spawn when task requires isolated context or specialized toolchain.
 3. Do not spawn for quick edits, small summaries, or single-call operations.
 4. Every sub-agent must include objective, allowed tools, max runtime, output schema, and stop conditions.
+5. Coding, debugging, and deep investigation should default to sub-agent execution.
+6. Before spawning, announce in one line which sub-agent role and model lane will be used.
+7. On failure, report failure reason and fallback path in one line.
 
 ## Dedicated sub-agents worth keeping always-on
 
@@ -38,6 +41,12 @@
 2. Human approval is required for external posting or account actions.
 3. Human approval is required for credential scope changes.
 4. Human approval is required for destructive operations.
+
+## Delegation Message Format
+
+1. Spawn notice: `Delegating to <role> on <lane> for <objective>.`
+2. Completion notice: `Sub-agent completed <objective>. Key result: <result>.`
+3. Failure notice: `Sub-agent failed <objective>. Cause: <cause>. Next: <fallback>.`
 
 ## Communication policy
 

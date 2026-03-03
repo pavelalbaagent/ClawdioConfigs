@@ -1,0 +1,23 @@
+# Install with:
+#   sudo visudo -f /etc/sudoers.d/openclaw-ops
+# Then paste this content and save.
+
+# Host user that should be allowed limited ops commands
+User_Alias OPENCLAW = pavel
+
+# Narrow command allowlist
+Cmnd_Alias OPENCLAW_OPS = \
+  /usr/local/bin/openclaw gateway status, \
+  /usr/local/bin/openclaw gateway restart, \
+  /bin/systemctl status openclaw-gateway, \
+  /bin/systemctl restart openclaw-gateway, \
+  /bin/journalctl -u openclaw-gateway -n 200 --no-pager, \
+  /usr/bin/docker ps, \
+  /usr/bin/docker logs --tail 200 openclaw-gateway, \
+  /usr/bin/docker restart openclaw-gateway
+
+OPENCLAW ALL=(root) NOPASSWD: OPENCLAW_OPS
+
+# Safety defaults
+Defaults:OPENCLAW !requiretty
+Defaults:OPENCLAW secure_path="/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin"

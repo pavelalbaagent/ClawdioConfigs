@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+python3 scripts/validate_configs.py --config-dir config
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM || true)
+if [[ -n "$staged_files" ]]; then
+  # shellcheck disable=SC2086
+  python3 scripts/scan_secrets.py $staged_files
+fi
+
+echo "pre-commit checks passed"

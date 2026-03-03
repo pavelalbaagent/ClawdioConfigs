@@ -1,0 +1,3 @@
+{"ts":"2026-03-02T10:00:00Z","task_id":"t-001","lane":"L1_low_cost","provider":"google","model":"gemini_free_tier","prompt_tokens":1200,"completion_tokens":320,"latency_ms":1900,"status":"ok","estimated_cost_usd":0.0}
+{"ts":"2026-03-02T10:05:00Z","task_id":"t-002","lane":"L2_balanced","provider":"openai","model":"balanced_paid_model","prompt_tokens":2600,"completion_tokens":700,"latency_ms":2400,"status":"fallback","fallback_reason":"google_rate_limit","estimated_cost_usd":0.08}
+{"ts":"2026-03-02T10:07:00Z","task_id":"t-003","lane":"L3_heavy","provider":"openai","model":"codex_or_gemini_advanced","prompt_tokens":6400,"completion_tokens":1900,"latency_ms":5200,"status":"ok","estimated_cost_usd":0.42}
