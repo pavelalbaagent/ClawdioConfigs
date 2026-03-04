@@ -2,6 +2,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -236,6 +237,50 @@ class ReminderStateMachineTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["reminder"]["id"], "r6")
         self.assertEqual(payload["reminder"]["message"], "review plan")
+
+    def test_create_from_text_relative_time(self):
+        code, payload, _ = run_cmd(
+            [
+                "--state-file",
+                str(self.state_file),
+                "create-from-text",
+                "--id",
+                "r7",
+                "--text",
+                "remind me stretch in 1 hour",
+                "--timezone",
+                "America/Guayaquil",
+            ]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["reminder"]["id"], "r7")
+        self.assertEqual(payload["reminder"]["message"], "stretch")
+
+        created_at = datetime.fromisoformat(payload["reminder"]["created_at"])
+        remind_at = datetime.fromisoformat(payload["reminder"]["remind_at"])
+        delta_seconds = (remind_at - created_at).total_seconds()
+        self.assertGreaterEqual(delta_seconds, 3500)
+        self.assertLessEqual(delta_seconds, 3700)
+
+    def test_create_invalid_time_returns_structured_error(self):
+        code, payload, _ = run_cmd(
+            [
+                "--state-file",
+                str(self.state_file),
+                "create",
+                "--id",
+                "r8",
+                "--message",
+                "test",
+                "--when",
+                "in someday",
+                "--timezone",
+                "America/Guayaquil",
+            ]
+        )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload["ok"], False)
+        self.assertEqual(payload["error"], "invalid_time")
 
 
 if __name__ == "__main__":

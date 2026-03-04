@@ -8,6 +8,7 @@
 4. `scripts/openclaw-dashboard-tunnel.sh`: local SSH tunnel to OpenClaw dashboard via Tailscale.
 5. `scripts/run-codex-safe.sh`: controlled Codex CLI wrapper for agent usage.
 6. `scripts/run-gemini-safe.sh`: controlled Gemini CLI wrapper for agent usage.
+7. `scripts/reminder_scheduler_adapter.py`: reminder scheduling guard that enforces `payload.kind=systemEvent` for main-session due reminders.
 
 ## Recommended placement on VPS
 

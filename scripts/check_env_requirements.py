@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "integrations.yaml"
+DEFAULT_MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -57,11 +59,55 @@ def ensure_string_list(value: Any) -> list[str]:
     return [item for item in value if isinstance(item, str) and item.strip()]
 
 
-def env_state(var_name: str) -> str:
-    return "SET" if os.environ.get(var_name, "").strip() else "MISSING"
+def load_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        raise FileNotFoundError(f"env file not found: {path}")
+
+    for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+
+        if "=" not in line:
+            raise ValueError(f"invalid env line {line_no}: missing '='")
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError(f"invalid env key on line {line_no}: {key}")
+
+        if (
+            len(value) >= 2
+            and ((value[0] == value[-1] == "\"") or (value[0] == value[-1] == "'"))
+        ):
+            value = value[1:-1]
+
+        values[key] = value
+
+    return values
 
 
-def resolve_provider_requirements(integration: dict[str, Any], base_required: list[str]) -> tuple[str | None, str | None, list[str]]:
+def env_get(var_name: str, env_overrides: dict[str, str]) -> str:
+    if var_name in env_overrides:
+        return env_overrides[var_name]
+    return os.environ.get(var_name, "")
+
+
+def env_state(var_name: str, env_overrides: dict[str, str]) -> str:
+    return "SET" if env_get(var_name, env_overrides).strip() else "MISSING"
+
+
+def resolve_provider_requirements(
+    integration: dict[str, Any],
+    base_required: list[str],
+    env_overrides: dict[str, str],
+) -> tuple[str | None, str | None, list[str]]:
     provider_priority = ensure_string_list(integration.get("provider_priority"))
     provider_requirements = ensure_dict(integration.get("provider_env_requirements"))
 
@@ -70,7 +116,7 @@ def resolve_provider_requirements(integration: dict[str, Any], base_required: li
     for var in base_required:
         if not var.endswith("_PROVIDER"):
             continue
-        value = os.environ.get(var, "").strip()
+        value = env_get(var, env_overrides).strip()
         if value:
             selected_provider = value
             selected_from = var
@@ -87,18 +133,44 @@ def resolve_provider_requirements(integration: dict[str, Any], base_required: li
     return selected_provider, selected_from, provider_required
 
 
-def append_missing(vars_list: list[str], missing: list[str]) -> None:
+def append_missing(vars_list: list[str], missing: list[str], env_overrides: dict[str, str]) -> None:
     for var in vars_list:
-        if env_state(var) == "MISSING":
+        if env_state(var, env_overrides) == "MISSING":
             missing.append(var)
+
+
+def resolve_memory_profile(memory_data: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    profiles = ensure_dict(memory_data.get("profiles"))
+    definitions = ensure_dict(profiles.get("definitions"))
+    profile_name = profiles.get("active_profile")
+    if not isinstance(profile_name, str) or not profile_name.strip():
+        return "", {}, {}
+    profile_name = profile_name.strip()
+    profile = ensure_dict(definitions.get(profile_name))
+    modules = ensure_dict(memory_data.get("memory_modules"))
+    return profile_name, profile, modules
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check required env vars for integration profile")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to integrations.yaml")
+    parser.add_argument("--memory-config", default=str(DEFAULT_MEMORY_CONFIG), help="path to memory.yaml")
+    parser.add_argument("--env-file", help="dotenv-like file to use for checks without exporting vars")
+    parser.add_argument("--include-optional", action="store_true", help="also report optional env vars")
     parser.add_argument("--profile", help="override active profile")
     parser.add_argument("--strict", action="store_true", help="exit non-zero if required env vars are missing")
     args = parser.parse_args()
+
+    env_overrides: dict[str, str] = {}
+    if args.env_file:
+        env_path = Path(args.env_file).expanduser().resolve()
+        try:
+            env_overrides = load_env_file(env_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Failed to read --env-file: {exc}")
+            return 1
+        print(f"Using env file: {env_path}")
+        print("")
 
     config_path = Path(args.config)
     data = ensure_dict(load_yaml(config_path))
@@ -135,13 +207,23 @@ def main() -> int:
         if not enabled:
             print(f"- {name}: DISABLED")
             continue
-        selected_provider, selected_from, provider_required = resolve_provider_requirements(integration, required)
+        selected_provider, selected_from, provider_required = resolve_provider_requirements(
+            integration,
+            required,
+            env_overrides,
+        )
         all_required = list(dict.fromkeys(required + provider_required))
+
+        if args.include_optional:
+            optional = ensure_string_list(integration.get("optional_env", []))
+            if optional:
+                optional_status = [f"{var}={env_state(var, env_overrides)}" for var in optional]
+                print(f"- {name} (optional): " + ", ".join(optional_status))
 
         if not all_required:
             print(f"- {name}: no required env vars")
             continue
-        statuses = [f"{var}={env_state(var)}" for var in all_required]
+        statuses = [f"{var}={env_state(var, env_overrides)}" for var in all_required]
         provider_label = ""
         if selected_provider:
             from_label = f" via {selected_from}" if selected_from else ""
@@ -150,7 +232,7 @@ def main() -> int:
                 print(f"- {name}: using default provider `{selected_provider}` because *_PROVIDER env is not set")
 
         print(f"- {name}: " + ", ".join(statuses) + provider_label)
-        append_missing(all_required, missing_required)
+        append_missing(all_required, missing_required, env_overrides)
         if selected_provider and not provider_required and ensure_dict(integration.get("provider_env_requirements")):
             print(f"- {name}: provider `{selected_provider}` has no mapped env requirements in config")
 
@@ -169,9 +251,52 @@ def main() -> int:
         if not required:
             print(f"- {name}: no required env vars")
             continue
-        statuses = [f"{var}={env_state(var)}" for var in required]
+        statuses = [f"{var}={env_state(var, env_overrides)}" for var in required]
         print(f"- {name}: " + ", ".join(statuses))
-        append_missing(required, missing_required)
+        append_missing(required, missing_required, env_overrides)
+        if args.include_optional:
+            optional = ensure_string_list(cli.get("optional_env", []))
+            if optional:
+                optional_status = [f"{var}={env_state(var, env_overrides)}" for var in optional]
+                print(f"- {name} (optional): " + ", ".join(optional_status))
+
+    print("")
+    print("Memory modules:")
+    memory_config_path = Path(args.memory_config)
+    if not memory_config_path.exists():
+        print(f"- memory config not found: {memory_config_path}")
+    else:
+        memory_data = ensure_dict(load_yaml(memory_config_path))
+        memory_profile_name, memory_profile, memory_modules = resolve_memory_profile(memory_data)
+        if not memory_profile_name:
+            print("- no active memory profile found")
+        elif not memory_profile:
+            print(f"- profile not found: {memory_profile_name}")
+        else:
+            print(f"- profile: {memory_profile_name}")
+            enabled_modules = ensure_string_list(memory_profile.get("enabled_modules"))
+            if not enabled_modules:
+                print("- enabled_modules: empty")
+            for module_name in enabled_modules:
+                module = ensure_dict(memory_modules.get(module_name))
+                if not module:
+                    print(f"- {module_name}: NOT_DEFINED")
+                    continue
+                if module.get("enabled") is not True:
+                    print(f"- {module_name}: DISABLED")
+                    continue
+                required = ensure_string_list(module.get("required_env", []))
+                if not required:
+                    print(f"- {module_name}: no required env vars")
+                else:
+                    statuses = [f"{var}={env_state(var, env_overrides)}" for var in required]
+                    print(f"- {module_name}: " + ", ".join(statuses))
+                    append_missing(required, missing_required, env_overrides)
+                if args.include_optional:
+                    optional = ensure_string_list(module.get("optional_env", []))
+                    if optional:
+                        optional_status = [f"{var}={env_state(var, env_overrides)}" for var in optional]
+                        print(f"- {module_name} (optional): " + ", ".join(optional_status))
 
     unique_missing = sorted(set(missing_required))
     print("")

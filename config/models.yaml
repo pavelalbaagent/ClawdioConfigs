@@ -3,10 +3,33 @@ routing:
     L0_no_model:
       enabled: true
       description: deterministic operations only
+      use_for:
+        - reminder_state_machine
+        - cron_and_scheduling
+        - workflow_routing
+        - config_validation
 
     L1_low_cost:
       provider: google
       model: gemini_free_tier
+      provider_priority:
+        - google_ai_studio_free
+      max_input_tokens: 6000
+      max_output_tokens: 1200
+      use_for:
+        - summarize
+        - rewrite
+        - classify
+        - extract
+
+    L1_openrouter_free_fallback:
+      provider: openrouter
+      model: openrouter/auto
+      routing_hint: prefer_free_models_only
+      provider_priority:
+        - openrouter_free_overflow
+      required_env:
+        - OPENROUTER_API_KEY
       max_input_tokens: 6000
       max_output_tokens: 1200
       use_for:
@@ -16,8 +39,12 @@ routing:
         - extract
 
     L2_balanced:
-      provider: google_or_openai_api
+      provider: multi_provider
       model: balanced_paid_model
+      provider_priority:
+        - google_ai_studio_free
+        - codex_subscription_cli
+        - anthropic_credit_pool
       max_input_tokens: 12000
       max_output_tokens: 2000
       use_for:
@@ -28,6 +55,10 @@ routing:
     L3_heavy:
       provider: supervised_cli_session
       model: codex_or_gemini_advanced
+      provider_priority:
+        - codex_subscription_cli
+        - anthropic_credit_pool
+        - google_ai_studio_free
       max_input_tokens: 24000
       max_output_tokens: 4000
       use_for:
@@ -38,17 +69,200 @@ routing:
 
   fallback_order:
     - L1_low_cost
+    - L1_openrouter_free_fallback
     - L2_balanced
     - L3_heavy
+
+  usage_modes:
+    strict_cost:
+      description: Keep daily throughput on free lanes and block auto-heavy escalation.
+      default_lane: L1_low_cost
+      allow_auto_escalation_up_to: L2_balanced
+      reserve_l3_for:
+        - architecture_decisions
+        - high_risk_code_changes
+    balanced_default:
+      description: Default mode with moderate escalation for quality-sensitive outputs.
+      default_lane: L1_low_cost
+      allow_auto_escalation_up_to: L2_balanced
+      reserve_l3_for:
+        - architecture_decisions
+    quality_push:
+      description: Prioritize output quality, still requiring approval for heavy runs.
+      default_lane: L2_balanced
+      allow_auto_escalation_up_to: L3_heavy
+      reserve_l3_for:
+        - architecture_decisions
+        - ambiguous_high_stakes_planning
+        - critical_debugging
+
+  decision_matrix:
+    deterministic_workflow:
+      intent_tags:
+        - cron
+        - reminder_scheduler
+        - parsing
+        - state_machine
+      preferred_lane: L0_no_model
+      provider_preference: []
+      fallback_lanes: []
+      approval_required: false
+    quick_read_write:
+      intent_tags:
+        - short_summary
+        - rewrite
+        - classify
+        - extraction
+      preferred_lane: L1_low_cost
+      provider_preference:
+        - google_ai_studio_free
+      fallback_lanes:
+        - L1_openrouter_free_fallback
+        - L2_balanced
+      approval_required: false
+    inbox_triage_and_digest:
+      intent_tags:
+        - inbox_triage
+        - digest
+        - todo_planning
+      preferred_lane: L1_low_cost
+      provider_preference:
+        - google_ai_studio_free
+      fallback_lanes:
+        - L1_openrouter_free_fallback
+        - L2_balanced
+      approval_required: false
+    research_synthesis:
+      intent_tags:
+        - multi_source_summary
+        - compare_options
+        - recommendation_draft
+      preferred_lane: L2_balanced
+      provider_preference:
+        - google_ai_studio_free
+        - codex_subscription_cli
+      fallback_lanes:
+        - L1_low_cost
+        - L3_heavy
+      approval_required: false
+    coding_and_integration:
+      intent_tags:
+        - code_generation
+        - debugging
+        - integration_fix
+      preferred_lane: L2_balanced
+      provider_preference:
+        - codex_subscription_cli
+        - google_ai_studio_free
+      fallback_lanes:
+        - L1_low_cost
+        - L3_heavy
+      approval_required: false
+    architecture_or_high_ambiguity:
+      intent_tags:
+        - architecture
+        - roadmap_design
+        - major_tradeoff
+      preferred_lane: L3_heavy
+      provider_preference:
+        - codex_subscription_cli
+        - anthropic_credit_pool
+      fallback_lanes:
+        - L2_balanced
+      approval_required: true
+    external_write_action:
+      intent_tags:
+        - send_email
+        - post_message
+        - trigger_workflow
+      preferred_lane: L1_low_cost
+      provider_preference:
+        - google_ai_studio_free
+      fallback_lanes:
+        - L1_openrouter_free_fallback
+        - L2_balanced
+      approval_required: true
+    credit_preservation_mode:
+      intent_tags:
+        - quota_spike
+        - temporary_rate_limit
+      preferred_lane: L1_openrouter_free_fallback
+      provider_preference:
+        - openrouter_free_overflow
+      fallback_lanes:
+        - L1_low_cost
+        - L2_balanced
+      approval_required: false
+
+provider_inventory:
+  google_ai_studio_free:
+    enabled_if_env:
+      - GEMINI_API_KEY
+    budget_type: free_quota
+    strengths:
+      - low_cost_high_volume
+      - fast_small_to_medium_tasks
+    weaknesses:
+      - burst_rate_limits
+      - variable_availability_under_load
+  openrouter_free_overflow:
+    enabled_if_env:
+      - OPENROUTER_API_KEY
+    optional_env:
+      - OPENROUTER_FREE_MODEL
+    budget_type: free_overflow
+    strengths:
+      - provider_diversification
+      - low_cost_overflow
+    weaknesses:
+      - model_and_quota_variability
+      - no_unlimited_guarantee
+  codex_subscription_cli:
+    enabled_if:
+      - codex_cli_available
+    budget_type: subscription_manual
+    strengths:
+      - high_quality_coding_and_planning
+      - best_for_supervised_heavy_tasks
+    weaknesses:
+      - not_ideal_for_unattended_background_automation
+  anthropic_credit_pool:
+    enabled_if_env:
+      - ANTHROPIC_API_KEY
+    budget_type: prepaid_credits
+    usage_policy: reserve_for_complex_design_or_second_opinion
+    default_daily_call_cap: 3
+    strengths:
+      - structured_long_form_reasoning
+    weaknesses:
+      - limited_credit_pool
+
+fallback_policies:
+  on_rate_limit:
+    steps:
+      - reduce_context_and_retry_once
+      - switch_to_next_lane_in_order
+  on_quota_exhaustion:
+    low_risk_tasks:
+      - switch_to_openrouter_free_overflow
+      - queue_until_quota_reset_if_no_free_lane_available
+    high_impact_tasks:
+      - require_manual_approval_for_l3
+      - pause_if_no_approved_provider_available
+  on_provider_outage:
+    steps:
+      - mark_provider_unhealthy_for_15_minutes
+      - skip_unhealthy_provider_in_priority_lists
 
 controls:
   cache_enabled: true
   summarize_context_over_tokens: 8000
   one_retry_on_rate_limit: true
   block_auto_escalation_to_L3: true
+  max_auto_fallback_hops: 2
+  require_manual_approval_for_anthropic: true
 
 budget_distribution_target:
   L1_low_cost_pct: 70
   L2_balanced_pct: 25
   L3_heavy_pct: 5
-

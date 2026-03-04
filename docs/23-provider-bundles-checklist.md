@@ -11,6 +11,16 @@ Use this as the default onboarding bundle:
 3. Core comms: `telegram`
 4. Core integrations: `gmail`, `drive`, `github`, `n8n`
 5. Optional search API: add later only if browser-only retrieval is insufficient
+6. Optional overflow LLM lane: `OPENROUTER_API_KEY` for OpenRouter free fallback
+7. Optional reserve LLM lane: `ANTHROPIC_API_KEY` for complex-design overflow only
+
+For staged optionalization, use profile presets in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml):
+
+1. `bootstrap_minimal`
+2. `stage_2_comms_google`
+3. `stage_3_comms_dev`
+4. `stage_4_tasks`
+5. `stage_5_automation`
 
 ## Required Env for Recommended Bundle
 

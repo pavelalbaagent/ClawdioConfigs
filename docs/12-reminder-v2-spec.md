@@ -17,9 +17,10 @@ Replace reminder-history logs with a deterministic reminder workflow.
 ## Command grammar
 
 1. Create: `remind me <message> at <time>`
-2. Close: `done`
-3. Reschedule: `defer until <time>`
-4. Reply handling should work without reminder IDs when only one open reminder matches.
+2. Create (relative): `remind me <message> in <duration>` (examples: `in 1 hour`, `in 30 minutes`)
+3. Close: `done`
+4. Reschedule: `defer until <time>`
+5. Reply handling should work without reminder IDs when only one open reminder matches.
 
 ## State model
 
@@ -52,3 +53,12 @@ Replace reminder-history logs with a deterministic reminder workflow.
 A deterministic state-machine helper is provided at:
 
 1. [ops/scripts/reminder_state_machine.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_state_machine.py)
+2. Scheduler adapter guard (enforces `systemEvent` for main-session due jobs):
+3. [ops/scripts/reminder_scheduler_adapter.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_scheduler_adapter.py)
+
+## Guard usage
+
+1. Translate state-machine output into safe scheduler jobs:
+2. `python3 ops/scripts/reminder_scheduler_adapter.py translate --input reminder-actions.json --session-target main`
+3. Validate a planned job before `cron add`:
+4. `python3 ops/scripts/reminder_scheduler_adapter.py validate-job --input reminder-job.json`

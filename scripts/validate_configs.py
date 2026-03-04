@@ -23,6 +23,7 @@ EXPECTED_CONFIGS = {
     "channels": CONFIG_DIR / "channels.yaml",
     "models": CONFIG_DIR / "models.yaml",
     "integrations": CONFIG_DIR / "integrations.yaml",
+    "memory": CONFIG_DIR / "memory.yaml",
     "agents": CONFIG_DIR / "agents.yaml",
     "tasks": CONFIG_DIR / "tasks.yaml",
     "security": CONFIG_DIR / "security.yaml",
@@ -490,6 +491,132 @@ def validate_session_policy(data: dict[str, Any], errors: list[str], warnings: l
     )
 
 
+def validate_memory(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
+    profiles = require_dict(data.get("profiles"), errors, "memory.profiles")
+    active_profile = profiles.get("active_profile")
+    if not is_non_empty_str(active_profile):
+        add_error(errors, "REQ", "memory.profiles.active_profile is required")
+        active_profile = ""
+    definitions = require_dict(profiles.get("definitions"), errors, "memory.profiles.definitions")
+
+    modules = require_dict(data.get("memory_modules"), errors, "memory.memory_modules")
+
+    if active_profile and active_profile not in definitions:
+        add_error(errors, "PROFILE", f"active memory profile not found: {active_profile}")
+
+    for profile_name, profile_data in definitions.items():
+        section = f"memory.profiles.definitions.{profile_name}"
+        profile = require_dict(profile_data, errors, section)
+        enabled_modules = validate_string_list(profile.get("enabled_modules"), f"{section}.enabled_modules", errors, allow_empty=False)
+        for module_name in enabled_modules:
+            if module_name not in modules:
+                add_error(errors, "PROFILE", f"{section} references unknown module: {module_name}")
+            else:
+                module = require_dict(modules.get(module_name), errors, f"memory.memory_modules.{module_name}")
+                if not isinstance(module.get("enabled"), bool):
+                    add_error(errors, "TYPE", f"memory.memory_modules.{module_name}.enabled must be boolean")
+                elif module.get("enabled") is not True:
+                    add_warning(warnings, "MEM", f"profile {profile_name} enables {module_name} but module is disabled")
+
+    structured = require_dict(modules.get("structured_markdown"), errors, "memory.memory_modules.structured_markdown")
+    if structured.get("enabled") is True:
+        validate_string_list(
+            structured.get("source_globs"),
+            "memory.memory_modules.structured_markdown.source_globs",
+            errors,
+            allow_empty=False,
+        )
+        rules = require_dict(structured.get("rules", {}), errors, "memory.memory_modules.structured_markdown.rules")
+        retention = rules.get("daily_log_retention_days")
+        if retention is not None and (not isinstance(retention, int) or retention <= 0):
+            add_error(
+                errors,
+                "RANGE",
+                "memory.memory_modules.structured_markdown.rules.daily_log_retention_days must be integer > 0",
+            )
+
+    semantic = require_dict(modules.get("semantic_embeddings"), errors, "memory.memory_modules.semantic_embeddings")
+    semantic_enabled = semantic.get("enabled") is True
+    if semantic_enabled:
+        if not is_non_empty_str(semantic.get("provider")):
+            add_error(errors, "REQ", "memory.memory_modules.semantic_embeddings.provider is required")
+        if not is_non_empty_str(semantic.get("model")):
+            add_error(errors, "REQ", "memory.memory_modules.semantic_embeddings.model is required")
+        validate_string_list(
+            semantic.get("required_env"),
+            "memory.memory_modules.semantic_embeddings.required_env",
+            errors,
+            allow_empty=False,
+        )
+        validate_string_list(
+            semantic.get("optional_env", []),
+            "memory.memory_modules.semantic_embeddings.optional_env",
+            errors,
+            allow_empty=True,
+        )
+
+        chunking = require_dict(semantic.get("chunking"), errors, "memory.memory_modules.semantic_embeddings.chunking")
+        max_chars = chunking.get("max_chars_per_chunk")
+        overlap = chunking.get("overlap_chars")
+        if not isinstance(max_chars, int) or max_chars <= 0:
+            add_error(errors, "RANGE", "memory semantic chunking.max_chars_per_chunk must be integer > 0")
+        if not isinstance(overlap, int) or overlap < 0:
+            add_error(errors, "RANGE", "memory semantic chunking.overlap_chars must be integer >= 0")
+        elif isinstance(max_chars, int) and overlap >= max_chars:
+            add_warning(warnings, "MEM", "memory overlap_chars >= max_chars_per_chunk can reduce chunk quality")
+
+        retrieval = require_dict(semantic.get("retrieval"), errors, "memory.memory_modules.semantic_embeddings.retrieval")
+        top_k = retrieval.get("top_k_default")
+        if not isinstance(top_k, int) or top_k <= 0:
+            add_error(errors, "RANGE", "memory semantic retrieval.top_k_default must be integer > 0")
+        min_similarity = retrieval.get("min_similarity")
+        if not isinstance(min_similarity, (int, float)) or not (0 <= float(min_similarity) <= 1):
+            add_error(errors, "RANGE", "memory semantic retrieval.min_similarity must be between 0 and 1")
+
+        budget = require_dict(semantic.get("budget_controls"), errors, "memory.memory_modules.semantic_embeddings.budget_controls")
+        for field in ("max_new_embeddings_per_run", "max_embedding_chars_per_day"):
+            value = budget.get(field)
+            if not isinstance(value, int) or value <= 0:
+                add_error(errors, "RANGE", f"memory semantic budget {field} must be integer > 0")
+
+        storage = require_dict(semantic.get("storage"), errors, "memory.memory_modules.semantic_embeddings.storage")
+        if not is_non_empty_str(storage.get("sqlite_db_path")):
+            add_error(errors, "REQ", "memory semantic storage.sqlite_db_path is required")
+
+    sqlite_state = require_dict(modules.get("sqlite_state"), errors, "memory.memory_modules.sqlite_state")
+    sqlite_enabled = sqlite_state.get("enabled") is True
+    if sqlite_enabled:
+        if not is_non_empty_str(sqlite_state.get("db_path")):
+            add_error(errors, "REQ", "memory.sqlite_state.db_path is required")
+        schema_file = sqlite_state.get("schema_file")
+        if not is_non_empty_str(schema_file):
+            add_error(errors, "REQ", "memory.sqlite_state.schema_file is required")
+        else:
+            schema_path = Path(str(schema_file))
+            if not schema_path.is_absolute():
+                schema_path = ROOT / schema_path
+            if not schema_path.exists():
+                add_warning(warnings, "MEM", f"memory sqlite schema file not found: {schema_file}")
+
+        validate_string_list(sqlite_state.get("tables"), "memory.sqlite_state.tables", errors, allow_empty=False)
+
+        pragmas = require_dict(sqlite_state.get("pragmas", {}), errors, "memory.sqlite_state.pragmas")
+        for key, value in pragmas.items():
+            if not is_non_empty_str(key):
+                add_error(errors, "TYPE", "memory.sqlite_state.pragmas keys must be non-empty strings")
+            if not isinstance(value, (str, int, float)):
+                add_error(errors, "TYPE", f"memory.sqlite_state.pragmas.{key} must be string/int/float")
+
+    if semantic_enabled and not sqlite_enabled:
+        add_warning(warnings, "MEM", "semantic_embeddings enabled while sqlite_state disabled")
+
+    runtime = require_dict(data.get("runtime"), errors, "memory.runtime")
+    for field in ("compact_when_context_tokens_over", "checkpoint_every_minutes"):
+        value = runtime.get(field)
+        if value is not None and (not isinstance(value, int) or value <= 0):
+            add_error(errors, "RANGE", f"memory.runtime.{field} must be integer > 0")
+
+
 def validate_spawn_alignment(
     agents_data: dict[str, Any],
     session_policy_data: dict[str, Any],
@@ -553,6 +680,8 @@ def main() -> int:
         validate_models(require_dict(loaded["models"], errors, "models"), errors, warnings)
     if "integrations" in loaded:
         validate_integrations(require_dict(loaded["integrations"], errors, "integrations"), errors, warnings)
+    if "memory" in loaded:
+        validate_memory(require_dict(loaded["memory"], errors, "memory"), errors, warnings)
 
     model_lanes = set()
     if "models" in loaded and isinstance(loaded["models"], dict):

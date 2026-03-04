@@ -23,6 +23,9 @@ def copy_tree(source: Path, target: Path, force: bool) -> tuple[list[Path], list
 
     for src in sorted(source.rglob("*")):
         rel = src.relative_to(source)
+        if ".memory" in rel.parts:
+            # Skip runtime state folders that should not be part of baseline templates.
+            continue
         dst = target / rel
         if src.is_dir():
             dst.mkdir(parents=True, exist_ok=True)
@@ -33,7 +36,11 @@ def copy_tree(source: Path, target: Path, force: bool) -> tuple[list[Path], list
             skipped.append(dst)
             continue
 
-        content = src.read_text(encoding="utf-8")
+        try:
+            content = src.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            skipped.append(dst)
+            continue
         dst.write_text(render_template(content), encoding="utf-8")
         created.append(dst)
 

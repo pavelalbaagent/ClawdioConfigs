@@ -10,4 +10,8 @@ logs/
 secrets/
 *.sqlite
 *.db
+.memory/
+**/.memory/
 external/
+data/dashboard-workspace.json
+data/reminders-state.json

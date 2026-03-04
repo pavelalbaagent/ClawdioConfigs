@@ -10,7 +10,11 @@ Core files:
 4. `SESSION.md`: current-session checkpoint.
 5. `TODO.md`: actionable tasks.
 6. `HEARTBEAT.md`: periodic low-noise checks.
-7. `memory/`: daily logs.
+7. `memory/`: structured memory files + daily logs.
+8. `memory/PROFILE.md`: stable owner profile memory.
+9. `memory/PROJECTS.md`: project state memory.
+10. `memory/DECISIONS.md`: durable decision memory.
+11. `memory/INTEGRATIONS.md`: integration state memory.
 
 Use scripts:
 

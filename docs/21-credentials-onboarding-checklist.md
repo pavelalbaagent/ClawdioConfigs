@@ -29,6 +29,13 @@ Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/
 5. Linear path: `LINEAR_API_KEY`, `LINEAR_TEAM_ID`
 6. Optional search APIs:
 7. `OPENCLAW_SEARCH_API_KEY` or `BRAVE_SEARCH_API_KEY` or `SERPAPI_API_KEY`
+8. Optional memory tuning vars:
+9. `OPENAI_EMBEDDING_MODEL`
+10. `MEMORY_SQLITE_DB_PATH`
+11. Optional overflow model path:
+12. `OPENROUTER_API_KEY`
+13. Optional reserve-design model path:
+14. `ANTHROPIC_API_KEY`
 
 ## Phase C: Optional/High-Risk
 
@@ -39,8 +46,10 @@ Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/
 
 1. `python3 scripts/check_env_requirements.py`
 2. `python3 scripts/check_env_requirements.py --strict`
-3. `python3 scripts/validate_configs.py --config-dir config`
-4. `python3 scripts/scan_secrets.py`
+3. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict`
+4. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --include-optional`
+5. `python3 scripts/validate_configs.py --config-dir config`
+6. `python3 scripts/scan_secrets.py`
 
 ## Rotation and Hygiene
 

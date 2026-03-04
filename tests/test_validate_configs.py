@@ -28,6 +28,7 @@ class ValidateConfigsTests(unittest.TestCase):
                 "channels",
                 "models",
                 "integrations",
+                "memory",
                 "agents",
                 "tasks",
                 "security",
@@ -57,6 +58,7 @@ class ValidateConfigsTests(unittest.TestCase):
                 "channels",
                 "models",
                 "integrations",
+                "memory",
                 "agents",
                 "tasks",
                 "security",
@@ -77,6 +79,36 @@ class ValidateConfigsTests(unittest.TestCase):
             )
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("active integration profile not found", proc.stdout)
+
+    def test_missing_memory_profile_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in (
+                "core",
+                "channels",
+                "models",
+                "integrations",
+                "memory",
+                "agents",
+                "tasks",
+                "security",
+                "reminders",
+                "session_policy",
+            ):
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            memory_path = tmp_path / "memory.yaml"
+            text = memory_path.read_text()
+            text = text.replace("active_profile: hybrid_124", "active_profile: missing_profile")
+            memory_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("active memory profile not found", proc.stdout)
 
 
 if __name__ == "__main__":

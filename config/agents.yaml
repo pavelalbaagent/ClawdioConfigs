@@ -31,6 +31,44 @@ agents:
       - alerting
       - logs_reader
 
+routing_overrides:
+  active_mode: balanced_default
+  agent_task_matrix:
+    coordinator:
+      quick_triage: L1_low_cost
+      routine_planning: L1_low_cost
+      ambiguous_planning: L2_balanced
+      architecture_decision: L3_heavy
+    researcher:
+      source_collection: L1_low_cost
+      synthesis: L2_balanced
+      high_impact_recommendation: L3_heavy
+    builder:
+      quick_patch: L1_low_cost
+      standard_feature_build: L2_balanced
+      major_refactor: L3_heavy
+    ops_guard:
+      health_checks: L0_no_model
+      incident_summary: L1_low_cost
+      root_cause_analysis: L2_balanced
+  fallback_paths:
+    low_cost_blocked:
+      - L1_openrouter_free_fallback
+      - L2_balanced
+    balanced_blocked:
+      - L1_low_cost
+      - L3_heavy
+    heavy_blocked:
+      - L2_balanced
+      - manual_pause_and_review
+  escalation_rules:
+    - condition: two_failures_same_task_in_30m
+      action: escalate_one_lane_then_pause
+    - condition: task_has_external_write_intent
+      action: require_human_approval
+    - condition: task_is_high_stakes_or_irreversible
+      action: require_human_approval
+
 spawn_policy:
   max_active_subagents: 2
   default_ttl_minutes: 45
@@ -47,4 +85,3 @@ approval_required:
   - L3_heavy
   - external_account_action
   - data_deletion
-

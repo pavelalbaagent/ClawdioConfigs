@@ -1,0 +1,76 @@
+profiles:
+  active_profile: hybrid_124
+  definitions:
+    md_only:
+      description: Structured markdown memory only (lowest cost).
+      enabled_modules:
+        - structured_markdown
+    md_plus_embeddings:
+      description: Markdown memory plus semantic recall with embeddings.
+      enabled_modules:
+        - structured_markdown
+        - semantic_embeddings
+    hybrid_124:
+      description: Structured markdown plus semantic embeddings plus SQLite structured state.
+      enabled_modules:
+        - structured_markdown
+        - semantic_embeddings
+        - sqlite_state
+
+memory_modules:
+  structured_markdown:
+    enabled: true
+    source_globs:
+      - MEMORY.md
+      - USER.md
+      - SOUL.md
+      - SESSION.md
+      - TODO.md
+      - memory/*.md
+    rules:
+      preserve_h2_headings: true
+      daily_log_retention_days: 30
+      promote_durable_facts_to_memory_md: true
+      block_raw_secrets: true
+
+  semantic_embeddings:
+    enabled: true
+    provider: openai
+    model: text-embedding-3-small
+    required_env:
+      - OPENAI_API_KEY
+    optional_env:
+      - OPENAI_EMBEDDING_MODEL
+    chunking:
+      max_chars_per_chunk: 1200
+      overlap_chars: 120
+    retrieval:
+      top_k_default: 8
+      min_similarity: 0.32
+      include_keyword_fallback: true
+    budget_controls:
+      max_new_embeddings_per_run: 200
+      max_embedding_chars_per_day: 120000
+      skip_if_above_daily_cap: true
+    storage:
+      sqlite_db_path: .memory/memory.db
+
+  sqlite_state:
+    enabled: true
+    db_path: .memory/memory.db
+    schema_file: contracts/memory/sqlite_schema.sql
+    pragmas:
+      journal_mode: WAL
+      synchronous: NORMAL
+      temp_store: MEMORY
+    tables:
+      - source_documents
+      - memory_chunks
+      - embeddings
+      - memory_state
+      - recall_events
+
+runtime:
+  auto_compact_session_on_handoff: true
+  compact_when_context_tokens_over: 8500
+  checkpoint_every_minutes: 45

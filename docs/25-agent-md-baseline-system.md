@@ -14,7 +14,11 @@ Start every agent workspace with the same strong, low-token continuity system.
 4. `SESSION.md`: current objective, working context, and handoff.
 5. `TODO.md`: personal and agent task queues.
 6. `HEARTBEAT.md`: proactive periodic checks without spam.
-7. `memory/YYYY-MM-DD.md`: short-lived daily logs.
+7. `memory/PROFILE.md`: stable profile memory.
+8. `memory/PROJECTS.md`: active/paused project memory.
+9. `memory/DECISIONS.md`: durable decision memory.
+10. `memory/INTEGRATIONS.md`: integration-state memory.
+11. `memory/YYYY-MM-DD.md`: short-lived daily logs.
 
 ## Source of Truth
 
@@ -47,6 +51,10 @@ Start every agent workspace with the same strong, low-token continuity system.
 4. `python3 scripts/validate_agent_md.py --target /path/to/workspace`
 5. Force refresh from latest templates:
 6. `python3 scripts/bootstrap_agent_md.py --target /path/to/workspace --force`
+7. Sync markdown memory into SQLite (+ optional embeddings):
+8. `python3 scripts/memory_index_sync.py --workspace /path/to/workspace`
+9. Search memory:
+10. `python3 scripts/memory_search.py --workspace /path/to/workspace --query \"...\"`
 
 ## VPS Rollout Example
 

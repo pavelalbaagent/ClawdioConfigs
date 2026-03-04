@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenClaw Control Plane</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero-top">
+          <div>
+            <h1>OpenClaw Control Plane</h1>
+            <p>
+              Manual-first operations dashboard: profiles, modules, usage, reminders, project progress, and
+              agent-assigned tasks.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <span id="health-pill" class="status-pill"><span class="status-dot"></span>loading</span>
+            <button id="refresh-button" class="secondary">Refresh</button>
+            <button id="logout-button" class="secondary">Logout</button>
+          </div>
+        </div>
+        <div id="error-banner" class="banner"></div>
+      </section>
+
+      <section class="grid">
+        <article class="card col-3 metric">
+          <span class="label">Integration Profile</span>
+          <span class="value" id="metric-integration-profile">-</span>
+          <span class="hint" id="metric-integration-count">-</span>
+        </article>
+        <article class="card col-3 metric">
+          <span class="label">Open Tasks</span>
+          <span class="value" id="metric-open-tasks">-</span>
+          <span class="hint" id="metric-task-progress">-</span>
+        </article>
+        <article class="card col-3 metric">
+          <span class="label">Active Projects</span>
+          <span class="value" id="metric-projects">-</span>
+          <span class="hint" id="metric-project-progress">-</span>
+        </article>
+        <article class="card col-3 metric">
+          <span class="label">Pending Reminders</span>
+          <span class="value" id="metric-reminders">-</span>
+          <span class="hint">awaiting action</span>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-4">
+          <h2>Profile Switching</h2>
+          <div class="controls">
+            <div class="control-row">
+              <label for="integration-profile-select">Integrations profile</label>
+              <select id="integration-profile-select"></select>
+            </div>
+            <div class="control-row">
+              <label for="memory-profile-select">Memory profile</label>
+              <select id="memory-profile-select"></select>
+            </div>
+            <div class="control-row">
+              <button id="apply-profiles-button">Apply Profiles</button>
+            </div>
+          </div>
+          <p class="footnote" id="profile-status">No changes yet.</p>
+        </article>
+
+        <article class="card alt col-4">
+          <h2>Preset Packs</h2>
+          <div class="list" id="preset-list"></div>
+          <p class="footnote" id="preset-status">Apply a pack to switch multiple settings at once.</p>
+        </article>
+
+        <article class="card col-4">
+          <h2>Adapter + Auth Settings</h2>
+          <div class="list" id="adapter-list"></div>
+          <div class="controls" style="margin-top: 10px">
+            <div class="control-row">
+              <label for="codexbar-provider-select">Codexbar provider</label>
+              <select id="codexbar-provider-select">
+                <option value="all">all</option>
+                <option value="openai">openai</option>
+                <option value="anthropic">anthropic</option>
+                <option value="google">google</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="routing-mode-select">Routing mode</label>
+              <select id="routing-mode-select"></select>
+            </div>
+            <div class="control-row">
+              <label for="refresh-seconds-input">Auto refresh (sec)</label>
+              <input id="refresh-seconds-input" type="number" min="5" max="600" step="5" />
+            </div>
+            <div class="control-row">
+              <label for="auth-required-toggle">Require token auth</label>
+              <input id="auth-required-toggle" type="checkbox" class="toggle" />
+            </div>
+            <div class="control-row">
+              <label for="auth-env-key-input">Token env key</label>
+              <input id="auth-env-key-input" type="text" />
+            </div>
+            <div class="control-row">
+              <button id="save-dashboard-settings" class="secondary">Save Settings</button>
+            </div>
+          </div>
+          <p class="footnote" id="adapter-status">Adapters are modular and optional.</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-6">
+          <h2>Integrations</h2>
+          <div class="list" id="integrations-list"></div>
+        </article>
+
+        <article class="card col-6">
+          <h2>Memory + n8n Modules</h2>
+          <h3>Memory</h3>
+          <div class="list" id="memory-list"></div>
+          <h3 style="margin-top: 16px">n8n</h3>
+          <div class="list" id="n8n-list"></div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-6">
+          <h2>Pending Reminders</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Message</th>
+                  <th>Status</th>
+                  <th>Due</th>
+                  <th>In (min)</th>
+                  <th>Follow-up</th>
+                </tr>
+              </thead>
+              <tbody id="reminders-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card alt col-6">
+          <h2>To-Do Queue</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Assignees</th>
+                  <th>Project</th>
+                  <th>Due</th>
+                </tr>
+              </thead>
+              <tbody id="todo-queue-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-5">
+          <h2>Create Project</h2>
+          <div class="controls">
+            <div class="control-row">
+              <label for="project-name-input">Name</label>
+              <input id="project-name-input" type="text" placeholder="Project name" />
+            </div>
+            <div class="control-row">
+              <label for="project-owner-input">Owner</label>
+              <input id="project-owner-input" type="text" value="pavel" />
+            </div>
+            <div class="control-row">
+              <label for="project-target-date-input">Target date (optional)</label>
+              <input id="project-target-date-input" type="date" />
+            </div>
+            <div class="control-row">
+              <label for="project-description-input">Description</label>
+              <input id="project-description-input" type="text" placeholder="Short objective" />
+            </div>
+            <div class="control-row">
+              <button id="create-project-button">Create Project</button>
+            </div>
+          </div>
+          <p class="footnote" id="project-status">Define active projects to track progress and ownership.</p>
+        </article>
+
+        <article class="card col-7">
+          <h2>Projects Progress</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Status</th>
+                  <th>Owner</th>
+                  <th>Tasks</th>
+                  <th>Progress</th>
+                  <th>Update</th>
+                </tr>
+              </thead>
+              <tbody id="projects-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-5">
+          <h2>Create Task</h2>
+          <div class="controls">
+            <div class="control-row">
+              <label for="task-title-input">Title</label>
+              <input id="task-title-input" type="text" placeholder="Task title" />
+            </div>
+            <div class="control-row">
+              <label for="task-project-select">Project</label>
+              <select id="task-project-select"></select>
+            </div>
+            <div class="control-row">
+              <label for="task-priority-select">Priority</label>
+              <select id="task-priority-select">
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+                <option value="high">high</option>
+                <option value="urgent">urgent</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="task-template-select">Quick template</label>
+              <select id="task-template-select"></select>
+              <button id="create-template-task-button" class="secondary">Create From Template</button>
+            </div>
+            <div class="control-row">
+              <label for="task-due-input">Due (optional)</label>
+              <input id="task-due-input" type="datetime-local" />
+            </div>
+            <div class="control-row">
+              <label for="task-notes-input">Notes</label>
+              <input id="task-notes-input" type="text" placeholder="Expected output or details" />
+            </div>
+            <div class="control-row" id="task-assignee-checkboxes"></div>
+            <div class="control-row">
+              <button id="create-task-button">Create + Assign Task</button>
+            </div>
+          </div>
+          <p class="footnote" id="task-create-status">Assign to one or multiple agents/human.</p>
+        </article>
+
+        <article class="card alt col-7">
+          <h2>Task Board</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Project</th>
+                  <th>Assignees</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Priority</th>
+                  <th>Due</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tasks-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-6">
+          <h2>Approval Inbox</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Requested</th>
+                  <th>Task/Target</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Decision</th>
+                </tr>
+              </thead>
+              <tbody id="approvals-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card alt col-6">
+          <h2>Execution Runs</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Queued</th>
+                  <th>Task</th>
+                  <th>Assignee</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th>Controls</th>
+                </tr>
+              </thead>
+              <tbody id="runs-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-6">
+          <h2>Local Usage</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lane</th>
+                  <th>Calls</th>
+                  <th>Tokens</th>
+                  <th>Errors</th>
+                  <th>Fallbacks</th>
+                  <th>Avg Latency</th>
+                </tr>
+              </thead>
+              <tbody id="usage-lane-body"></tbody>
+            </table>
+          </div>
+          <p class="footnote mono" id="usage-source">source: -</p>
+        </article>
+
+        <article class="card alt col-6">
+          <h2>Codexbar Usage</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Model</th>
+                  <th>Input</th>
+                  <th>Output</th>
+                  <th>Cost (USD)</th>
+                </tr>
+              </thead>
+              <tbody id="codexbar-body"></tbody>
+            </table>
+          </div>
+          <p class="footnote" id="codexbar-status">Codexbar adapter disabled.</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-12">
+          <h2>Recent Work</h2>
+          <div class="control-row">
+            <button id="export-weekly-md-button" class="secondary">Export Weekly Markdown</button>
+            <button id="export-tasks-csv-button" class="secondary">Export Tasks CSV</button>
+            <span class="footnote" id="export-status"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Task</th>
+                  <th>Lane</th>
+                  <th>Model</th>
+                  <th>Status</th>
+                  <th>Tokens</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody id="recent-calls-body"></tbody>
+            </table>
+          </div>
+          <p class="footnote" id="report-files"></p>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

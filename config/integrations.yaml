@@ -1,6 +1,57 @@
 profiles:
   active_profile: lean_manual
   definitions:
+    bootstrap_minimal:
+      description: Lowest-friction bootstrap. No external write integrations.
+      enabled_integrations:
+        - web_browsing
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    stage_2_comms_google:
+      description: Bootstrap plus Gmail + Drive.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    stage_3_comms_dev:
+      description: Stage 2 plus GitHub workflows and repo operations.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    stage_4_tasks:
+      description: Stage 3 plus personal and agent task managers.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+        - personal_task_manager
+        - agent_task_manager
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    stage_5_automation:
+      description: Stage 4 plus n8n orchestration bridge.
+      enabled_integrations:
+        - web_browsing
+        - gmail
+        - drive
+        - github
+        - personal_task_manager
+        - agent_task_manager
+        - n8n
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
     lean_manual:
       description: Minimal onboarding with manual approval before external side effects.
       enabled_integrations:

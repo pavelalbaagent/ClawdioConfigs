@@ -21,6 +21,16 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 15. Environment readiness checker in [check_env_requirements.py](/Users/palba/Projects/Clawdio/scripts/check_env_requirements.py) and template [.env.example](/Users/palba/Projects/Clawdio/.env.example).
 16. Provider bundle checklist in [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Clawdio/docs/23-provider-bundles-checklist.md).
 17. n8n workflow contract pack in [docs/24-n8n-workflow-contract-pack.md](/Users/palba/Projects/Clawdio/docs/24-n8n-workflow-contract-pack.md) and `contracts/n8n/`.
+18. VPS transcript ingestion runbook in [docs/26-ytingest-transcript-ingestion-runbook.md](/Users/palba/Projects/Clawdio/docs/26-ytingest-transcript-ingestion-runbook.md).
+19. Public-video transcript access setup in [docs/27-youtube-public-transcript-access.md](/Users/palba/Projects/Clawdio/docs/27-youtube-public-transcript-access.md).
+20. Transcript-based usefulness analysis in [docs/28-youtube-transcript-usefulness-review.md](/Users/palba/Projects/Clawdio/docs/28-youtube-transcript-usefulness-review.md).
+21. Hybrid memory runbook (`1+2+4`) in [docs/29-memory-hybrid-124-runbook.md](/Users/palba/Projects/Clawdio/docs/29-memory-hybrid-124-runbook.md), [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml), [memory_index_sync.py](/Users/palba/Projects/Clawdio/scripts/memory_index_sync.py), and [memory_search.py](/Users/palba/Projects/Clawdio/scripts/memory_search.py).
+22. Reminder failure postmortem and hardening notes in [docs/30-reminder-failure-analysis.md](/Users/palba/Projects/Clawdio/docs/30-reminder-failure-analysis.md).
+23. Reminder scheduler payload guard in [reminder_scheduler_adapter.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_scheduler_adapter.py) and [docs/12-reminder-v2-spec.md](/Users/palba/Projects/Clawdio/docs/12-reminder-v2-spec.md).
+24. Secrets-file fast onboarding in [docs/31-secrets-file-onboarding.md](/Users/palba/Projects/Clawdio/docs/31-secrets-file-onboarding.md).
+25. Modular optionalization matrix and stage profiles in [docs/32-modular-optionalization-matrix.md](/Users/palba/Projects/Clawdio/docs/32-modular-optionalization-matrix.md), [profile_matrix.py](/Users/palba/Projects/Clawdio/scripts/profile_matrix.py), and [set_active_profiles.py](/Users/palba/Projects/Clawdio/scripts/set_active_profiles.py).
+26. Local dashboard control plane in [docs/33-dashboard-control-plane.md](/Users/palba/Projects/Clawdio/docs/33-dashboard-control-plane.md) and [dashboard/server.py](/Users/palba/Projects/Clawdio/dashboard/server.py).
+27. Situation-based model routing playbook and resolver in [docs/34-model-routing-playbook.md](/Users/palba/Projects/Clawdio/docs/34-model-routing-playbook.md) and [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py).
 
 ## Suggested starting sequence
 
@@ -36,7 +46,12 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 10. `python3 scripts/validate_configs.py --config-dir config`
 11. `python3 scripts/scan_secrets.py`
 12. `python3 -m unittest discover -s tests -p 'test_*.py' -v`
-13. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
+13. Configure and test hybrid memory:
+14. [docs/29-memory-hybrid-124-runbook.md](/Users/palba/Projects/Clawdio/docs/29-memory-hybrid-124-runbook.md)
+15. `python3 scripts/memory_index_sync.py --workspace /path/to/workspace --dry-run`
+16. Set dashboard auth token (optional but recommended): `export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'`
+17. Start the local dashboard control plane (optional): `python3 dashboard/server.py --host 127.0.0.1 --port 18789`
+18. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
 
 ## Important constraint
 

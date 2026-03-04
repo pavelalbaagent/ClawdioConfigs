@@ -1,0 +1,107 @@
+dashboard:
+  adapters:
+    local_telemetry_enabled: true
+    codexbar_cost_enabled: false
+    codexbar_usage_enabled: false
+  codexbar:
+    provider: all
+    timeout_seconds: 20
+  ui:
+    auto_refresh_seconds: 20
+  auth:
+    require_token: true
+    token_env_key: OPENCLAW_DASHBOARD_TOKEN
+    session_ttl_minutes: 720
+  presets:
+    manual_min_cost:
+      description: Lean manual approvals and lowest runtime cost.
+      integrations_profile: lean_manual
+      memory_profile: md_only
+      integration_toggles:
+        n8n: false
+        calendar: false
+        linkedin: false
+      memory_module_toggles:
+        semantic_embeddings: false
+        sqlite_state: false
+      n8n_module_toggles:
+        news_digest: false
+    standard_daily:
+      description: Balanced daily profile with hybrid memory and productivity modules.
+      integrations_profile: standard_productive
+      memory_profile: hybrid_124
+      integration_toggles:
+        gmail: true
+        drive: true
+        github: true
+        personal_task_manager: true
+        agent_task_manager: true
+        n8n: true
+      memory_module_toggles:
+        structured_markdown: true
+        semantic_embeddings: true
+        sqlite_state: true
+      n8n_module_toggles:
+        inbox_router: true
+        personal_reminders: true
+        agent_task_sync: true
+        news_digest: false
+    research_push:
+      description: Research-heavy mode with broader integrations and news ingestion.
+      integrations_profile: full_auto_candidate
+      memory_profile: hybrid_124
+      integration_toggles:
+        n8n: true
+        calendar: true
+        web_browsing: true
+      memory_module_toggles:
+        structured_markdown: true
+        semantic_embeddings: true
+        sqlite_state: true
+      n8n_module_toggles:
+        inbox_router: true
+        personal_reminders: true
+        agent_task_sync: true
+        news_digest: true
+  task_templates:
+    research_brief:
+      title: "Research brief: "
+      description: Gather findings and synthesize key insights.
+      priority: medium
+      status: todo
+      default_assignees:
+        - researcher
+      due_in_hours: 24
+      notes: Deliver concise findings with key sources and actionable recommendations.
+    build_feature:
+      title: "Build: "
+      description: Implement code changes and validation checks.
+      priority: high
+      status: todo
+      default_assignees:
+        - builder
+      due_in_hours: 48
+      notes: Implement changes, run tests, and summarize risks + next steps.
+    ops_health_check:
+      title: "Ops check: "
+      description: Inspect runtime health, reminders, and telemetry anomalies.
+      priority: medium
+      status: todo
+      default_assignees:
+        - ops_guard
+      due_in_hours: 12
+      notes: Review service health, pending reminders, and critical integration issues.
+  approvals:
+    require_for_external_writes: true
+    external_write_keywords:
+      - send
+      - email
+      - post
+      - publish
+      - delete
+      - push
+      - trigger
+      - workflow
+      - create event
+      - comment pr
+    auto_expire_hours: 72

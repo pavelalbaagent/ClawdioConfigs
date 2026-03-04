@@ -2,6 +2,12 @@
 
 Use this as curated long-term memory, not a raw transcript.
 
+Memory lanes:
+
+1. Lane 1 (structured markdown): this file + `memory/PROFILE.md`, `memory/PROJECTS.md`, `memory/DECISIONS.md`, `memory/INTEGRATIONS.md`.
+2. Lane 2 (semantic): optional embeddings-based lookup over markdown memory.
+3. Lane 4 (SQLite): structured persistence and query support for memory chunks/state.
+
 Compaction policy:
 
 1. Keep bullets short.

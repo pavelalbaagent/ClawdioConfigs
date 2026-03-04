@@ -8,6 +8,10 @@ baseline:
     - HEARTBEAT.md
     - memory/README.md
     - memory/TEMPLATE.md
+    - memory/PROFILE.md
+    - memory/PROJECTS.md
+    - memory/DECISIONS.md
+    - memory/INTEGRATIONS.md
   required_headings:
     SOUL.md:
       - Identity
@@ -45,6 +49,26 @@ baseline:
       - Check Cadence
       - Checklist
       - Quiet Hours
+    memory/PROFILE.md:
+      - Identity Snapshot
+      - Communication and Collaboration
+      - Personal Constraints
+      - Durable Preferences
+      - Last Review
+    memory/PROJECTS.md:
+      - Active Projects
+      - Paused Projects
+      - Priority Order
+      - Last Review
+    memory/DECISIONS.md:
+      - Decision Log
+      - Revisit Triggers
+      - Last Review
+    memory/INTEGRATIONS.md:
+      - Enabled Integrations
+      - Credentials State
+      - Failure Notes
+      - Last Review
   max_lines:
     SOUL.md: 120
     USER.md: 160
@@ -52,3 +76,7 @@ baseline:
     SESSION.md: 140
     TODO.md: 180
     HEARTBEAT.md: 120
+    memory/PROFILE.md: 180
+    memory/PROJECTS.md: 220
+    memory/DECISIONS.md: 220
+    memory/INTEGRATIONS.md: 200

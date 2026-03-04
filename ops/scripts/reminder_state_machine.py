@@ -53,6 +53,18 @@ def parse_when(value: str, timezone_name: str, reference_utc: datetime) -> datet
     zone = ZoneInfo(timezone_name)
     reference_local = reference_utc.astimezone(zone)
 
+    # Relative inputs, e.g. "in 1 hour", "in 30 minutes", "in 90m".
+    rel = re.fullmatch(r"in\s+(\d+)\s*(hours?|hrs?|h|minutes?|mins?|m)\s*", text, flags=re.IGNORECASE)
+    if rel:
+        qty = int(rel.group(1))
+        unit = rel.group(2).lower()
+        if unit in {"hours", "hour", "hrs", "hr", "h"}:
+            return reference_utc + timedelta(hours=qty)
+        return reference_utc + timedelta(minutes=qty)
+
+    if re.fullmatch(r"in\s+(an?|one)\s+hour\s*", text, flags=re.IGNORECASE):
+        return reference_utc + timedelta(hours=1)
+
     # HH:MM means today or tomorrow in the given timezone.
     hhmm = re.fullmatch(r"(\d{1,2}):(\d{2})", text)
     if hhmm:
@@ -109,10 +121,25 @@ def output(payload: dict[str, Any]) -> None:
 
 
 def parse_create_text(text: str) -> tuple[str, str] | None:
-    match = re.match(r"^\s*remind\s+me\s+(.+?)\s+at\s+(.+?)\s*$", text, flags=re.IGNORECASE)
-    if not match:
+    normalized = text.strip()
+
+    at_match = re.match(r"^\s*remind\s+me\s+(.+)\s+at\s+(.+)\s*$", normalized, flags=re.IGNORECASE)
+    if at_match:
+        message = at_match.group(1).strip()
+        when_text = at_match.group(2).strip()
+        if message and when_text:
+            return message, when_text
         return None
-    return match.group(1).strip(), match.group(2).strip()
+
+    in_match = re.match(r"^\s*remind\s+me\s+(.+)\s+in\s+(.+)\s*$", normalized, flags=re.IGNORECASE)
+    if in_match:
+        message = in_match.group(1).strip()
+        when_text = in_match.group(2).strip()
+        if message and when_text:
+            return message, f"in {when_text}"
+        return None
+
+    return None
 
 
 def parse_reply_text(text: str) -> tuple[str, str | None]:
@@ -194,7 +221,11 @@ def cmd_create(args: argparse.Namespace) -> None:
     state_file = Path(args.state_file)
     state = load_state(state_file)
     current = now_utc()
-    reminder_at = parse_when(args.when, args.timezone, current)
+    try:
+        reminder_at = parse_when(args.when, args.timezone, current)
+    except Exception:
+        output({"ok": False, "error": "invalid_time", "input": args.when})
+        raise SystemExit(2)
     reminder_id = args.id or build_id()
 
     reminder = {
@@ -303,7 +334,11 @@ def cmd_respond(args: argparse.Namespace) -> None:
     if command == "done":
         response = apply_done(state, reminder, current)
     elif command == "defer":
-        response = apply_defer(state, reminder, str(payload), current)
+        try:
+            response = apply_defer(state, reminder, str(payload), current)
+        except Exception:
+            output({"ok": False, "error": "invalid_time", "input": payload})
+            raise SystemExit(2)
     elif command == "invalid":
         output({"ok": False, "error": "missing_defer_time"})
         raise SystemExit(2)
@@ -348,7 +383,11 @@ def cmd_handle_reply(args: argparse.Namespace) -> None:
     if command == "done":
         response = apply_done(state, reminder, current)
     else:
-        response = apply_defer(state, reminder, str(payload), current)
+        try:
+            response = apply_defer(state, reminder, str(payload), current)
+        except Exception:
+            output({"ok": False, "error": "invalid_time", "input": payload})
+            raise SystemExit(2)
 
     save_state(state_file, state)
     output(response)
