@@ -1,0 +1,189 @@
+profiles:
+  active_profile: addons_off
+  definitions:
+    addons_off:
+      description: Baseline mode. Keep external skill add-ons disabled.
+      enabled_addons: []
+    addons_core_recommended:
+      description: Lowest-friction recommended add-ons that improve deterministic workflows.
+      enabled_addons:
+        - markdown_converter
+        - video_transcript_downloader
+        - summarize
+        - model_usage
+        - github
+        - gemini
+    addons_search_brave:
+      description: Core recommended add-ons plus Brave API search.
+      enabled_addons:
+        - markdown_converter
+        - video_transcript_downloader
+        - summarize
+        - model_usage
+        - github
+        - gemini
+        - brave_search
+    addons_collab_planning:
+      description: Core recommended add-ons plus Slack and Trello connectors.
+      enabled_addons:
+        - markdown_converter
+        - video_transcript_downloader
+        - summarize
+        - model_usage
+        - github
+        - gemini
+        - slack
+        - trello
+
+addons:
+  brave_search:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env:
+      - BRAVE_SEARCH_API_KEY
+    optional_env: []
+    conflicts_with:
+      - tavily_search
+    notes: Use as the primary API search adapter when browser-only retrieval is insufficient.
+
+  gog:
+    enabled: false
+    tier: skip_for_now
+    cost_class: low
+    required_env:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_REFRESH_TOKEN
+    optional_env: []
+    notes: Overlaps with existing Gmail/Drive integrations and broadens scope complexity.
+
+  gemini:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env:
+      - GEMINI_API_KEY
+    optional_env: []
+    notes: Aligns with existing Gemini CLI lane and low-cost routing.
+
+  mcporter:
+    enabled: false
+    tier: skip_for_now
+    cost_class: medium
+    required_env: []
+    optional_env: []
+    notes: MCP-heavy path is postponed in current plan.
+
+  slack:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env:
+      - SLACK_BOT_TOKEN
+      - SLACK_SIGNING_SECRET
+    optional_env:
+      - SLACK_APP_TOKEN
+    notes: Keep platform-agnostic contract first; enable channel-specific bridge only when needed.
+
+  frontend_design:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env: []
+    optional_env: []
+    notes: Enable only during active dashboard/frontend design cycles.
+
+  markdown_converter:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env: []
+    optional_env: []
+    notes: Deterministic content normalization before summarization or indexing.
+
+  video_transcript_downloader:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env: []
+    optional_env:
+      - YTDLP_COOKIES_FILE
+      - YTDLP_EXTRA_ARGS
+    notes: Improves transcript reliability for public third-party videos.
+
+  onepassword:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env:
+      - OP_SERVICE_ACCOUNT_TOKEN
+    optional_env:
+      - OP_ACCOUNT
+    notes: Good future hardening path for centralized secret retrieval.
+
+  model_usage:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env: []
+    optional_env:
+      - CODEXBAR_API_KEY
+    notes: Supports cost/usage visibility and routing discipline.
+
+  trello:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env:
+      - TRELLO_API_KEY
+      - TRELLO_TOKEN
+    optional_env:
+      - TRELLO_DEFAULT_BOARD_ID
+    notes: Useful only if Trello is selected as a task backend.
+
+  nano_pdf:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env: []
+    optional_env: []
+    notes: Niche convenience utility; keep optional.
+
+  github:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env:
+      - GITHUB_TOKEN
+      - GITHUB_OWNER
+    optional_env:
+      - GITHUB_REPO
+    notes: Aligns with existing controlled GitHub workflow integration.
+
+  summarize:
+    enabled: true
+    tier: recommended_now
+    cost_class: low
+    required_env: []
+    optional_env: []
+    notes: Keep as a controlled compression step after deterministic preprocessing.
+
+  self_improving_agent:
+    enabled: false
+    tier: skip_for_now
+    cost_class: high
+    required_env: []
+    optional_env: []
+    notes: Higher-autonomy behavior conflicts with manual-first cost strategy.
+
+  tavily_search:
+    enabled: false
+    tier: skip_for_now
+    cost_class: low
+    required_env:
+      - TAVILY_API_KEY
+    optional_env: []
+    conflicts_with:
+      - brave_search
+    notes: Overlaps with Brave search path; keep disabled unless explicitly switched.

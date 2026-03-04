@@ -34,16 +34,25 @@ Defined in [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml
 2. `md_plus_embeddings`: semantic recall enabled.
 3. `hybrid_124`: markdown + embeddings + SQLite (current default).
 
+## Add-on Presets (External Skills)
+
+Defined in [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml):
+
+1. `addons_off`: baseline, all external skill add-ons disabled.
+2. `addons_core_recommended`: deterministic utility add-ons (`markdown_converter`, `video_transcript_downloader`, `summarize`, `model_usage`, `github`, `gemini`).
+3. `addons_search_brave`: core set plus `brave_search`.
+4. `addons_collab_planning`: core set plus `slack` and `trello`.
+
 ## Quick Switch Commands
 
 1. List available integration profiles + required env keys:
 2. `python3 scripts/profile_matrix.py`
 3. Switch active profiles safely:
-4. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_minimal --memory-profile md_only`
+4. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_minimal --memory-profile md_only --addons-profile addons_off`
 5. Validate required keys for chosen profiles from a secrets file:
-6. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict`
+6. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict --addons-profile addons_off`
 7. Show optional key status too (including Brave):
-8. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --include-optional`
+8. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --include-optional --addons-profile addons_search_brave`
 
 ## Recommended Low-Risk Starting Mode
 
@@ -55,4 +64,4 @@ Defined in [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml
 ## Rollback
 
 1. Switch back to current baseline instantly:
-2. `python3 scripts/set_active_profiles.py --integrations-profile lean_manual --memory-profile hybrid_124`
+2. `python3 scripts/set_active_profiles.py --integrations-profile lean_manual --memory-profile hybrid_124 --addons-profile addons_off`

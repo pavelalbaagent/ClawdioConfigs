@@ -58,6 +58,25 @@ class CheckEnvRequirementsTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             self.assertIn("BRAVE_SEARCH_API_KEY=", proc.stdout)
 
+    def test_addons_profile_reports_missing_required_vars_in_strict_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / "runtime.env"
+            env_path.write_text("OPENAI_API_KEY=test\n", encoding="utf-8")
+
+            proc = self.run_script(
+                [
+                    "--env-file",
+                    str(env_path),
+                    "--addons-profile",
+                    "addons_search_brave",
+                    "--strict",
+                ]
+            )
+            self.assertNotEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            self.assertIn("Add-ons:", proc.stdout)
+            self.assertIn("brave_search", proc.stdout)
+            self.assertIn("BRAVE_SEARCH_API_KEY=MISSING", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print integration profile module and env-key matrix."""
+"""Print integration and add-on profile env-key matrices."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "integrations.yaml"
+DEFAULT_ADDONS_CONFIG = ROOT / "config" / "addons.yaml"
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -62,7 +63,6 @@ def resolve_profile_required_env(
 ) -> tuple[list[str], list[str], dict[str, list[str]]]:
     modules = ensure_string_list(profile.get("enabled_integrations"))
     required: list[str] = []
-    optional: list[str] = []
     module_required: dict[str, list[str]] = {}
 
     for module_name in modules:
@@ -82,7 +82,6 @@ def resolve_profile_required_env(
         req = list(dict.fromkeys(req))
         module_required[module_name] = req
         required.extend(req)
-        optional.extend(ensure_string_list(integration.get("optional_env")))
 
     return (
         modules,
@@ -91,10 +90,33 @@ def resolve_profile_required_env(
     )
 
 
+def resolve_addon_profile_required_env(
+    profile: dict[str, Any],
+    addons: dict[str, Any],
+) -> tuple[list[str], list[str], dict[str, list[str]]]:
+    addon_names = ensure_string_list(profile.get("enabled_addons"))
+    required: list[str] = []
+    addon_required: dict[str, list[str]] = {}
+
+    for addon_name in addon_names:
+        addon = ensure_dict(addons.get(addon_name))
+        if not addon:
+            addon_required[addon_name] = []
+            continue
+        req = ensure_string_list(addon.get("required_env"))
+        req = list(dict.fromkeys(req))
+        addon_required[addon_name] = req
+        required.extend(req)
+
+    return addon_names, sorted(set(required)), addon_required
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Print profile module matrix and required env keys")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to integrations.yaml")
+    parser.add_argument("--addons-config", default=str(DEFAULT_ADDONS_CONFIG), help="path to addons.yaml")
     parser.add_argument("--profile", help="show details for one profile")
+    parser.add_argument("--addons-profile", help="show details for one add-ons profile")
     args = parser.parse_args()
 
     config_path = Path(args.config).resolve()
@@ -140,6 +162,51 @@ def main() -> int:
                     print(f"  - {module_name}: {', '.join(keys)}")
                 else:
                     print(f"  - {module_name}: none")
+
+        print("")
+
+    addons_config_path = Path(args.addons_config).resolve()
+    if not addons_config_path.exists():
+        print(f"Add-ons config not found: {addons_config_path}")
+        return 0
+
+    addons_data = ensure_dict(load_yaml(addons_config_path))
+    addons_profiles = ensure_dict(ensure_dict(addons_data.get("profiles")).get("definitions"))
+    addons_active = ensure_dict(addons_data.get("profiles")).get("active_profile")
+    addons = ensure_dict(addons_data.get("addons"))
+
+    if not addons_profiles:
+        print("No add-ons profiles found")
+        return 0
+
+    addon_profile_names = [args.addons_profile] if args.addons_profile else sorted(addons_profiles.keys())
+    for name in addon_profile_names:
+        if not isinstance(name, str) or name not in addons_profiles:
+            print(f"Add-ons profile not found: {name}")
+            return 1
+        profile = ensure_dict(addons_profiles[name])
+        addon_names, required_env, addon_required = resolve_addon_profile_required_env(profile, addons)
+        marker = " (active)" if name == addons_active else ""
+
+        print(f"Add-ons profile: {name}{marker}")
+        description = profile.get("description")
+        if isinstance(description, str) and description.strip():
+            print(f"- Description: {description.strip()}")
+        print(f"- Enabled add-ons ({len(addon_names)}): {', '.join(addon_names) if addon_names else 'none'}")
+        print(f"- Required env count: {len(required_env)}")
+        if required_env:
+            print("- Required env keys:")
+            for key in required_env:
+                print(f"  - {key}")
+
+        if args.addons_profile:
+            print("- Add-on -> required env:")
+            for addon_name in addon_names:
+                keys = addon_required.get(addon_name, [])
+                if keys:
+                    print(f"  - {addon_name}: {', '.join(keys)}")
+                else:
+                    print(f"  - {addon_name}: none")
 
         print("")
 

@@ -31,14 +31,15 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 25. Modular optionalization matrix and stage profiles in [docs/32-modular-optionalization-matrix.md](/Users/palba/Projects/Clawdio/docs/32-modular-optionalization-matrix.md), [profile_matrix.py](/Users/palba/Projects/Clawdio/scripts/profile_matrix.py), and [set_active_profiles.py](/Users/palba/Projects/Clawdio/scripts/set_active_profiles.py).
 26. Local dashboard control plane in [docs/33-dashboard-control-plane.md](/Users/palba/Projects/Clawdio/docs/33-dashboard-control-plane.md) and [dashboard/server.py](/Users/palba/Projects/Clawdio/dashboard/server.py).
 27. Situation-based model routing playbook and resolver in [docs/34-model-routing-playbook.md](/Users/palba/Projects/Clawdio/docs/34-model-routing-playbook.md) and [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py).
+28. Skill add-on modular pack in [docs/35-addons-modular-skill-pack.md](/Users/palba/Projects/Clawdio/docs/35-addons-modular-skill-pack.md) and [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml).
 
 ## Suggested starting sequence
 
 1. Review [docs/00-recovered-assets.md](/Users/palba/Projects/Clawdio/docs/00-recovered-assets.md).
 2. Review VPS salvage triage in [docs/10-vps-salvage-triage.md](/Users/palba/Projects/Clawdio/docs/10-vps-salvage-triage.md) and promoted assets in [docs/17-promoted-vps-assets.md](/Users/palba/Projects/Clawdio/docs/17-promoted-vps-assets.md).
-3. Pick integration profile and fill required keys:
+3. Pick integration/memory/add-on profiles and fill required keys:
 4. `python3 scripts/check_env_requirements.py`
-5. `python3 scripts/check_env_requirements.py --strict`
+5. `python3 scripts/check_env_requirements.py --strict --addons-profile addons_off`
 6. Review provider bundle and n8n contracts:
 7. [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Clawdio/docs/23-provider-bundles-checklist.md)
 8. [docs/24-n8n-workflow-contract-pack.md](/Users/palba/Projects/Clawdio/docs/24-n8n-workflow-contract-pack.md)

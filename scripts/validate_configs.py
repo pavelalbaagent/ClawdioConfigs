@@ -23,6 +23,7 @@ EXPECTED_CONFIGS = {
     "channels": CONFIG_DIR / "channels.yaml",
     "models": CONFIG_DIR / "models.yaml",
     "integrations": CONFIG_DIR / "integrations.yaml",
+    "addons": CONFIG_DIR / "addons.yaml",
     "memory": CONFIG_DIR / "memory.yaml",
     "agents": CONFIG_DIR / "agents.yaml",
     "tasks": CONFIG_DIR / "tasks.yaml",
@@ -335,6 +336,62 @@ def validate_integrations(data: dict[str, Any], errors: list[str], warnings: lis
     rotate_days = secrets.get("rotate_days")
     if not isinstance(rotate_days, int) or rotate_days <= 0:
         add_error(errors, "RANGE", "integrations.secrets.rotate_days must be integer > 0")
+
+
+def validate_addons(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
+    profiles = require_dict(data.get("profiles"), errors, "addons.profiles")
+    active_profile = profiles.get("active_profile")
+    if not is_non_empty_str(active_profile):
+        add_error(errors, "REQ", "addons.profiles.active_profile is required")
+        active_profile = ""
+    definitions = require_dict(profiles.get("definitions"), errors, "addons.profiles.definitions")
+
+    addons = require_dict(data.get("addons"), errors, "addons.addons")
+    addon_names = set(addons.keys())
+
+    if active_profile and active_profile not in definitions:
+        add_error(errors, "PROFILE", f"active add-ons profile not found: {active_profile}")
+
+    active_enabled: set[str] = set()
+    for profile_name, profile_data in definitions.items():
+        section = f"addons.profiles.definitions.{profile_name}"
+        profile = require_dict(profile_data, errors, section)
+        enabled_addons = validate_string_list(
+            profile.get("enabled_addons", []),
+            f"{section}.enabled_addons",
+            errors,
+            allow_empty=True,
+        )
+        if profile_name == active_profile:
+            active_enabled = set(enabled_addons)
+        for addon_name in enabled_addons:
+            if addon_name not in addon_names:
+                add_error(errors, "PROFILE", f"{section} references unknown add-on: {addon_name}")
+
+    allowed_tiers = {"recommended_now", "optional", "skip_for_now"}
+    for addon_name, addon_data in addons.items():
+        section = f"addons.addons.{addon_name}"
+        addon = require_dict(addon_data, errors, section)
+        enabled = addon.get("enabled")
+        if not isinstance(enabled, bool):
+            add_error(errors, "TYPE", f"{section}.enabled must be boolean")
+
+        validate_string_list(addon.get("required_env", []), f"{section}.required_env", errors, allow_empty=True)
+        validate_string_list(addon.get("optional_env", []), f"{section}.optional_env", errors, allow_empty=True)
+
+        tier = addon.get("tier")
+        if is_non_empty_str(tier) and tier not in allowed_tiers:
+            add_warning(warnings, "ADDON", f"{section}.tier is not in allowed set: {sorted(allowed_tiers)}")
+        elif tier is not None and not is_non_empty_str(tier):
+            add_error(errors, "TYPE", f"{section}.tier must be a non-empty string when set")
+
+        conflicts = validate_string_list(addon.get("conflicts_with", []), f"{section}.conflicts_with", errors, allow_empty=True)
+        unknown_conflicts = sorted(set(conflicts) - addon_names)
+        if unknown_conflicts:
+            add_warning(warnings, "ADDON", f"{section}.conflicts_with references unknown add-ons: {unknown_conflicts}")
+
+        if addon_name in active_enabled and enabled is False:
+            add_warning(warnings, "ADDON", f"active add-ons profile enables {addon_name} but addon is disabled")
 
 
 def validate_agents(data: dict[str, Any], model_lanes: set[str], errors: list[str], warnings: list[str]) -> None:
@@ -680,6 +737,8 @@ def main() -> int:
         validate_models(require_dict(loaded["models"], errors, "models"), errors, warnings)
     if "integrations" in loaded:
         validate_integrations(require_dict(loaded["integrations"], errors, "integrations"), errors, warnings)
+    if "addons" in loaded:
+        validate_addons(require_dict(loaded["addons"], errors, "addons"), errors, warnings)
     if "memory" in loaded:
         validate_memory(require_dict(loaded["memory"], errors, "memory"), errors, warnings)
 

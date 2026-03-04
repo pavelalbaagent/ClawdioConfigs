@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report required environment variables for enabled integrations and tool CLIs."""
+"""Report required env vars for active integrations, memory modules, and add-ons."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "integrations.yaml"
 DEFAULT_MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
+DEFAULT_ADDONS_CONFIG = ROOT / "config" / "addons.yaml"
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -151,13 +152,30 @@ def resolve_memory_profile(memory_data: dict[str, Any]) -> tuple[str, dict[str, 
     return profile_name, profile, modules
 
 
+def resolve_addons_profile(
+    addons_data: dict[str, Any],
+    profile_override: str | None,
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    profiles = ensure_dict(addons_data.get("profiles"))
+    definitions = ensure_dict(profiles.get("definitions"))
+    profile_name = profile_override or profiles.get("active_profile")
+    if not isinstance(profile_name, str) or not profile_name.strip():
+        return "", {}, {}
+    profile_name = profile_name.strip()
+    profile = ensure_dict(definitions.get(profile_name))
+    addons = ensure_dict(addons_data.get("addons"))
+    return profile_name, profile, addons
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check required env vars for integration profile")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to integrations.yaml")
     parser.add_argument("--memory-config", default=str(DEFAULT_MEMORY_CONFIG), help="path to memory.yaml")
+    parser.add_argument("--addons-config", default=str(DEFAULT_ADDONS_CONFIG), help="path to addons.yaml")
     parser.add_argument("--env-file", help="dotenv-like file to use for checks without exporting vars")
     parser.add_argument("--include-optional", action="store_true", help="also report optional env vars")
     parser.add_argument("--profile", help="override active profile")
+    parser.add_argument("--addons-profile", help="override active add-ons profile")
     parser.add_argument("--strict", action="store_true", help="exit non-zero if required env vars are missing")
     args = parser.parse_args()
 
@@ -297,6 +315,52 @@ def main() -> int:
                     if optional:
                         optional_status = [f"{var}={env_state(var, env_overrides)}" for var in optional]
                         print(f"- {module_name} (optional): " + ", ".join(optional_status))
+
+    print("")
+    print("Add-ons:")
+    addons_config_path = Path(args.addons_config)
+    if not addons_config_path.exists():
+        print(f"- addons config not found: {addons_config_path}")
+    else:
+        addons_data = ensure_dict(load_yaml(addons_config_path))
+        addons_profile_name, addons_profile, addons = resolve_addons_profile(addons_data, args.addons_profile)
+        if not addons_profile_name:
+            print("- no active add-ons profile found")
+        elif not addons_profile:
+            print(f"- profile not found: {addons_profile_name}")
+        else:
+            print(f"- profile: {addons_profile_name}")
+            enabled_addons = ensure_string_list(addons_profile.get("enabled_addons"))
+            if not enabled_addons:
+                print("- enabled_addons: empty")
+            for addon_name in enabled_addons:
+                addon = ensure_dict(addons.get(addon_name))
+                if not addon:
+                    print(f"- {addon_name}: NOT_DEFINED")
+                    continue
+                if addon.get("enabled") is not True:
+                    print(f"- {addon_name}: DISABLED")
+                    continue
+
+                tier = addon.get("tier")
+                display_name = f"{addon_name} [{tier}]" if isinstance(tier, str) and tier.strip() else addon_name
+                required = ensure_string_list(addon.get("required_env", []))
+                if not required:
+                    print(f"- {display_name}: no required env vars")
+                else:
+                    statuses = [f"{var}={env_state(var, env_overrides)}" for var in required]
+                    print(f"- {display_name}: " + ", ".join(statuses))
+                    append_missing(required, missing_required, env_overrides)
+
+                if args.include_optional:
+                    optional = ensure_string_list(addon.get("optional_env", []))
+                    if optional:
+                        optional_status = [f"{var}={env_state(var, env_overrides)}" for var in optional]
+                        print(f"- {display_name} (optional): " + ", ".join(optional_status))
+
+                conflicts = ensure_string_list(addon.get("conflicts_with", []))
+                if conflicts:
+                    print(f"- {display_name}: conflicts_with={', '.join(conflicts)}")
 
     unique_missing = sorted(set(missing_required))
     print("")

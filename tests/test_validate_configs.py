@@ -8,6 +8,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "validate_configs.py"
 CONFIG_DIR = ROOT / "config"
+CONFIG_FILES = (
+    "core",
+    "channels",
+    "models",
+    "integrations",
+    "addons",
+    "memory",
+    "agents",
+    "tasks",
+    "security",
+    "reminders",
+    "session_policy",
+)
 
 
 class ValidateConfigsTests(unittest.TestCase):
@@ -23,18 +36,7 @@ class ValidateConfigsTests(unittest.TestCase):
     def test_invalid_budget_distribution_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            for name in (
-                "core",
-                "channels",
-                "models",
-                "integrations",
-                "memory",
-                "agents",
-                "tasks",
-                "security",
-                "reminders",
-                "session_policy",
-            ):
+            for name in CONFIG_FILES:
                 shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
 
             models_path = tmp_path / "models.yaml"
@@ -53,18 +55,7 @@ class ValidateConfigsTests(unittest.TestCase):
     def test_missing_integration_profile_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            for name in (
-                "core",
-                "channels",
-                "models",
-                "integrations",
-                "memory",
-                "agents",
-                "tasks",
-                "security",
-                "reminders",
-                "session_policy",
-            ):
+            for name in CONFIG_FILES:
                 shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
 
             integrations_path = tmp_path / "integrations.yaml"
@@ -83,18 +74,7 @@ class ValidateConfigsTests(unittest.TestCase):
     def test_missing_memory_profile_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            for name in (
-                "core",
-                "channels",
-                "models",
-                "integrations",
-                "memory",
-                "agents",
-                "tasks",
-                "security",
-                "reminders",
-                "session_policy",
-            ):
+            for name in CONFIG_FILES:
                 shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
 
             memory_path = tmp_path / "memory.yaml"

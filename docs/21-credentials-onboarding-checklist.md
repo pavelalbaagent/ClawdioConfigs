@@ -1,6 +1,6 @@
 # Credentials and Onboarding Checklist
 
-Last updated: 2026-03-02
+Last updated: 2026-03-04
 
 ## Target
 
@@ -41,13 +41,14 @@ Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/
 
 1. Keep LinkedIn off until compliance path is confirmed.
 2. If needed later, add LinkedIn OAuth values and run manual-review-only mode first.
+3. Keep `addons_off` until baseline is stable, then enable one add-on profile at a time from [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml).
 
 ## Validation Gates
 
 1. `python3 scripts/check_env_requirements.py`
-2. `python3 scripts/check_env_requirements.py --strict`
-3. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict`
-4. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --include-optional`
+2. `python3 scripts/check_env_requirements.py --strict --addons-profile addons_off`
+3. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict --addons-profile addons_off`
+4. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --include-optional --addons-profile addons_search_brave`
 5. `python3 scripts/validate_configs.py --config-dir config`
 6. `python3 scripts/scan_secrets.py`
 

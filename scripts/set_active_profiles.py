@@ -14,6 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATIONS_CONFIG = ROOT / "config" / "integrations.yaml"
 MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
+ADDONS_CONFIG = ROOT / "config" / "addons.yaml"
 ACTIVE_RE = re.compile(r"^(\s*active_profile:\s*)([^\s#]+)(.*)$")
 
 
@@ -84,14 +85,15 @@ def update_config(path: Path, new_profile: str, dry_run: bool) -> tuple[str, str
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Switch active profile in integrations/memory configs")
+    parser = argparse.ArgumentParser(description="Switch active profile in integrations/memory/add-ons configs")
     parser.add_argument("--integrations-profile", help="new active profile for config/integrations.yaml")
     parser.add_argument("--memory-profile", help="new active profile for config/memory.yaml")
+    parser.add_argument("--addons-profile", help="new active profile for config/addons.yaml")
     parser.add_argument("--dry-run", action="store_true", help="validate and preview without writing files")
     args = parser.parse_args()
 
-    if not args.integrations_profile and not args.memory_profile:
-        print("Nothing to change. Provide --integrations-profile and/or --memory-profile")
+    if not args.integrations_profile and not args.memory_profile and not args.addons_profile:
+        print("Nothing to change. Provide --integrations-profile, --memory-profile, and/or --addons-profile")
         return 2
 
     if args.integrations_profile:
@@ -113,6 +115,16 @@ def main() -> int:
         prev, new = update_config(MEMORY_CONFIG, args.memory_profile, args.dry_run)
         mode = "would switch" if args.dry_run else "switched"
         print(f"memory: {mode} {prev} -> {new}")
+
+    if args.addons_profile:
+        current, definitions = get_profile_definitions(ADDONS_CONFIG)
+        if args.addons_profile not in definitions:
+            print(f"Unknown add-ons profile: {args.addons_profile}")
+            print(f"Available: {', '.join(sorted(definitions))}")
+            return 2
+        prev, new = update_config(ADDONS_CONFIG, args.addons_profile, args.dry_run)
+        mode = "would switch" if args.dry_run else "switched"
+        print(f"addons: {mode} {prev} -> {new}")
 
     if args.dry_run:
         print("dry run complete")
