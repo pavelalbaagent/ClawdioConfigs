@@ -57,6 +57,10 @@ def ensure_string_list(value: Any) -> list[str]:
     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
 
+def dedupe_string_list(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
 def read_json(path: Path) -> Any:
     if not path.exists():
         return None
@@ -288,6 +292,7 @@ class DashboardBackend:
                     "require_token": True,
                     "token_env_key": "OPENCLAW_DASHBOARD_TOKEN",
                     "session_ttl_minutes": 720,
+                    "allow_generated_token": False,
                 },
                 "presets": {
                     "manual_min_cost": {
@@ -465,7 +470,9 @@ class DashboardBackend:
         else:
             progress_pct = 100 if status == "done" else 0
 
-        assignees = ensure_string_list(row.get("assignees", []))
+        assignees = dedupe_string_list(ensure_string_list(row.get("assignees", [])))
+        side_effects = dedupe_string_list(ensure_string_list(row.get("side_effects", [])))
+        requires_approval = bool(row.get("requires_approval") is True or side_effects)
 
         return {
             "id": task_id,
@@ -478,6 +485,8 @@ class DashboardBackend:
             "notes": str(row.get("notes", "")).strip(),
             "source": str(row.get("source", "dashboard")).strip() or "dashboard",
             "progress_pct": progress_pct,
+            "requires_approval": requires_approval,
+            "side_effects": side_effects,
             "created_at": str(row.get("created_at", "")).strip() or iso_now_utc(),
             "updated_at": str(row.get("updated_at", "")).strip() or iso_now_utc(),
         }
@@ -604,6 +613,7 @@ class DashboardBackend:
         auth_require_token: bool | None = None,
         auth_token_env_key: str | None = None,
         auth_session_ttl_minutes: int | None = None,
+        auth_allow_generated_token: bool | None = None,
         routing_mode: str | None = None,
     ) -> dict[str, Any]:
         cfg = self.read_dashboard_config()
@@ -646,6 +656,8 @@ class DashboardBackend:
             if auth_session_ttl_minutes <= 0:
                 raise ValueError("auth_session_ttl_minutes must be > 0")
             auth["session_ttl_minutes"] = auth_session_ttl_minutes
+        if auth_allow_generated_token is not None:
+            auth["allow_generated_token"] = auth_allow_generated_token
 
         if routing_mode is not None:
             self.set_routing_mode(routing_mode)
@@ -1213,6 +1225,41 @@ class DashboardBackend:
 
         return out
 
+    def _side_effect_catalog(self) -> list[str]:
+        integrations_data = self.load_yaml_dict(self.integrations_path)
+        integrations = ensure_dict(integrations_data.get("integrations"))
+        tool_clis = ensure_dict(integrations_data.get("tool_clis"))
+
+        effects = {"custom:external_write"}
+        for integration_name, integration_data in integrations.items():
+            row = ensure_dict(integration_data)
+            for action in ensure_string_list(row.get("write_actions", [])):
+                effects.add(f"{integration_name}:{action}")
+
+        for cli_name, cli_data in tool_clis.items():
+            row = ensure_dict(cli_data)
+            for action in ensure_string_list(row.get("approval_required_for", [])):
+                effects.add(f"tool_cli:{cli_name}:{action}")
+
+        return sorted(effects)
+
+    def _normalize_side_effects(self, side_effects: list[str] | None) -> list[str]:
+        clean = dedupe_string_list(
+            [item.strip().lower() for item in (side_effects or []) if isinstance(item, str) and item.strip()]
+        )
+        if not clean:
+            return []
+
+        allowed = set(self._side_effect_catalog())
+        invalid = [item for item in clean if item not in allowed]
+        if invalid:
+            raise ValueError(
+                "unknown side_effects: "
+                + ", ".join(invalid)
+                + ". Use one of the catalog values from integrations/tool CLIs or custom:external_write."
+            )
+        return clean
+
     def _task_templates(self) -> list[dict[str, Any]]:
         cfg = self.read_dashboard_config()
         templates = ensure_dict(ensure_dict(cfg.get("dashboard")).get("task_templates"))
@@ -1243,6 +1290,8 @@ class DashboardBackend:
                     "default_assignees": ensure_string_list(row.get("default_assignees", [])),
                     "due_in_hours": due_in_hours,
                     "notes": str(row.get("notes", "")).strip(),
+                    "side_effects": self._normalize_side_effects(ensure_string_list(row.get("side_effects", []))),
+                    "requires_approval": bool(row.get("requires_approval") is True),
                 }
             )
         return rows
@@ -1262,14 +1311,17 @@ class DashboardBackend:
         if not settings["require_for_external_writes"]:
             return False
 
+        if bool(task.get("requires_approval") is True):
+            return True
+
+        if ensure_string_list(task.get("side_effects", [])):
+            return True
+
         source = f"{task.get('title', '')} {task.get('notes', '')}".lower()
         for keyword in settings["external_write_keywords"]:
             if keyword and keyword in source:
                 return True
 
-        # explicit override for future integrations if caller sets it
-        if bool(task.get("requires_approval") is True):
-            return True
         return False
 
     def create_task_from_template(
@@ -1283,6 +1335,8 @@ class DashboardBackend:
         priority: str | None = None,
         due_at: str | None = None,
         notes: str | None = None,
+        side_effects: list[str] | None = None,
+        requires_approval: bool | None = None,
     ) -> dict[str, Any]:
         clean_template = template_name.strip()
         if not clean_template:
@@ -1297,6 +1351,16 @@ class DashboardBackend:
         resolved_priority = (priority or "").strip().lower() or str(template.get("priority", "medium"))
         resolved_status = (status or "").strip().lower() or str(template.get("status", "todo"))
         resolved_notes = (notes or "").strip() or str(template.get("notes", "")).strip() or None
+        resolved_side_effects = (
+            self._normalize_side_effects(side_effects)
+            if side_effects is not None
+            else self._normalize_side_effects(ensure_string_list(template.get("side_effects", [])))
+        )
+        resolved_requires_approval = (
+            bool(requires_approval)
+            if requires_approval is not None
+            else bool(template.get("requires_approval") is True or resolved_side_effects)
+        )
 
         resolved_assignees = [item.strip().lower() for item in (assignees or []) if item.strip()]
         if not resolved_assignees:
@@ -1320,6 +1384,8 @@ class DashboardBackend:
             notes=resolved_notes,
             progress_pct=0,
             source="template",
+            side_effects=resolved_side_effects,
+            requires_approval=resolved_requires_approval,
         )
 
         return {
@@ -1431,6 +1497,8 @@ class DashboardBackend:
         notes: str | None = None,
         progress_pct: int | None = None,
         source: str = "dashboard",
+        side_effects: list[str] | None = None,
+        requires_approval: bool = False,
     ) -> dict[str, Any]:
         clean_title = title.strip()
         if not clean_title:
@@ -1447,6 +1515,7 @@ class DashboardBackend:
         clean_priority = priority.strip().lower()
         if clean_priority not in PRIORITY_LEVELS:
             raise ValueError(f"invalid task priority: {priority}")
+        clean_side_effects = self._normalize_side_effects(side_effects)
 
         workspace = self.load_workspace_data()
         projects = workspace["projects"]
@@ -1475,6 +1544,8 @@ class DashboardBackend:
                 "notes": (notes or "").strip(),
                 "source": source.strip() or "dashboard",
                 "progress_pct": progress_pct,
+                "requires_approval": bool(requires_approval or clean_side_effects),
+                "side_effects": clean_side_effects,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -1496,6 +1567,8 @@ class DashboardBackend:
         due_at: str | None = None,
         notes: str | None = None,
         progress_pct: int | None = None,
+        side_effects: list[str] | None = None,
+        requires_approval: bool | None = None,
     ) -> dict[str, Any]:
         clean_id = task_id.strip()
         if not clean_id:
@@ -1554,6 +1627,15 @@ class DashboardBackend:
             if progress_pct < 0 or progress_pct > 100:
                 raise ValueError("progress_pct must be between 0 and 100")
             target["progress_pct"] = int(progress_pct)
+
+        if side_effects is not None:
+            clean_side_effects = self._normalize_side_effects(side_effects)
+            target["side_effects"] = clean_side_effects
+            if clean_side_effects and requires_approval is None:
+                target["requires_approval"] = True
+
+        if requires_approval is not None:
+            target["requires_approval"] = requires_approval
 
         if target.get("status") == "done" and progress_pct is None:
             target["progress_pct"] = 100
@@ -1969,6 +2051,8 @@ class DashboardBackend:
                     "project_name": task.get("project_name"),
                     "priority": task.get("priority"),
                     "due_at": task.get("due_at"),
+                    "requires_approval": task.get("requires_approval", False),
+                    "side_effects": task.get("side_effects", []),
                 }
             )
 
@@ -2053,6 +2137,7 @@ class DashboardBackend:
             "approval_counts": approval_counts,
             "todo_queue": todo_queue[:60],
             "assignable_entities": self._assignable_entities(),
+            "side_effect_catalog": self._side_effect_catalog(),
             "task_templates": self._task_templates(),
             "markdown_todos": markdown_todos,
         }

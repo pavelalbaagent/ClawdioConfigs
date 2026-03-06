@@ -49,6 +49,11 @@ async function bootstrap() {
     }
 
     byId("auth-hint").textContent = `Token env key: ${auth.token_env_key || "OPENCLAW_DASHBOARD_TOKEN"}`;
+    if (auth.configured === false) {
+      showError(
+        `Dashboard token is not configured in ${auth.token_env_key || "OPENCLAW_DASHBOARD_TOKEN"}.`
+      );
+    }
   } catch (error) {
     showError(error.message);
   }

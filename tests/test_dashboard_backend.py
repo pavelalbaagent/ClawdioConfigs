@@ -112,6 +112,11 @@ class DashboardBackendTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.backend.set_dashboard_flags(codexbar_provider="invalid")
 
+    def test_set_dashboard_flags_persists_generated_token_toggle(self):
+        self.backend.set_dashboard_flags(auth_allow_generated_token=True)
+        cfg = self.backend.read_dashboard_config()
+        self.assertTrue(cfg["dashboard"]["auth"]["allow_generated_token"])
+
     def test_apply_preset_updates_profiles_and_toggles(self):
         result = self.backend.apply_preset("manual_min_cost")
         self.assertTrue(result["ok"])
@@ -251,6 +256,32 @@ class DashboardBackendTests(unittest.TestCase):
         state = self.backend.build_state()
         self.assertEqual(state["workspace"]["approval_counts"]["pending"], 0)
         self.assertEqual(state["workspace"]["run_counts"]["queued"], 1)
+
+    def test_structured_side_effects_require_approval(self):
+        project = self.backend.create_project(name="Structured Approval")
+        task = self.backend.create_task(
+            title="Handle outreach queue",
+            assignees=["builder"],
+            project_id=project["id"],
+            priority="medium",
+            side_effects=["github:create_issue"],
+        )
+
+        dispatch = self.backend.dispatch_task(task_id=task["id"])
+        self.assertFalse(dispatch["queued"])
+        self.assertTrue(dispatch["requires_approval"])
+        self.assertEqual(dispatch["approval"]["status"], "pending")
+
+    def test_unknown_side_effects_are_rejected(self):
+        project = self.backend.create_project(name="Bad Effects")
+        with self.assertRaises(ValueError):
+            self.backend.create_task(
+                title="Unsafe task",
+                assignees=["builder"],
+                project_id=project["id"],
+                priority="medium",
+                side_effects=["bad:thing"],
+            )
 
     def test_pending_reminders_are_exposed(self):
         reminder_path = self.tmp_path / "data" / "reminders-state.json"

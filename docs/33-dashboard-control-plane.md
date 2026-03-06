@@ -46,13 +46,14 @@ export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'
 ```
 
 2. Open dashboard URL and login at `/login.html`.
-3. If env token is not set, server generates a temporary token and prints it to stdout.
+3. If you want temporary local-dev credentials instead, explicitly set `dashboard.auth.allow_generated_token: true` in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
 
 Auth settings live in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml):
 
 1. `dashboard.auth.require_token`
 2. `dashboard.auth.token_env_key`
 3. `dashboard.auth.session_ttl_minutes`
+4. `dashboard.auth.allow_generated_token`
 
 ## Through VPS Tunnel
 
@@ -107,7 +108,7 @@ Execution run capabilities:
 
 Approval inbox capabilities:
 
-1. Pending approval queue for external write-like task intents.
+1. Pending approval queue for tasks marked with structured `side_effects` metadata or legacy external-write keywords.
 2. Approve/reject decisions from dashboard.
 3. Dispatch is blocked until approval is granted when required by policy.
 

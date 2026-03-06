@@ -50,6 +50,7 @@ class DashboardAuthManager:
             "require_token": require_token,
             "token_env_key": token_env_key,
             "session_ttl_minutes": ttl_minutes,
+            "allow_generated_token": bool(auth.get("allow_generated_token", False)),
         }
 
     def _cleanup_sessions(self) -> None:
@@ -64,7 +65,7 @@ class DashboardAuthManager:
         if token:
             return token, "env"
 
-        if bool(settings.get("require_token")):
+        if bool(settings.get("require_token")) and bool(settings.get("allow_generated_token")):
             cached = self.generated_tokens.get(env_key)
             if cached:
                 return cached, "generated"
@@ -74,7 +75,21 @@ class DashboardAuthManager:
             print(f"[dashboard] generated temporary token for {env_key}: {generated}")
             return generated, "generated"
 
+        if bool(settings.get("require_token")):
+            return "", "missing"
+
         return "", "none"
+
+    def startup_status(self) -> dict[str, Any]:
+        settings = self._settings()
+        token, source = self._expected_token(settings)
+        configured = (not settings["require_token"]) or bool(token)
+        return {
+            "settings": settings,
+            "token": token,
+            "token_source": source,
+            "configured": configured,
+        }
 
     @staticmethod
     def _parse_cookie_header(header_value: str | None) -> dict[str, str]:
@@ -105,6 +120,8 @@ class DashboardAuthManager:
 
         if not settings["require_token"]:
             return True, settings, expected_token, source, None
+        if not expected_token:
+            return False, settings, "", source, None
 
         header_token = handler.headers.get("X-Dashboard-Token", "").strip()
         if header_token and hmac.compare_digest(header_token, expected_token):
@@ -142,6 +159,12 @@ class DashboardAuthManager:
                 "error": "token is required",
             }
 
+        if not expected_token:
+            return {
+                "ok": False,
+                "error": f"dashboard token is not configured in env var {settings['token_env_key']}",
+            }
+
         if not expected_token or not hmac.compare_digest(token, expected_token):
             return {
                 "ok": False,
@@ -170,13 +193,15 @@ class DashboardAuthManager:
         self.sessions.pop(session_id, None)
 
     def status_for_request(self, handler: SimpleHTTPRequestHandler) -> dict[str, Any]:
-        auth_ok, settings, _, source, _ = self.check_request(handler)
+        auth_ok, settings, expected_token, source, _ = self.check_request(handler)
         return {
             "required": bool(settings["require_token"]),
             "authenticated": bool(auth_ok),
             "token_env_key": settings["token_env_key"],
             "token_source": source,
             "session_ttl_minutes": settings["session_ttl_minutes"],
+            "allow_generated_token": bool(settings["allow_generated_token"]),
+            "configured": (not settings["require_token"]) or bool(expected_token),
         }
 
 
@@ -383,6 +408,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     auth_require_token=self._optional_bool(payload, "auth_require_token"),
                     auth_token_env_key=self._optional_str(payload, "auth_token_env_key"),
                     auth_session_ttl_minutes=self._optional_int(payload, "auth_session_ttl_minutes"),
+                    auth_allow_generated_token=self._optional_bool(payload, "auth_allow_generated_token"),
                     routing_mode=self._optional_str(payload, "routing_mode"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "config": cfg})
@@ -423,6 +449,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     notes=self._optional_str(payload, "notes"),
                     progress_pct=self._optional_int(payload, "progress_pct"),
                     source=self._optional_str(payload, "source") or "dashboard",
+                    side_effects=self._optional_list_of_strings(payload, "side_effects"),
+                    requires_approval=self._optional_bool(payload, "requires_approval") or False,
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "task": result})
                 return
@@ -437,6 +465,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     priority=self._optional_str(payload, "priority"),
                     due_at=self._optional_str(payload, "due_at"),
                     notes=self._optional_str(payload, "notes"),
+                    side_effects=self._optional_list_of_strings(payload, "side_effects"),
+                    requires_approval=self._optional_bool(payload, "requires_approval"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
@@ -461,6 +491,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     due_at=self._optional_str(payload, "due_at"),
                     notes=self._optional_str(payload, "notes"),
                     progress_pct=self._optional_int(payload, "progress_pct"),
+                    side_effects=self._optional_list_of_strings(payload, "side_effects"),
+                    requires_approval=self._optional_bool(payload, "requires_approval"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "task": result})
                 return
@@ -663,6 +695,16 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18789)
     args = parser.parse_args()
+
+    startup = DashboardHandler.auth.startup_status()
+    settings = ensure_dict(startup.get("settings"))
+    if bool(settings.get("require_token")) and not bool(startup.get("configured")):
+        env_key = str(settings.get("token_env_key", "OPENCLAW_DASHBOARD_TOKEN"))
+        print(
+            "Dashboard auth is enabled but no token is configured. "
+            f"Set {env_key} or enable dashboard.auth.allow_generated_token for explicit dev mode."
+        )
+        return 1
 
     server = ThreadingHTTPServer((args.host, args.port), DashboardHandler)
     print(f"OpenClaw dashboard listening on http://{args.host}:{args.port}")

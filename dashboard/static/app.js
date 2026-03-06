@@ -125,6 +125,13 @@ function appendCells(tr, values) {
   }
 }
 
+function parseCommaList(value) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function renderProfiles(snapshot) {
   const intSelect = byId("integration-profile-select");
   const memSelect = byId("memory-profile-select");
@@ -254,6 +261,7 @@ function renderAdapters(snapshot) {
   byId("refresh-seconds-input").value = Number((cfg.ui || {}).auto_refresh_seconds || 20);
   byId("auth-required-toggle").checked = Boolean(auth.require_token);
   byId("auth-env-key-input").value = auth.token_env_key || "OPENCLAW_DASHBOARD_TOKEN";
+  byId("auth-allow-generated-toggle").checked = Boolean(auth.allow_generated_token);
 }
 
 function renderMetrics(snapshot) {
@@ -497,6 +505,21 @@ function renderTaskTemplates(snapshot) {
   }
 }
 
+function renderSideEffectCatalog(snapshot) {
+  const datalist = byId("task-side-effects-list");
+  if (!datalist) {
+    return;
+  }
+
+  datalist.innerHTML = "";
+  const catalog = ((snapshot.workspace || {}).side_effect_catalog || []).slice(0, 200);
+  for (const effect of catalog) {
+    const option = document.createElement("option");
+    option.value = effect;
+    datalist.appendChild(option);
+  }
+}
+
 function renderTasks(snapshot) {
   const body = byId("tasks-body");
   body.innerHTML = "";
@@ -506,7 +529,17 @@ function renderTasks(snapshot) {
     const tr = document.createElement("tr");
 
     const titleTd = document.createElement("td");
-    titleTd.textContent = task.title;
+    const titleWrap = document.createElement("div");
+    const titleStrong = document.createElement("strong");
+    titleStrong.textContent = task.title;
+    titleWrap.appendChild(titleStrong);
+    if (task.requires_approval || (task.side_effects || []).length) {
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `approval: ${(task.side_effects || []).join(", ") || "manual approval"}`;
+      titleWrap.appendChild(meta);
+    }
+    titleTd.appendChild(titleWrap);
 
     const projectTd = document.createElement("td");
     projectTd.textContent = task.project_name || "-";
@@ -967,6 +1000,7 @@ async function saveDashboardSettings() {
   const refresh = Number(byId("refresh-seconds-input").value || 20);
   const authRequired = byId("auth-required-toggle").checked;
   const authEnvKey = byId("auth-env-key-input").value.trim() || "OPENCLAW_DASHBOARD_TOKEN";
+  const authAllowGeneratedToken = byId("auth-allow-generated-toggle").checked;
 
   await api("/api/dashboard/settings", {
     method: "POST",
@@ -976,6 +1010,7 @@ async function saveDashboardSettings() {
       auto_refresh_seconds: refresh,
       auth_require_token: authRequired,
       auth_token_env_key: authEnvKey,
+      auth_allow_generated_token: authAllowGeneratedToken,
     },
   });
 
@@ -1036,6 +1071,8 @@ async function createTask() {
 
   const dueRaw = byId("task-due-input").value;
   const dueAt = dueRaw ? new Date(dueRaw).toISOString() : null;
+  const sideEffects = parseCommaList(byId("task-side-effects-input").value);
+  const requiresApproval = byId("task-requires-approval-toggle").checked;
   const payload = {
     title,
     project_id: byId("task-project-select").value || undefined,
@@ -1043,9 +1080,13 @@ async function createTask() {
     notes: byId("task-notes-input").value.trim() || undefined,
     assignees,
     status: "todo",
+    requires_approval: requiresApproval,
   };
   if (dueAt) {
     payload.due_at = dueAt;
+  }
+  if (sideEffects.length) {
+    payload.side_effects = sideEffects;
   }
 
   await api("/api/tasks/create", {
@@ -1056,6 +1097,8 @@ async function createTask() {
   byId("task-title-input").value = "";
   byId("task-notes-input").value = "";
   byId("task-due-input").value = "";
+  byId("task-side-effects-input").value = "";
+  byId("task-requires-approval-toggle").checked = false;
   setText("task-create-status", "Task created and assigned.");
   await loadState();
 }
@@ -1070,9 +1113,12 @@ async function createTaskFromTemplate() {
   const assignees = selectedAssigneesForCreate();
   const dueRaw = byId("task-due-input").value;
   const dueAt = dueRaw ? new Date(dueRaw).toISOString() : null;
+  const sideEffects = parseCommaList(byId("task-side-effects-input").value);
+  const requiresApproval = byId("task-requires-approval-toggle").checked;
 
   const payload = {
     template_name: templateName,
+    requires_approval: requiresApproval,
   };
   const title = byId("task-title-input").value.trim();
   const projectId = byId("task-project-select").value;
@@ -1096,6 +1142,9 @@ async function createTaskFromTemplate() {
   if (assignees.length) {
     payload.assignees = assignees;
   }
+  if (sideEffects.length) {
+    payload.side_effects = sideEffects;
+  }
 
   const result = await api("/api/tasks/create_from_template", {
     method: "POST",
@@ -1105,6 +1154,8 @@ async function createTaskFromTemplate() {
   byId("task-title-input").value = "";
   byId("task-notes-input").value = "";
   byId("task-due-input").value = "";
+  byId("task-side-effects-input").value = "";
+  byId("task-requires-approval-toggle").checked = false;
   setText("task-create-status", `Template task created: ${result.result.task.title}`);
   await loadState();
 }
@@ -1182,6 +1233,7 @@ async function loadState() {
     renderProjects(snapshot);
     renderTaskAssignees(snapshot);
     renderTaskTemplates(snapshot);
+    renderSideEffectCatalog(snapshot);
     renderTasks(snapshot);
     renderApprovals(snapshot);
     renderRuns(snapshot);

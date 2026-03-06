@@ -30,7 +30,11 @@ EXPECTED_CONFIGS = {
     "security": CONFIG_DIR / "security.yaml",
     "reminders": CONFIG_DIR / "reminders.yaml",
     "session_policy": CONFIG_DIR / "session_policy.yaml",
+    "dashboard": CONFIG_DIR / "dashboard.yaml",
 }
+
+TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
+PRIORITY_LEVELS = {"low", "medium", "high", "urgent"}
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -82,6 +86,10 @@ def require_dict(data: Any, errors: list[str], name: str) -> dict[str, Any]:
         add_error(errors, "TYPE", f"{name} must be a mapping")
         return {}
     return data
+
+
+def ensure_dict(data: Any) -> dict[str, Any]:
+    return data if isinstance(data, dict) else {}
 
 
 def validate_string_list(value: Any, field_name: str, errors: list[str], *, allow_empty: bool = True) -> list[str]:
@@ -394,6 +402,34 @@ def validate_addons(data: dict[str, Any], errors: list[str], warnings: list[str]
             add_warning(warnings, "ADDON", f"active add-ons profile enables {addon_name} but addon is disabled")
 
 
+def build_known_side_effects(integrations_data: dict[str, Any]) -> set[str]:
+    effects = {"custom:external_write"}
+    integrations = ensure_dict(integrations_data.get("integrations"))
+    tool_clis = ensure_dict(integrations_data.get("tool_clis"))
+
+    for integration_name, integration_data in integrations.items():
+        row = ensure_dict(integration_data)
+        for action in validate_string_list(
+            row.get("write_actions", []),
+            f"integrations.integrations.{integration_name}.write_actions",
+            [],
+            allow_empty=True,
+        ):
+            effects.add(f"{integration_name}:{action}")
+
+    for cli_name, cli_data in tool_clis.items():
+        row = ensure_dict(cli_data)
+        for action in validate_string_list(
+            row.get("approval_required_for", []),
+            f"integrations.tool_clis.{cli_name}.approval_required_for",
+            [],
+            allow_empty=True,
+        ):
+            effects.add(f"tool_cli:{cli_name}:{action}")
+
+    return effects
+
+
 def validate_agents(data: dict[str, Any], model_lanes: set[str], errors: list[str], warnings: list[str]) -> None:
     agents = require_dict(data.get("agents"), errors, "agents.agents")
     if not agents:
@@ -674,6 +710,131 @@ def validate_memory(data: dict[str, Any], errors: list[str], warnings: list[str]
             add_error(errors, "RANGE", f"memory.runtime.{field} must be integer > 0")
 
 
+def validate_dashboard(
+    data: dict[str, Any],
+    integrations_data: dict[str, Any],
+    memory_data: dict[str, Any],
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    dashboard = require_dict(data.get("dashboard"), errors, "dashboard.dashboard")
+
+    adapters = require_dict(dashboard.get("adapters"), errors, "dashboard.dashboard.adapters")
+    for field in ("local_telemetry_enabled", "codexbar_cost_enabled", "codexbar_usage_enabled"):
+        value = adapters.get(field)
+        if not isinstance(value, bool):
+            add_error(errors, "TYPE", f"dashboard.dashboard.adapters.{field} must be boolean")
+
+    codexbar = require_dict(dashboard.get("codexbar"), errors, "dashboard.dashboard.codexbar")
+    provider = codexbar.get("provider")
+    if not is_non_empty_str(provider):
+        add_error(errors, "REQ", "dashboard.dashboard.codexbar.provider is required")
+    elif provider not in {"openai", "anthropic", "google", "all"}:
+        add_error(errors, "TYPE", "dashboard.dashboard.codexbar.provider must be one of: openai, anthropic, google, all")
+    timeout = codexbar.get("timeout_seconds")
+    if not isinstance(timeout, int) or timeout <= 0:
+        add_error(errors, "RANGE", "dashboard.dashboard.codexbar.timeout_seconds must be integer > 0")
+
+    ui = require_dict(dashboard.get("ui"), errors, "dashboard.dashboard.ui")
+    refresh = ui.get("auto_refresh_seconds")
+    if not isinstance(refresh, int) or refresh <= 0:
+        add_error(errors, "RANGE", "dashboard.dashboard.ui.auto_refresh_seconds must be integer > 0")
+
+    auth = require_dict(dashboard.get("auth"), errors, "dashboard.dashboard.auth")
+    require_token = auth.get("require_token")
+    if not isinstance(require_token, bool):
+        add_error(errors, "TYPE", "dashboard.dashboard.auth.require_token must be boolean")
+    token_env_key = auth.get("token_env_key")
+    if not is_non_empty_str(token_env_key):
+        add_error(errors, "REQ", "dashboard.dashboard.auth.token_env_key is required")
+    ttl = auth.get("session_ttl_minutes")
+    if not isinstance(ttl, int) or ttl <= 0:
+        add_error(errors, "RANGE", "dashboard.dashboard.auth.session_ttl_minutes must be integer > 0")
+    allow_generated = auth.get("allow_generated_token")
+    if allow_generated is not None and not isinstance(allow_generated, bool):
+        add_error(errors, "TYPE", "dashboard.dashboard.auth.allow_generated_token must be boolean")
+    if require_token is True and allow_generated is True:
+        add_warning(
+            warnings,
+            "DASH",
+            "dashboard auth allows generated tokens; keep this limited to explicit local dev mode",
+        )
+
+    integration_profiles = ensure_dict(ensure_dict(integrations_data.get("profiles")).get("definitions"))
+    memory_profiles = ensure_dict(ensure_dict(memory_data.get("profiles")).get("definitions"))
+    integration_names = set(ensure_dict(integrations_data.get("integrations")).keys())
+    memory_module_names = set(ensure_dict(memory_data.get("memory_modules")).keys())
+    n8n_modules = set(ensure_dict(ensure_dict(ensure_dict(integrations_data.get("integrations")).get("n8n")).get("modules")).keys())
+    known_side_effects = build_known_side_effects(integrations_data)
+
+    presets = require_dict(dashboard.get("presets"), errors, "dashboard.dashboard.presets")
+    for preset_name, preset_data in presets.items():
+        section = f"dashboard.dashboard.presets.{preset_name}"
+        preset = require_dict(preset_data, errors, section)
+        integrations_profile = preset.get("integrations_profile")
+        if not is_non_empty_str(integrations_profile):
+            add_error(errors, "REQ", f"{section}.integrations_profile is required")
+        elif integrations_profile not in integration_profiles:
+            add_error(errors, "PROFILE", f"{section}.integrations_profile references unknown profile: {integrations_profile}")
+
+        memory_profile = preset.get("memory_profile")
+        if not is_non_empty_str(memory_profile):
+            add_error(errors, "REQ", f"{section}.memory_profile is required")
+        elif memory_profile not in memory_profiles:
+            add_error(errors, "PROFILE", f"{section}.memory_profile references unknown profile: {memory_profile}")
+
+        for toggle_name in ensure_dict(preset.get("integration_toggles")).keys():
+            if toggle_name not in integration_names:
+                add_error(errors, "PROFILE", f"{section}.integration_toggles references unknown integration: {toggle_name}")
+        for toggle_name in ensure_dict(preset.get("memory_module_toggles")).keys():
+            if toggle_name not in memory_module_names:
+                add_error(errors, "PROFILE", f"{section}.memory_module_toggles references unknown memory module: {toggle_name}")
+        for toggle_name in ensure_dict(preset.get("n8n_module_toggles")).keys():
+            if toggle_name not in n8n_modules:
+                add_error(errors, "PROFILE", f"{section}.n8n_module_toggles references unknown n8n module: {toggle_name}")
+
+    templates = require_dict(dashboard.get("task_templates"), errors, "dashboard.dashboard.task_templates")
+    for template_name, template_data in templates.items():
+        section = f"dashboard.dashboard.task_templates.{template_name}"
+        template = require_dict(template_data, errors, section)
+        if not is_non_empty_str(template.get("title")):
+            add_error(errors, "REQ", f"{section}.title is required")
+        priority = template.get("priority")
+        if not is_non_empty_str(priority) or priority not in PRIORITY_LEVELS:
+            add_error(errors, "TYPE", f"{section}.priority must be one of: {sorted(PRIORITY_LEVELS)}")
+        status = template.get("status")
+        if not is_non_empty_str(status) or status not in TASK_STATUSES:
+            add_error(errors, "TYPE", f"{section}.status must be one of: {sorted(TASK_STATUSES)}")
+        default_assignees = validate_string_list(template.get("default_assignees", []), f"{section}.default_assignees", errors, allow_empty=False)
+        if not default_assignees:
+            add_warning(warnings, "DASH", f"{section}.default_assignees is empty")
+        due_in_hours = template.get("due_in_hours")
+        if due_in_hours is not None and (not isinstance(due_in_hours, int) or due_in_hours <= 0):
+            add_error(errors, "RANGE", f"{section}.due_in_hours must be integer > 0")
+        side_effects = validate_string_list(template.get("side_effects", []), f"{section}.side_effects", errors, allow_empty=True)
+        unknown_side_effects = sorted(set(side_effects) - known_side_effects)
+        if unknown_side_effects:
+            add_error(errors, "TYPE", f"{section}.side_effects references unknown values: {unknown_side_effects}")
+        requires_approval = template.get("requires_approval")
+        if requires_approval is not None and not isinstance(requires_approval, bool):
+            add_error(errors, "TYPE", f"{section}.requires_approval must be boolean")
+        if side_effects and requires_approval is False:
+            add_warning(warnings, "DASH", f"{section} has side_effects but requires_approval=false")
+
+    approvals = require_dict(dashboard.get("approvals"), errors, "dashboard.dashboard.approvals")
+    if not isinstance(approvals.get("require_for_external_writes"), bool):
+        add_error(errors, "TYPE", "dashboard.dashboard.approvals.require_for_external_writes must be boolean")
+    validate_string_list(
+        approvals.get("external_write_keywords"),
+        "dashboard.dashboard.approvals.external_write_keywords",
+        errors,
+        allow_empty=False,
+    )
+    auto_expire = approvals.get("auto_expire_hours")
+    if not isinstance(auto_expire, int) or auto_expire <= 0:
+        add_error(errors, "RANGE", "dashboard.dashboard.approvals.auto_expire_hours must be integer > 0")
+
+
 def validate_spawn_alignment(
     agents_data: dict[str, Any],
     session_policy_data: dict[str, Any],
@@ -741,6 +902,14 @@ def main() -> int:
         validate_addons(require_dict(loaded["addons"], errors, "addons"), errors, warnings)
     if "memory" in loaded:
         validate_memory(require_dict(loaded["memory"], errors, "memory"), errors, warnings)
+    if "dashboard" in loaded and "integrations" in loaded and "memory" in loaded:
+        validate_dashboard(
+            require_dict(loaded["dashboard"], errors, "dashboard"),
+            require_dict(loaded["integrations"], errors, "integrations"),
+            require_dict(loaded["memory"], errors, "memory"),
+            errors,
+            warnings,
+        )
 
     model_lanes = set()
     if "models" in loaded and isinstance(loaded["models"], dict):

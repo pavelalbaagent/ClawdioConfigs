@@ -104,6 +104,10 @@
               <input id="auth-env-key-input" type="text" />
             </div>
             <div class="control-row">
+              <label for="auth-allow-generated-toggle">Allow generated dev token</label>
+              <input id="auth-allow-generated-toggle" type="checkbox" class="toggle" />
+            </div>
+            <div class="control-row">
               <button id="save-dashboard-settings" class="secondary">Save Settings</button>
             </div>
           </div>
@@ -245,6 +249,20 @@
             <div class="control-row">
               <label for="task-notes-input">Notes</label>
               <input id="task-notes-input" type="text" placeholder="Expected output or details" />
+            </div>
+            <div class="control-row">
+              <label for="task-side-effects-input">Side effects (optional)</label>
+              <input
+                id="task-side-effects-input"
+                type="text"
+                list="task-side-effects-list"
+                placeholder="github:create_issue, custom:external_write"
+              />
+              <datalist id="task-side-effects-list"></datalist>
+            </div>
+            <div class="control-row">
+              <label for="task-requires-approval-toggle">Force approval</label>
+              <input id="task-requires-approval-toggle" type="checkbox" class="toggle" />
             </div>
             <div class="control-row" id="task-assignee-checkboxes"></div>
             <div class="control-row">

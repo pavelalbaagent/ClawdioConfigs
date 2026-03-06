@@ -20,6 +20,7 @@ CONFIG_FILES = (
     "security",
     "reminders",
     "session_policy",
+    "dashboard",
 )
 
 
@@ -89,6 +90,25 @@ class ValidateConfigsTests(unittest.TestCase):
             )
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("active memory profile not found", proc.stdout)
+
+    def test_invalid_dashboard_preset_profile_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            dashboard_path = tmp_path / "dashboard.yaml"
+            text = dashboard_path.read_text()
+            text = text.replace("integrations_profile: lean_manual", "integrations_profile: missing_profile", 1)
+            dashboard_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("integrations_profile references unknown profile", proc.stdout)
 
 
 if __name__ == "__main__":
