@@ -1,0 +1,177 @@
+agent:
+  name: fitness_coach
+  enabled: false
+  objective: Manage a 12-week hypertrophy plus fat-loss block, then deload and adapt the next cycle.
+  owner: pavel
+  specialization: push_pull_arm_specialization_home_gym
+  default_lane: L1_low_cost
+  escalation_lane: L2_balanced
+  max_auto_actions_per_session: 12
+
+execution_policy:
+  deterministic_first: true
+  require_confirmation_before_program_overwrite: true
+  require_confirmation_before_deload_or_major_change: true
+  fallback_if_uncertain: ask_clarifying_question
+
+schedule:
+  timezone: America/Guayaquil
+  main_workouts_per_week: 4
+  optional_workouts_per_week: 1
+  default_rest_days:
+    - wednesday
+    - sunday
+  flexible_schedule: true
+  missed_workout_policy: rolling_carry_forward
+  workout_queue:
+    - M1_push_pull_barbell
+    - M2_pull_arms_db
+    - M3_push_arms_db
+    - M4_push_pull_barbell_2
+    - O5_optional_pump_or_legs
+
+memory_strategy:
+  profile_recommendation: hybrid_124
+  markdown:
+    enabled: true
+    files:
+      - fitness/ATHLETE_PROFILE.md
+      - fitness/PROGRAM.md
+      - fitness/EXERCISE_LIBRARY.md
+      - fitness/RULES.md
+      - fitness/SESSION_QUEUE.md
+      - fitness/logs/*.md
+    purpose: human-readable source of truth and low-token continuity
+  sqlite:
+    enabled: true
+    db_path: .memory/fitness.db
+    schema_file: contracts/fitness/sqlite_schema.sql
+    purpose: deterministic schedule lookup and workout logging
+  semantic_embeddings:
+    enabled: true
+    include_paths:
+      - fitness/ATHLETE_PROFILE.md
+      - fitness/PROGRAM.md
+      - fitness/EXERCISE_LIBRARY.md
+      - fitness/RULES.md
+      - fitness/logs/*.md
+    exclude_fields:
+      - raw_numeric_set_logs
+    purpose: qualitative recall for constraints, substitutions, and recovery notes
+
+interaction_contract:
+  command_examples:
+    - "workout today"
+    - "start workout"
+    - "log bench 8 reps 35kg bb total rir 2"
+    - "log incline db press 12 reps 12.5kg each"
+    - "log myoreps lateral raise 5kg each activation 18 then 5+4+4"
+    - "log superset A1 db row 12 reps 17.5kg each and A2 db press 10 reps 17.5kg each"
+    - "finish workout"
+  parser_rules:
+    units:
+      weight: kg
+      bodyweight: kg
+    defaults:
+      dumbbell_weight_mode: each
+      barbell_weight_mode: bb_total
+      rir_if_missing: null
+      set_type_if_missing: straight
+    weight_mode_overrides:
+      - each
+      - pair
+      - bb_total
+      - bb_side
+    unknown_barbell_empty_weight_behavior: request_once_and_cache
+
+progression_rules:
+  primary_goal: hypertrophy_fat_loss
+  cycle_structure:
+    build_weeks: 12
+    deload_weeks: 1
+    next_cycle_method: performance_adapted
+  specialization_targets:
+    biceps_sets_per_week: 20-24
+    triceps_sets_per_week: 18-22
+    low_variety_high_repetition_exposure: true
+  progression_options:
+    compounds:
+      - double_progression
+      - rir_autoregulated_progression
+    isolations:
+      - rep_progression_to_cap
+      - myorep_density_progression
+  default_method_by_category:
+    compounds: double_progression
+    isolations: rep_progression_to_cap
+  limited_load_strategy:
+    - increase_reps_within_range
+    - increase_controlled_tempo
+    - add_pause_reps
+    - add_myorep_clusters
+    - reduce_rest_progressively
+  deload_trigger:
+    consecutive_underperformance_sessions: 3
+    high_fatigue_markers_threshold: 2
+  myoreps:
+    capture_activation_set: true
+    capture_mini_sets: true
+  supersets:
+    supported: true
+    pair_labels:
+      - A1
+      - A2
+      - B1
+      - B2
+      - C1
+      - C2
+
+exercise_preferences:
+  split_bias: push_pull_with_arm_specialization
+  leg_strategy: sprinkled_when_practical
+  max_exercises_per_session: 5
+  bench_setup_days_per_week_target: 2
+  back_bias: lats_and_width
+  chest_bias: incline_upper_chest
+  arm_head_coverage_required: true
+  setup_optimization:
+    cluster_bench_barbell_days: true
+    minimize_plate_changes_within_session: true
+    prioritize_antagonistic_supersets: true
+
+athlete_context:
+  preferred_unit: kg
+  training_days_target: 5
+  reminders_for_workout_start: false
+  reminders_for_logging_followup: false
+  open_to_reenable_reminders_later: true
+
+home_gym_constraints:
+  equipment:
+    - flat_or_adjustable_bench
+    - dumbbells
+    - barbell
+  available_plates_kg:
+    plate_5kg: 4
+    plate_2_5kg: 4
+    plate_1_25kg: 4
+  unknowns_to_capture:
+    - barbell_empty_weight_kg
+
+integrations:
+  reminders:
+    enabled: false
+    use_existing_reminder_engine: true
+    default_post_workout_log_reminder_minutes: 20
+  dashboard:
+    enabled: true
+    expose_widgets:
+      - todays_workout
+      - last_session_summary
+      - weekly_volume
+      - progression_flags
+
+status:
+  implementation_phase: program_v1_canonicalized
+  blockers:
+    - confirm_barbell_empty_weight

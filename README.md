@@ -32,6 +32,10 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 26. Local dashboard control plane in [docs/33-dashboard-control-plane.md](/Users/palba/Projects/Clawdio/docs/33-dashboard-control-plane.md) and [dashboard/server.py](/Users/palba/Projects/Clawdio/dashboard/server.py).
 27. Situation-based model routing playbook and resolver in [docs/34-model-routing-playbook.md](/Users/palba/Projects/Clawdio/docs/34-model-routing-playbook.md) and [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py).
 28. Skill add-on modular pack in [docs/35-addons-modular-skill-pack.md](/Users/palba/Projects/Clawdio/docs/35-addons-modular-skill-pack.md) and [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml).
+29. One-by-one token setup playbook in [docs/36-token-acquisition-playbook.md](/Users/palba/Projects/Clawdio/docs/36-token-acquisition-playbook.md) with local secrets file `secrets/openclaw.env`.
+30. Fitness agent architecture and memory plan in [docs/37-fitness-agent-memory-plan.md](/Users/palba/Projects/Clawdio/docs/37-fitness-agent-memory-plan.md), with intake guide [docs/38-fitness-intake-questionnaire.md](/Users/palba/Projects/Clawdio/docs/38-fitness-intake-questionnaire.md) and config [config/fitness_agent.yaml](/Users/palba/Projects/Clawdio/config/fitness_agent.yaml).
+31. Fitness canonical layout in [docs/39-fitness-canonical-layout.md](/Users/palba/Projects/Clawdio/docs/39-fitness-canonical-layout.md), with canonical files under `fitness/` and reference workbook [Workout_plan_reference.xlsx](/Users/palba/Projects/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
+32. Historical workout-planning iterations are archived under `docs/archive/fitness-planning/`.
 
 ## Suggested starting sequence
 
@@ -50,7 +54,7 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 13. Configure and test hybrid memory:
 14. [docs/29-memory-hybrid-124-runbook.md](/Users/palba/Projects/Clawdio/docs/29-memory-hybrid-124-runbook.md)
 15. `python3 scripts/memory_index_sync.py --workspace /path/to/workspace --dry-run`
-16. Set dashboard auth token (optional but recommended): `export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'`
+16. Set dashboard auth token before starting the dashboard: `export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'`
 17. Start the local dashboard control plane (optional): `python3 dashboard/server.py --host 127.0.0.1 --port 18789`
 18. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
 

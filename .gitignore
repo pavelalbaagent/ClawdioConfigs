@@ -15,3 +15,6 @@ secrets/
 external/
 data/dashboard-workspace.json
 data/reminders-state.json
+fitness/logs/*.md
+!fitness/logs/README.md
+output/spreadsheet/*
