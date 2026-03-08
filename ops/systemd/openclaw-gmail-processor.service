@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw Gmail Inbox Processor
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/openclaw/openclaw.env
+ConditionPathExists=/opt/openclaw/scripts/gmail_inbox_processor.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openclaw
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env python3 /opt/openclaw/scripts/gmail_inbox_processor.py --env-file /etc/openclaw/openclaw.env --apply --promote-task-candidates --promote-calendar-candidates
+
+[Install]
+WantedBy=default.target

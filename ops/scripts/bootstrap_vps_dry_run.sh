@@ -32,9 +32,9 @@ cmd "sudo apt-get install -y git curl ca-certificates nodejs npm python3"
 cmd "node --version && npm --version && python3 --version"
 
 step "02" "Filesystem layout"
-cmd "sudo mkdir -p ${OPENCLAW_BASE} ${OPENCLAW_BASE}/logs ${OPENCLAW_BASE}/data"
+cmd "sudo mkdir -p ${OPENCLAW_BASE} /var/log/openclaw /var/lib/openclaw"
 cmd "sudo mkdir -p /etc/openclaw"
-cmd "sudo chown -R ${OPENCLAW_USER}:${OPENCLAW_USER} ${OPENCLAW_BASE}"
+cmd "sudo chown -R ${OPENCLAW_USER}:${OPENCLAW_USER} ${OPENCLAW_BASE} /var/log/openclaw /var/lib/openclaw"
 
 step "03" "Environment/secrets"
 cmd "sudo touch ${OPENCLAW_ENV}"
@@ -48,10 +48,18 @@ cmd "python3 ${OPENCLAW_BASE}/scripts/validate_configs.py --config-dir ${OPENCLA
 
 step "05" "Systemd units (user-mode templates)"
 cmd "mkdir -p ${OPENCLAW_HOME}/.config/systemd/user"
-cmd "cp ${OPENCLAW_BASE}/salvage/vps-20260302/consolidated/keep-core/systemd/openclaw-gateway.service ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "cp ${OPENCLAW_BASE}/ops/recovered/vps-20260302/systemd/openclaw-gateway.service ${OPENCLAW_HOME}/.config/systemd/user/"
 cmd "systemctl --user daemon-reload"
 cmd "systemctl --user enable openclaw-gateway.service"
 cmd "systemctl --user start openclaw-gateway.service"
+
+step "05b" "Optional Gmail inbox processor timer (stage_2_comms_google)"
+cmd "mkdir -p ${OPENCLAW_HOME}/.config/systemd/user"
+cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-gmail-processor.service ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-gmail-processor.timer ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "systemctl --user daemon-reload"
+cmd "systemctl --user enable --now openclaw-gmail-processor.timer"
+cmd "systemctl --user list-timers openclaw-gmail-processor.timer --no-pager"
 
 step "06" "Operational safeguards"
 cmd "git -C ${OPENCLAW_BASE} config core.hooksPath .githooks"

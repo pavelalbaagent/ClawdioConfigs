@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.mypy_cache/
 .env
 .env.*
 !.env.example
@@ -15,6 +17,11 @@ secrets/
 external/
 data/dashboard-workspace.json
 data/reminders-state.json
+data/gmail-inbox-last-run.json
+data/calendar-candidates.json
+data/drive-workspace-status.json
+data/braindump-snapshot.json
 fitness/logs/*.md
 !fitness/logs/README.md
 output/spreadsheet/*
+tmp/
