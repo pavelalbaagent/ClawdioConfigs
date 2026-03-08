@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import shutil
 import tempfile
 import unittest
@@ -19,6 +21,7 @@ class DashboardBackendTests(unittest.TestCase):
         self.tmp_path = Path(self.tmp.name)
 
         (self.tmp_path / "config").mkdir(parents=True)
+        (self.tmp_path / "contracts" / "braindump").mkdir(parents=True)
         (self.tmp_path / "telemetry").mkdir(parents=True)
         (self.tmp_path / "scripts").mkdir(parents=True)
 
@@ -34,6 +37,10 @@ class DashboardBackendTests(unittest.TestCase):
         ):
             shutil.copy(ROOT / "config" / name, self.tmp_path / "config" / name)
 
+        shutil.copy(
+            ROOT / "contracts" / "braindump" / "sqlite_schema.sql",
+            self.tmp_path / "contracts" / "braindump" / "sqlite_schema.sql",
+        )
         shutil.copy(ROOT / "scripts" / "set_active_profiles.py", self.tmp_path / "scripts" / "set_active_profiles.py")
         shutil.copy(ROOT / "telemetry" / "model-calls.example.ndjson", self.tmp_path / "telemetry" / "model-calls.example.ndjson")
 
@@ -50,8 +57,9 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("telemetry", state)
         self.assertIn("env", state)
         self.assertIn("routing", state)
+        self.assertIn("braindump", state)
 
-        self.assertEqual(state["profiles"]["integrations"]["active"], "lean_manual")
+        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_minimal")
         self.assertEqual(state["profiles"]["memory"]["active"], "hybrid_124")
         self.assertEqual(state["routing"]["active_mode"], "balanced_default")
 
@@ -122,7 +130,7 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertTrue(result["ok"])
 
         state = self.backend.build_state()
-        self.assertEqual(state["profiles"]["integrations"]["active"], "lean_manual")
+        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_minimal")
         self.assertEqual(state["profiles"]["memory"]["active"], "md_only")
 
         integrations = {row["name"]: row for row in state["modules"]["integrations"]}
@@ -134,6 +142,13 @@ class DashboardBackendTests(unittest.TestCase):
     def test_create_and_update_project(self):
         created = self.backend.create_project(name="Agent KPI Board", owner="pavel")
         self.assertTrue(created["id"].startswith("proj-"))
+
+        workspace = self.backend.load_workspace_data()
+        spaces = workspace.get("spaces", [])
+        project_space = next((row for row in spaces if row.get("project_id") == created["id"]), None)
+        self.assertIsNotNone(project_space)
+        self.assertEqual(project_space["session_strategy"], "separate_session")
+        self.assertEqual(project_space["agent_strategy"], "spawn_on_demand")
 
         updated = self.backend.update_project(project_id=created["id"], status="paused", progress_pct=35)
         self.assertEqual(updated["status"], "paused")
@@ -160,6 +175,92 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertEqual(updated["status"], "in_progress")
         self.assertEqual(updated["progress_pct"], 40)
         self.assertEqual(updated["assignees"], ["builder"])
+
+    def test_promote_task_to_project_creates_project_space_and_reassigns_task(self):
+        task = self.backend.create_task(
+            title="Design calendar conflict review flow",
+            assignees=["pavel"],
+            priority="high",
+            notes="Needs its own ongoing workstream",
+        )
+
+        result = self.backend.promote_task_to_project(task_id=task["id"], name="Calendar Conflict Review")
+        project = result["project"]
+        promoted_task = result["task"]
+        space = result["space"]
+
+        self.assertEqual(promoted_task["project_id"], project["id"])
+        self.assertEqual(space["project_id"], project["id"])
+        self.assertEqual(space["key"], "projects/calendar-conflict-review")
+        self.assertEqual(space["source_task_id"], task["id"])
+
+        state = self.backend.build_state()
+        project_row = next(row for row in state["workspace"]["projects"] if row["id"] == project["id"])
+        self.assertEqual(project_row["space_key"], "projects/calendar-conflict-review")
+        self.assertEqual(project_row["space_session_strategy"], "separate_session")
+        self.assertEqual(state["workspace"]["space_counts"]["project"], len(state["workspace"]["spaces"]))
+
+    def test_route_text_to_space_resolves_project_hint(self):
+        project = self.backend.create_project(name="Calendar Conflict Review", owner="pavel")
+
+        route = self.backend.route_text_to_space(
+            text="[project:calendar-conflict-review] remind me to review the calendar queue"
+        )
+
+        self.assertTrue(route["matched"])
+        self.assertTrue(route["resolved"])
+        self.assertEqual(route["kind"], "project")
+        self.assertEqual(route["project_id"], project["id"])
+        self.assertEqual(route["space_key"], "projects/calendar-conflict-review")
+        self.assertEqual(route["stripped_text"], "remind me to review the calendar queue")
+        self.assertEqual(route["space"]["entry_command_hint"], "[project:calendar-conflict-review]")
+
+    def test_assign_task_to_project_space_moves_existing_task(self):
+        source = self.backend.create_project(name="Inbox Ops", owner="pavel")
+        target = self.backend.create_project(name="Calendar Conflict Review", owner="pavel")
+        task = self.backend.create_task(
+            title="Review candidate",
+            assignees=["pavel"],
+            project_id=source["id"],
+            priority="medium",
+        )
+
+        moved = self.backend.assign_task_to_project_space(task_id=task["id"], project_id=target["id"])
+
+        self.assertEqual(moved["task"]["project_id"], target["id"])
+        self.assertEqual(moved["project"]["name"], "Calendar Conflict Review")
+        self.assertEqual(moved["space"]["key"], "projects/calendar-conflict-review")
+
+    def test_assign_calendar_candidate_to_project_space_updates_candidate(self):
+        project = self.backend.create_project(name="Calendar Conflict Review", owner="pavel")
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "cal-1",
+                            "title": "Review conflict",
+                            "from_email": "alex@example.com",
+                            "status": "proposed",
+                            "updated_at": "2026-03-07T12:00:00+00:00",
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        assigned = self.backend.assign_calendar_candidate_to_project(candidate_id="cal-1", project_id=project["id"])
+
+        self.assertEqual(assigned["item"]["project_id"], project["id"])
+        self.assertEqual(assigned["item"]["space_key"], "projects/calendar-conflict-review")
+        state = self.backend.build_state()
+        item = state["calendar_candidates"]["items"][0]
+        self.assertEqual(item["project_name"], "Calendar Conflict Review")
+        self.assertEqual(item["space_key"], "projects/calendar-conflict-review")
 
     def test_create_task_from_template(self):
         project = self.backend.create_project(name="Template Project")
@@ -318,6 +419,180 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertEqual(len(pending), 1)
         self.assertEqual(pending[0]["id"], "r-1")
         self.assertEqual(state["reminders"]["counts"]["pending"], 1)
+
+    def test_capture_braindump_text_supports_aliases(self):
+        result = self.backend.capture_braindump_text(
+            text="bd gift perfume sampler #birthday @monthly",
+            source="telegram",
+        )
+
+        item = result["item"]
+        self.assertEqual(item["category"], "gift_idea_wife")
+        self.assertEqual(item["review_bucket"], "monthly")
+        self.assertEqual(item["tags"], ["birthday"])
+        self.assertEqual(item["source"], "telegram")
+
+        state = self.backend.build_state()
+        self.assertTrue(state["braindump"]["available"])
+        self.assertEqual(state["braindump"]["counts_by_category"]["gift_idea_wife"], 1)
+        self.assertIn("gift", state["braindump"]["category_catalog"]["aliases"])
+
+    def test_capture_braindump_text_routes_project_hint(self):
+        self.backend.create_project(name="Calendar Conflict Review", owner="pavel")
+
+        result = self.backend.capture_braindump_text(
+            text="[project:calendar-conflict-review] bd tool test agentmail #email",
+            source="telegram",
+        )
+
+        self.assertTrue(result["route"]["resolved"])
+        self.assertEqual(result["parsed"]["category"], "tool_to_test")
+        self.assertEqual(result["item"]["short_text"], "test agentmail")
+        self.assertIn("space=projects/calendar-conflict-review", result["item"]["notes"])
+
+    def test_capture_braindump_text_rejects_unknown_project_hint(self):
+        with self.assertRaises(ValueError):
+            self.backend.capture_braindump_text(
+                text="[project:missing-space] bd tool test agentmail",
+                source="telegram",
+            )
+
+    def test_braindump_create_promote_archive_and_custom_category(self):
+        created = self.backend.create_braindump_item(
+            category="book_series",
+            text="track stormlight reread",
+            review_bucket="seasonal",
+            source="dashboard",
+        )
+        item = created["item"]
+        self.assertEqual(item["category"], "book_series")
+        self.assertEqual(item["review_bucket"], "seasonal")
+
+        conn = sqlite3.connect(self.tmp_path / ".memory" / "braindump.db")
+        default_row = conn.execute(
+            "SELECT review_bucket FROM braindump_category_defaults WHERE category = ?",
+            ("book_series",),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(default_row[0], "seasonal")
+
+        promoted = self.backend.promote_braindump_item(item_id=item["id"], target="task")
+        self.assertEqual(promoted["item"]["status"], "promoted")
+        workspace = self.backend.load_workspace_data()
+        self.assertEqual(len([row for row in workspace["tasks"] if row.get("source") == "braindump"]), 1)
+
+        second = self.backend.create_braindump_item(
+            category="personal_note",
+            text="remember camping stove dimensions",
+            source="dashboard",
+        )["item"]
+        parked = self.backend.park_braindump_item(item_id=second["id"], review_bucket="monthly")
+        self.assertEqual(parked["item"]["status"], "parked")
+        with self.assertRaises(ValueError):
+            self.backend.park_braindump_item(item_id=second["id"], review_bucket="nonsense")
+        archived = self.backend.archive_braindump_item(item_id=second["id"])
+        self.assertEqual(archived["item"]["status"], "archived")
+
+    def test_gmail_drive_calendar_and_braindump_runtime_status_are_exposed(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (self.tmp_path / ".memory").mkdir(parents=True, exist_ok=True)
+
+        (data_dir / "gmail-inbox-last-run.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-07T12:00:00+00:00",
+                    "run_id": 7,
+                    "dry_run": False,
+                    "state_db": str(self.tmp_path / ".memory" / "inbox_processing.db"),
+                    "summary": {"processed_count": 3, "candidate_counts": {"task": 1, "calendar": 1}},
+                    "promotions": {"tasks": {"created": 1, "updated": 0}, "calendar": {"created": 1, "updated": 0}},
+                    "recent_results": [
+                        {
+                            "from_email": "alex@example.com",
+                            "subject": "Meeting change",
+                            "primary_action": "keep_in_inbox",
+                            "reason": "calendar or deadline candidate",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "cal-gmail-m1",
+                            "title": "Meeting change",
+                            "from_email": "alex@example.com",
+                            "status": "proposed",
+                            "updated_at": "2026-03-07T12:00:00+00:00",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (data_dir / "drive-workspace-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-07T12:00:00+00:00",
+                    "summary": {
+                        "ok": False,
+                        "root": {"id": "root1", "name": "OpenClaw Shared"},
+                        "missing": ["02_outputs"],
+                        "extra": [],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (data_dir / "braindump-snapshot.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-07T12:30:00+00:00",
+                    "db_path": str(self.tmp_path / ".memory" / "braindump.db"),
+                    "counts_by_status": {"inbox": 2, "parked": 1},
+                    "counts_by_bucket": {"weekly": 2, "monthly": 1},
+                    "counts_by_category": {"gift_idea_wife": 2, "tool_to_test": 1},
+                    "due_count": 1,
+                    "due_items": [
+                        {
+                            "id": "bd-gift-1",
+                            "short_text": "Check perfume sampler",
+                            "category": "gift_idea_wife",
+                            "status": "inbox",
+                            "review_bucket": "weekly",
+                            "next_review_at": "2026-03-07T11:30:00+00:00",
+                        }
+                    ],
+                    "recent_items": [
+                        {
+                            "id": "bd-tool-1",
+                            "short_text": "Test AgentMail",
+                            "category": "tool_to_test",
+                            "status": "parked",
+                            "review_bucket": "monthly",
+                            "updated_at": "2026-03-07T12:20:00+00:00",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        state = self.backend.build_state()
+        self.assertTrue(state["gmail_inbox"]["available"])
+        self.assertEqual(state["gmail_inbox"]["summary"]["processed_count"], 3)
+        self.assertTrue(state["calendar_candidates"]["available"])
+        self.assertEqual(state["calendar_candidates"]["count"], 1)
+        self.assertTrue(state["drive_workspace"]["available"])
+        self.assertEqual(state["drive_workspace"]["summary"]["missing"], ["02_outputs"])
+        self.assertTrue(state["braindump"]["available"])
+        self.assertEqual(state["braindump"]["due_count"], 1)
+        self.assertEqual(state["braindump"]["counts_by_status"]["inbox"], 2)
 
 
 if __name__ == "__main__":

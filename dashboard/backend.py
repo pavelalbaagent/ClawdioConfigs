@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import uuid
@@ -23,6 +24,8 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from validate_configs import load_yaml  # type: ignore  # noqa: E402
+import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
+from space_router import route_text as route_space_text  # type: ignore  # noqa: E402
 
 
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
@@ -30,6 +33,9 @@ PRIORITY_LEVELS = {"low", "medium", "high", "urgent"}
 PROJECT_STATUSES = {"active", "planned", "paused", "blocked", "done", "archived"}
 RUN_STATUSES = {"queued", "running", "succeeded", "failed", "cancelled"}
 APPROVAL_STATUSES = {"pending", "approved", "rejected", "cancelled"}
+SPACE_KINDS = {"project"}
+SPACE_SESSION_STRATEGIES = {"shared_session", "separate_session", "checkpointed_session"}
+SPACE_AGENT_STRATEGIES = {"coordinator_only", "spawn_on_demand", "dedicated_specialist"}
 
 
 @dataclass
@@ -65,6 +71,11 @@ def read_json(path: Path) -> Any:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def read_ndjson(path: Path) -> list[dict[str, Any]]:
@@ -268,6 +279,13 @@ class DashboardBackend:
         self.ops_snapshot_path = self.telemetry_dir / "ops-snapshot.md"
         self.model_usage_report_path = self.telemetry_dir / "model-usage-latest.md"
         self.reminder_state_path = self.root / "data" / "reminders-state.json"
+        self.gmail_status_path = self.root / "data" / "gmail-inbox-last-run.json"
+        self.calendar_candidates_path = self.root / "data" / "calendar-candidates.json"
+        self.drive_workspace_status_path = self.root / "data" / "drive-workspace-status.json"
+        self.braindump_snapshot_path = self.root / "data" / "braindump-snapshot.json"
+        self.gmail_db_path = self.root / ".memory" / "inbox_processing.db"
+        self.braindump_db_path = self.root / ".memory" / "braindump.db"
+        self.braindump_schema_path = self.root / "contracts" / "braindump" / "sqlite_schema.sql"
         self.set_profiles_script = self.root / "scripts" / "set_active_profiles.py"
 
     def load_yaml_dict(self, path: Path) -> dict[str, Any]:
@@ -408,20 +426,20 @@ class DashboardBackend:
 
     def _default_workspace_data(self) -> dict[str, Any]:
         now = iso_now_utc()
+        default_project = {
+            "id": "proj-openclaw-v2",
+            "name": "OpenClaw V2 Rebuild",
+            "status": "active",
+            "description": "Core rebuild and modular control-plane rollout.",
+            "owner": "pavel",
+            "target_date": None,
+            "progress_pct": 0,
+            "created_at": now,
+            "updated_at": now,
+        }
         return {
-            "projects": [
-                {
-                    "id": "proj-openclaw-v2",
-                    "name": "OpenClaw V2 Rebuild",
-                    "status": "active",
-                    "description": "Core rebuild and modular control-plane rollout.",
-                    "owner": "pavel",
-                    "target_date": None,
-                    "progress_pct": 0,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            ],
+            "projects": [default_project],
+            "spaces": [self._project_space_template(default_project)],
             "tasks": [],
             "runs": [],
             "approvals": [],
@@ -451,6 +469,118 @@ class DashboardBackend:
             "created_at": str(row.get("created_at", "")).strip() or iso_now_utc(),
             "updated_at": str(row.get("updated_at", "")).strip() or iso_now_utc(),
         }
+
+    def _normalize_space(self, row: dict[str, Any]) -> dict[str, Any]:
+        name = str(row.get("name", "Space")).strip() or "Space"
+        kind = str(row.get("kind", "project")).strip().lower()
+        if kind not in SPACE_KINDS:
+            kind = "project"
+
+        project_id = str(row.get("project_id", "")).strip() or None
+        space_id = str(row.get("id", "")).strip() or f"space-{slugify(name)}-{uuid.uuid4().hex[:6]}"
+        key = str(row.get("key", "")).strip() or f"{kind}/{slugify(name)}"
+
+        status = str(row.get("status", "active")).strip().lower()
+        if status not in PROJECT_STATUSES:
+            status = "active"
+
+        session_strategy = str(row.get("session_strategy", "separate_session")).strip().lower()
+        if session_strategy not in SPACE_SESSION_STRATEGIES:
+            session_strategy = "separate_session"
+
+        agent_strategy = str(row.get("agent_strategy", "spawn_on_demand")).strip().lower()
+        if agent_strategy not in SPACE_AGENT_STRATEGIES:
+            agent_strategy = "spawn_on_demand"
+
+        return {
+            "id": space_id,
+            "key": key,
+            "kind": kind,
+            "project_id": project_id,
+            "name": name,
+            "status": status,
+            "summary": str(row.get("summary", "")).strip(),
+            "target_channel": str(row.get("target_channel", "projects")).strip() or "projects",
+            "entry_command_hint": str(row.get("entry_command_hint", "")).strip() or None,
+            "session_strategy": session_strategy,
+            "agent_strategy": agent_strategy,
+            "compaction_strategy": str(row.get("compaction_strategy", "milestone_summary")).strip()
+            or "milestone_summary",
+            "template_version": str(row.get("template_version", "project_space_v1")).strip() or "project_space_v1",
+            "source_task_id": str(row.get("source_task_id", "")).strip() or None,
+            "last_checkpoint_at": str(row.get("last_checkpoint_at", "")).strip() or None,
+            "created_at": str(row.get("created_at", "")).strip() or iso_now_utc(),
+            "updated_at": str(row.get("updated_at", "")).strip() or iso_now_utc(),
+        }
+
+    def _project_space_template(
+        self,
+        project: dict[str, Any],
+        *,
+        source_task_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_project = self._normalize_project(project)
+        slug = slugify(str(normalized_project.get("name", "")) or "project")
+        return self._normalize_space(
+            {
+                "id": f"space-{normalized_project['id']}",
+                "key": f"projects/{slug}",
+                "kind": "project",
+                "project_id": normalized_project["id"],
+                "name": normalized_project["name"],
+                "status": normalized_project["status"],
+                "summary": normalized_project["description"],
+                "target_channel": "projects",
+                "entry_command_hint": f"[project:{slug}]",
+                "session_strategy": "separate_session",
+                "agent_strategy": "spawn_on_demand",
+                "compaction_strategy": "milestone_summary",
+                "template_version": "project_space_v1",
+                "source_task_id": source_task_id,
+                "created_at": normalized_project["created_at"],
+                "updated_at": normalized_project["updated_at"],
+            }
+        )
+
+    def _ensure_project_spaces_in_workspace(self, workspace: dict[str, Any]) -> dict[str, Any]:
+        projects = [self._normalize_project(ensure_dict(item)) for item in workspace.get("projects", [])]
+        raw_spaces = workspace.get("spaces") if isinstance(workspace.get("spaces"), list) else []
+        normalized_existing = [self._normalize_space(ensure_dict(item)) for item in raw_spaces]
+
+        existing_by_project = {
+            str(row.get("project_id")): row for row in normalized_existing if str(row.get("project_id", "")).strip()
+        }
+        retained_non_project = [row for row in normalized_existing if not str(row.get("project_id", "")).strip()]
+
+        ensured_spaces: list[dict[str, Any]] = []
+        for project in projects:
+            template = self._project_space_template(project)
+            existing = existing_by_project.get(project["id"])
+            if existing:
+                merged = dict(template)
+                for key in (
+                    "id",
+                    "summary",
+                    "target_channel",
+                    "entry_command_hint",
+                    "session_strategy",
+                    "agent_strategy",
+                    "compaction_strategy",
+                    "template_version",
+                    "source_task_id",
+                    "last_checkpoint_at",
+                    "created_at",
+                ):
+                    if existing.get(key) not in {None, ""}:
+                        merged[key] = existing.get(key)
+                merged["updated_at"] = project["updated_at"]
+                ensured_spaces.append(self._normalize_space(merged))
+            else:
+                ensured_spaces.append(template)
+
+        workspace["projects"] = projects
+        workspace["spaces"] = retained_non_project + ensured_spaces
+        return workspace
 
     def _normalize_task(self, row: dict[str, Any]) -> dict[str, Any]:
         title = str(row.get("title", "Task")).strip() or "Task"
@@ -575,31 +705,181 @@ class DashboardBackend:
             return data
 
         projects = raw.get("projects") if isinstance(raw.get("projects"), list) else []
+        spaces = raw.get("spaces") if isinstance(raw.get("spaces"), list) else []
         tasks = raw.get("tasks") if isinstance(raw.get("tasks"), list) else []
         runs = raw.get("runs") if isinstance(raw.get("runs"), list) else []
         approvals = raw.get("approvals") if isinstance(raw.get("approvals"), list) else []
 
         normalized_projects = [self._normalize_project(ensure_dict(item)) for item in projects]
+        normalized_spaces = [self._normalize_space(ensure_dict(item)) for item in spaces]
         normalized_tasks = [self._normalize_task(ensure_dict(item)) for item in tasks]
         normalized_runs = [self._normalize_run(ensure_dict(item)) for item in runs]
         normalized_approvals = [self._normalize_approval(ensure_dict(item)) for item in approvals]
 
         if not normalized_projects:
-            normalized_projects = self._default_workspace_data()["projects"]
+            defaults = self._default_workspace_data()
+            normalized_projects = defaults["projects"]
+            normalized_spaces = defaults["spaces"]
 
         data = {
             "projects": normalized_projects,
+            "spaces": normalized_spaces,
             "tasks": normalized_tasks,
             "runs": normalized_runs,
             "approvals": normalized_approvals,
         }
+        data = self._ensure_project_spaces_in_workspace(data)
         if raw != data:
             self.save_workspace_data(data)
         return data
 
     def save_workspace_data(self, data: dict[str, Any]) -> None:
+        data = self._ensure_project_spaces_in_workspace(data)
         self.workspace_path.parent.mkdir(parents=True, exist_ok=True)
         self.workspace_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    def _open_braindump_conn(self) -> sqlite3.Connection:
+        self.braindump_db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.braindump_db_path)
+        braindump_runtime.ensure_db(conn, self.braindump_schema_path)
+        return conn
+
+    def _write_braindump_snapshot(self, conn: sqlite3.Connection) -> dict[str, Any]:
+        return braindump_runtime.write_snapshot(conn, self.braindump_snapshot_path, self.braindump_db_path)
+
+    def braindump_category_catalog(self) -> dict[str, Any]:
+        return {
+            "curated_categories": sorted(braindump_runtime.DEFAULT_CATEGORY_BUCKETS.keys()),
+            "aliases": dict(sorted(braindump_runtime.CATEGORY_ALIASES.items())),
+            "review_buckets": sorted(braindump_runtime.REVIEW_DELTA_DAYS.keys()),
+        }
+
+    def route_text_to_space(self, *, text: str) -> dict[str, Any]:
+        clean_text = text.strip()
+        if not clean_text:
+            raise ValueError("text is required")
+
+        workspace = self.load_workspace_data()
+        spaces = [self._normalize_space(ensure_dict(item)) for item in workspace.get("spaces", [])]
+        route = route_space_text(clean_text, spaces)
+
+        matched_space = next((row for row in spaces if str(row.get("id")) == str(route.get("space_id") or "")), None)
+        if matched_space is not None:
+            route["space"] = {
+                "id": matched_space.get("id"),
+                "key": matched_space.get("key"),
+                "kind": matched_space.get("kind"),
+                "name": matched_space.get("name"),
+                "project_id": matched_space.get("project_id"),
+                "session_strategy": matched_space.get("session_strategy"),
+                "agent_strategy": matched_space.get("agent_strategy"),
+                "entry_command_hint": matched_space.get("entry_command_hint"),
+            }
+        else:
+            route["space"] = None
+        return route
+
+    def create_braindump_item(
+        self,
+        *,
+        category: str,
+        text: str,
+        tags: list[str] | None = None,
+        review_bucket: str | None = None,
+        notes: str | None = None,
+        source: str = "dashboard",
+    ) -> dict[str, Any]:
+        conn = self._open_braindump_conn()
+        try:
+            item = braindump_runtime.create_item(
+                conn,
+                category=category,
+                text=text,
+                tags=tags or [],
+                review_bucket=review_bucket,
+                notes=notes,
+                source=source,
+            )
+            snapshot = self._write_braindump_snapshot(conn)
+            return {"item": item, "snapshot": snapshot}
+        finally:
+            conn.close()
+
+    def capture_braindump_text(
+        self,
+        *,
+        text: str,
+        source: str = "channel_text",
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        route = self.route_text_to_space(text=text)
+        if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
+            raise ValueError(f"project space not found: {route.get('space_key')}")
+
+        routed_text = (
+            str(route.get("stripped_text", "")).strip()
+            if route.get("kind") == "project" and route.get("resolved")
+            else text.strip()
+        )
+        route_note = None
+        if route.get("kind") == "project" and route.get("resolved"):
+            route_note = f"space={route.get('space_key')}"
+        combined_notes = "\n".join(part for part in [notes, route_note] if part and part.strip()) or None
+
+        conn = self._open_braindump_conn()
+        try:
+            parsed = braindump_runtime.parse_capture_text(routed_text)
+            item = braindump_runtime.capture_item_from_text(conn, routed_text, source=source, notes=combined_notes)
+            snapshot = self._write_braindump_snapshot(conn)
+            return {"route": route, "parsed": parsed, "item": item, "snapshot": snapshot}
+        finally:
+            conn.close()
+
+    def park_braindump_item(
+        self,
+        *,
+        item_id: str,
+        review_bucket: str | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        conn = self._open_braindump_conn()
+        try:
+            item = braindump_runtime.park_item(conn, item_id, review_bucket=review_bucket, note=note)
+            snapshot = self._write_braindump_snapshot(conn)
+            return {"item": item, "snapshot": snapshot}
+        finally:
+            conn.close()
+
+    def promote_braindump_item(
+        self,
+        *,
+        item_id: str,
+        target: str,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        conn = self._open_braindump_conn()
+        try:
+            item, promoted_to_id = braindump_runtime.promote_item(
+                conn,
+                item_id,
+                target=target,
+                workspace_path=self.workspace_path,
+                calendar_path=self.calendar_candidates_path,
+                note=note,
+            )
+            snapshot = self._write_braindump_snapshot(conn)
+            return {"item": item, "promoted_to_id": promoted_to_id, "snapshot": snapshot}
+        finally:
+            conn.close()
+
+    def archive_braindump_item(self, *, item_id: str, note: str | None = None) -> dict[str, Any]:
+        conn = self._open_braindump_conn()
+        try:
+            item = braindump_runtime.archive_item(conn, item_id, note=note)
+            snapshot = self._write_braindump_snapshot(conn)
+            return {"item": item, "snapshot": snapshot}
+        finally:
+            conn.close()
 
     def set_dashboard_flags(
         self,
@@ -908,6 +1188,132 @@ class DashboardBackend:
 
         rows.sort(key=lambda item: item.get("remind_at") or "")
         return rows
+
+    def _gmail_inbox_status(self) -> dict[str, Any]:
+        raw = read_json(self.gmail_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.gmail_status_path),
+                "state_db": str(self.gmail_db_path),
+                "summary": {},
+                "promotions": {},
+                "recent_results": [],
+                "manual_review_open": 0,
+            }
+
+        summary = ensure_dict(raw.get("summary"))
+        promotions = ensure_dict(raw.get("promotions"))
+        recent_results = [ensure_dict(item) for item in raw.get("recent_results", []) if isinstance(item, dict)]
+        manual_review_open = 0
+        if self.gmail_db_path.exists():
+            conn: sqlite3.Connection | None = None
+            try:
+                conn = sqlite3.connect(self.gmail_db_path)
+                row = conn.execute(
+                    """
+                    SELECT COUNT(*)
+                      FROM gmail_messages
+                     WHERE manual_review_required = 1
+                       AND last_action IN ('mark_for_manual_review', 'keep_in_inbox')
+                    """
+                ).fetchone()
+                manual_review_open = int((row or [0])[0] or 0)
+            except sqlite3.DatabaseError:
+                manual_review_open = 0
+            finally:
+                if conn is not None:
+                    conn.close()
+
+        return {
+            "available": True,
+            "path": str(self.gmail_status_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "run_id": raw.get("run_id"),
+            "dry_run": bool(raw.get("dry_run") is True),
+            "state_db": str(raw.get("state_db") or self.gmail_db_path),
+            "summary": summary,
+            "promotions": promotions,
+            "recent_results": recent_results[:20],
+            "manual_review_open": manual_review_open,
+        }
+
+    def _calendar_candidates(self) -> dict[str, Any]:
+        raw = read_json(self.calendar_candidates_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.calendar_candidates_path),
+                "items": [],
+                "count": 0,
+                "status_counts": {},
+            }
+
+        items = [ensure_dict(item) for item in raw.get("items", []) if isinstance(item, dict)]
+        items.sort(key=lambda row: str(row.get("updated_at", "")), reverse=True)
+        status_counts: dict[str, int] = defaultdict(int)
+        for item in items:
+            status_counts[str(item.get("status", "proposed"))] += 1
+
+        return {
+            "available": True,
+            "path": str(self.calendar_candidates_path),
+            "items": items[:40],
+            "count": len(items),
+            "status_counts": dict(status_counts),
+        }
+
+    def _drive_workspace_status(self) -> dict[str, Any]:
+        raw = read_json(self.drive_workspace_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.drive_workspace_status_path),
+                "summary": {},
+            }
+
+        return {
+            "available": True,
+            "path": str(self.drive_workspace_status_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "summary": ensure_dict(raw.get("summary")),
+        }
+
+    def _braindump_status(self) -> dict[str, Any]:
+        catalog = self.braindump_category_catalog()
+        raw = read_json(self.braindump_snapshot_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.braindump_snapshot_path),
+                "db_path": str(self.braindump_db_path),
+                "category_catalog": catalog,
+                "counts_by_status": {},
+                "counts_by_bucket": {},
+                "counts_by_category": {},
+                "due_count": 0,
+                "due_items": [],
+                "recent_items": [],
+            }
+
+        due_items = [ensure_dict(item) for item in raw.get("due_items", []) if isinstance(item, dict)]
+        recent_items = [ensure_dict(item) for item in raw.get("recent_items", []) if isinstance(item, dict)]
+        due_items.sort(key=lambda row: str(row.get("next_review_at") or row.get("captured_at") or ""))
+        recent_items.sort(key=lambda row: str(row.get("updated_at") or row.get("captured_at") or ""), reverse=True)
+
+        return {
+            "available": True,
+            "path": str(self.braindump_snapshot_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "db_path": str(raw.get("db_path") or self.braindump_db_path),
+            "category_catalog": catalog,
+            "counts_by_status": ensure_dict(raw.get("counts_by_status")),
+            "counts_by_bucket": ensure_dict(raw.get("counts_by_bucket")),
+            "counts_by_category": ensure_dict(raw.get("counts_by_category")),
+            "due_count": int(raw.get("due_count", len(due_items)) or 0),
+            "due_items": due_items[:20],
+            "recent_items": recent_items[:20],
+        }
 
     def _profile_env_requirements(self) -> dict[str, Any]:
         integrations_data = self.load_yaml_dict(self.integrations_path)
@@ -1430,6 +1836,125 @@ class DashboardBackend:
         self.save_workspace_data(workspace)
         return project
 
+    def promote_task_to_project(
+        self,
+        *,
+        task_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        owner: str | None = None,
+    ) -> dict[str, Any]:
+        clean_task_id = task_id.strip()
+        if not clean_task_id:
+            raise ValueError("task_id is required")
+
+        workspace = self.load_workspace_data()
+        tasks = workspace["tasks"]
+
+        target_task: dict[str, Any] | None = None
+        for row in tasks:
+            if str(row.get("id")) == clean_task_id:
+                target_task = row
+                break
+
+        if target_task is None:
+            raise ValueError(f"task not found: {clean_task_id}")
+
+        project_name = (name or "").strip() or str(target_task.get("title", "Project")).strip() or "Project"
+        project_description = (description or "").strip() or str(target_task.get("notes", "")).strip() or project_name
+        project_owner = (owner or "").strip().lower() or (
+            ensure_string_list(target_task.get("assignees", []))[0] if ensure_string_list(target_task.get("assignees", [])) else "pavel"
+        )
+
+        now = iso_now_utc()
+        project = self._normalize_project(
+            {
+                "id": f"proj-{slugify(project_name)}-{uuid.uuid4().hex[:6]}",
+                "name": project_name,
+                "description": project_description,
+                "owner": project_owner,
+                "target_date": None,
+                "status": "active",
+                "progress_pct": 0,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        workspace["projects"].append(project)
+
+        target_task["project_id"] = project["id"]
+        target_task["updated_at"] = now
+        if not str(target_task.get("notes", "")).strip() and project_description:
+            target_task["notes"] = project_description
+
+        workspace = self._ensure_project_spaces_in_workspace(workspace)
+        for idx, row in enumerate(workspace["spaces"]):
+            if str(row.get("project_id")) == project["id"]:
+                merged = dict(row)
+                merged["source_task_id"] = clean_task_id
+                merged["summary"] = project_description
+                merged["updated_at"] = now
+                workspace["spaces"][idx] = self._normalize_space(merged)
+                break
+
+        self.save_workspace_data(workspace)
+
+        normalized_task = self._normalize_task(target_task)
+        normalized_space = next(
+            (self._normalize_space(ensure_dict(row)) for row in workspace["spaces"] if str(row.get("project_id")) == project["id"]),
+            self._project_space_template(project, source_task_id=clean_task_id),
+        )
+        return {
+            "project": project,
+            "task": normalized_task,
+            "space": normalized_space,
+        }
+
+    def assign_task_to_project_space(
+        self,
+        *,
+        task_id: str,
+        project_id: str,
+    ) -> dict[str, Any]:
+        clean_task_id = task_id.strip()
+        clean_project_id = project_id.strip()
+        if not clean_task_id:
+            raise ValueError("task_id is required")
+        if not clean_project_id:
+            raise ValueError("project_id is required")
+
+        workspace = self.load_workspace_data()
+        workspace = self._ensure_project_spaces_in_workspace(workspace)
+
+        tasks = workspace["tasks"]
+        target_task = next((row for row in tasks if str(row.get("id")) == clean_task_id), None)
+        if target_task is None:
+            raise ValueError(f"task not found: {clean_task_id}")
+
+        project = next((self._normalize_project(ensure_dict(row)) for row in workspace["projects"] if str(row.get("id")) == clean_project_id), None)
+        if project is None:
+            raise ValueError(f"project not found: {clean_project_id}")
+
+        space = next((self._normalize_space(ensure_dict(row)) for row in workspace["spaces"] if str(row.get("project_id")) == clean_project_id), None)
+        if space is None:
+            raise ValueError(f"project space not found: {clean_project_id}")
+
+        now = iso_now_utc()
+        target_task["project_id"] = clean_project_id
+        target_task["updated_at"] = now
+
+        for idx, row in enumerate(tasks):
+            if str(row.get("id")) == clean_task_id:
+                tasks[idx] = self._normalize_task(target_task)
+                break
+
+        self.save_workspace_data(workspace)
+        return {
+            "task": self._normalize_task(target_task),
+            "project": project,
+            "space": space,
+        }
+
     def update_project(
         self,
         *,
@@ -1870,6 +2395,59 @@ class DashboardBackend:
             "run": run,
         }
 
+    def assign_calendar_candidate_to_project(
+        self,
+        *,
+        candidate_id: str,
+        project_id: str,
+    ) -> dict[str, Any]:
+        clean_candidate_id = candidate_id.strip()
+        clean_project_id = project_id.strip()
+        if not clean_candidate_id:
+            raise ValueError("candidate_id is required")
+        if not clean_project_id:
+            raise ValueError("project_id is required")
+
+        raw = read_json(self.calendar_candidates_path)
+        if not isinstance(raw, dict) or not isinstance(raw.get("items"), list):
+            raise ValueError("calendar candidates file not available")
+
+        workspace = self.load_workspace_data()
+        workspace = self._ensure_project_spaces_in_workspace(workspace)
+        project = next((self._normalize_project(ensure_dict(row)) for row in workspace["projects"] if str(row.get("id")) == clean_project_id), None)
+        if project is None:
+            raise ValueError(f"project not found: {clean_project_id}")
+
+        space = next((self._normalize_space(ensure_dict(row)) for row in workspace["spaces"] if str(row.get("project_id")) == clean_project_id), None)
+        if space is None:
+            raise ValueError(f"project space not found: {clean_project_id}")
+
+        target_item: dict[str, Any] | None = None
+        items = [ensure_dict(item) for item in raw.get("items", []) if isinstance(item, dict)]
+        for item in items:
+            if str(item.get("id")) == clean_candidate_id:
+                target_item = item
+                break
+        if target_item is None:
+            raise ValueError(f"calendar candidate not found: {clean_candidate_id}")
+
+        now = iso_now_utc()
+        target_item["project_id"] = project["id"]
+        target_item["project_name"] = project["name"]
+        target_item["space_id"] = space["id"]
+        target_item["space_key"] = space["key"]
+        target_item["assignment_source"] = "dashboard"
+        target_item["assignment_updated_at"] = now
+        target_item["updated_at"] = now
+
+        raw["items"] = items
+        write_json(self.calendar_candidates_path, raw)
+        return {
+            "item": target_item,
+            "project": project,
+            "space": space,
+        }
+
     def update_run(
         self,
         *,
@@ -1982,11 +2560,15 @@ class DashboardBackend:
     def _workspace_summary(self) -> dict[str, Any]:
         workspace = self.load_workspace_data()
         projects = [self._normalize_project(ensure_dict(item)) for item in workspace.get("projects", [])]
+        spaces = [self._normalize_space(ensure_dict(item)) for item in workspace.get("spaces", [])]
         tasks = [self._normalize_task(ensure_dict(item)) for item in workspace.get("tasks", [])]
         runs = [self._normalize_run(ensure_dict(item)) for item in workspace.get("runs", [])]
         approvals = [self._normalize_approval(ensure_dict(item)) for item in workspace.get("approvals", [])]
 
         project_lookup = {row["id"]: row for row in projects}
+        space_lookup_by_project = {
+            str(row.get("project_id")): row for row in spaces if str(row.get("project_id", "")).strip()
+        }
 
         task_rows = []
         task_counts = {"todo": 0, "in_progress": 0, "blocked": 0, "done": 0}
@@ -2013,6 +2595,7 @@ class DashboardBackend:
         project_rows = []
         for project in projects:
             progress_pct, counters = self._project_progress(project, tasks)
+            space = ensure_dict(space_lookup_by_project.get(project["id"]))
             project_rows.append(
                 {
                     **project,
@@ -2022,6 +2605,12 @@ class DashboardBackend:
                     "task_in_progress": counters["in_progress"],
                     "task_blocked": counters["blocked"],
                     "task_done": counters["done"],
+                    "space_id": space.get("id"),
+                    "space_key": space.get("key"),
+                    "space_session_strategy": space.get("session_strategy"),
+                    "space_agent_strategy": space.get("agent_strategy"),
+                    "space_target_channel": space.get("target_channel"),
+                    "space_entry_command_hint": space.get("entry_command_hint"),
                 }
             )
 
@@ -2082,7 +2671,12 @@ class DashboardBackend:
             "task_total": total_tasks,
             "task_done": task_counts["done"],
             "active_projects": len([row for row in project_rows if row.get("status") in {"active", "planned", "blocked"}]),
+            "project_spaces": len([row for row in spaces if row.get("kind") == "project"]),
         }
+
+        space_counts: dict[str, int] = defaultdict(int)
+        for space in spaces:
+            space_counts[str(space.get("kind", "project"))] += 1
 
         run_counts = {"queued": 0, "running": 0, "succeeded": 0, "failed": 0, "cancelled": 0}
         run_rows: list[dict[str, Any]] = []
@@ -2128,6 +2722,8 @@ class DashboardBackend:
 
         return {
             "projects": project_rows,
+            "spaces": spaces,
+            "space_counts": dict(space_counts),
             "tasks": task_rows,
             "task_counts": task_counts,
             "progress": progress,
@@ -2332,6 +2928,10 @@ class DashboardBackend:
         env = self._profile_env_requirements()
         reminder_counts = self._count_reminders()
         reminder_pending = self._pending_reminders()
+        gmail_inbox = self._gmail_inbox_status()
+        calendar_candidates = self._calendar_candidates()
+        drive_workspace = self._drive_workspace_status()
+        braindump = self._braindump_status()
         workspace = self._workspace_summary()
 
         local_telemetry_enabled = bool(
@@ -2403,6 +3003,10 @@ class DashboardBackend:
                 "counts": reminder_counts,
                 "pending_items": reminder_pending,
             },
+            "gmail_inbox": gmail_inbox,
+            "calendar_candidates": calendar_candidates,
+            "drive_workspace": drive_workspace,
+            "braindump": braindump,
             "workspace": workspace,
             "env": env,
             "telemetry": {

@@ -170,6 +170,170 @@
       </section>
 
       <section class="grid">
+        <article class="card col-7">
+          <h2>Gmail Inbox Ops</h2>
+          <p class="footnote" id="gmail-status-summary">No Gmail inbox run yet.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>Subject</th>
+                  <th>Action</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="gmail-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card alt col-5">
+          <h2>Drive Workspace</h2>
+          <div class="list">
+            <div class="list-item">
+              <div>
+                <strong>Root</strong>
+                <div class="meta" id="drive-root-meta">No Drive workspace check yet.</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Missing</strong>
+                <div class="meta" id="drive-missing-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Extra</strong>
+                <div class="meta" id="drive-extra-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Last Check</strong>
+                <div class="meta" id="drive-checked-meta">-</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-12">
+          <h2>Calendar Candidates</h2>
+          <p class="footnote" id="calendar-candidates-summary">No calendar candidates yet.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>From</th>
+                  <th>Tags</th>
+                  <th>Project Space</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="calendar-candidates-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-5">
+          <h2>Braindump</h2>
+          <div class="controls" style="margin-bottom: 12px">
+            <div class="control-row">
+              <label for="braindump-capture-input">Quick capture</label>
+              <input
+                id="braindump-capture-input"
+                type="text"
+                placeholder="bd gift perfume sampler #birthday @monthly"
+              />
+            </div>
+            <div class="control-row">
+              <label for="braindump-category-input">Category override</label>
+              <input
+                id="braindump-category-input"
+                type="text"
+                list="braindump-category-list"
+                placeholder="optional: gift / tool / research / custom"
+              />
+              <datalist id="braindump-category-list"></datalist>
+            </div>
+            <div class="control-row">
+              <label for="braindump-tags-input">Tags</label>
+              <input id="braindump-tags-input" type="text" placeholder="optional comma list" />
+            </div>
+            <div class="control-row">
+              <label for="braindump-review-bucket-select">Review bucket</label>
+              <select id="braindump-review-bucket-select"></select>
+            </div>
+            <div class="control-row">
+              <button id="capture-braindump-button" class="secondary">Capture</button>
+            </div>
+          </div>
+          <p class="footnote" id="braindump-capture-status">
+            Use explicit category + text here, or raw capture syntax like `bd gift perfume sampler`.
+          </p>
+          <div class="list">
+            <div class="list-item">
+              <div>
+                <strong>Status Counts</strong>
+                <div class="meta" id="braindump-status-meta">No braindump snapshot yet.</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Review Buckets</strong>
+                <div class="meta" id="braindump-bucket-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Due Items</strong>
+                <div class="meta" id="braindump-due-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Top Categories</strong>
+                <div class="meta" id="braindump-category-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Last Snapshot</strong>
+                <div class="meta" id="braindump-generated-meta">-</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card alt col-7">
+          <h2>Braindump Review Queue</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Text</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Review</th>
+                  <th>Next Check</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="braindump-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
         <article class="card col-5">
           <h2>Create Project</h2>
           <div class="controls">

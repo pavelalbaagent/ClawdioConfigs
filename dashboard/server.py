@@ -290,14 +290,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "POST /api/dashboard/settings",
                         "POST /api/projects/create",
                         "POST /api/projects/update",
+                        "POST /api/projects/promote_task",
+                        "POST /api/spaces/route_text",
                         "POST /api/tasks/create",
                         "POST /api/tasks/create_from_template",
                         "POST /api/tasks/dispatch",
+                        "POST /api/tasks/move_to_project_space",
                         "POST /api/tasks/update",
                         "POST /api/tasks/delete",
+                        "POST /api/calendar_candidates/assign_project",
                         "POST /api/runs/update",
                         "POST /api/approvals/create",
                         "POST /api/approvals/decision",
+                        "POST /api/braindump/create",
+                        "POST /api/braindump/capture",
+                        "POST /api/braindump/park",
+                        "POST /api/braindump/promote",
+                        "POST /api/braindump/archive",
                         "GET /api/exports/weekly.md?days=7",
                         "GET /api/exports/tasks.csv",
                     ]
@@ -438,6 +447,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus.OK, {"ok": True, "project": result})
                 return
 
+            if path == "/api/projects/promote_task":
+                result = self.backend.promote_task_to_project(
+                    task_id=self._require_string(payload, "task_id"),
+                    name=self._optional_str(payload, "name"),
+                    description=self._optional_str(payload, "description"),
+                    owner=self._optional_str(payload, "owner"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/spaces/route_text":
+                result = self.backend.route_text_to_space(
+                    text=self._require_string(payload, "text"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": {"route": result}})
+                return
+
             if path == "/api/tasks/create":
                 result = self.backend.create_task(
                     title=self._require_string(payload, "title"),
@@ -480,6 +506,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
 
+            if path == "/api/tasks/move_to_project_space":
+                result = self.backend.assign_task_to_project_space(
+                    task_id=self._require_string(payload, "task_id"),
+                    project_id=self._require_string(payload, "project_id"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
             if path == "/api/tasks/update":
                 result = self.backend.update_task(
                     task_id=self._require_string(payload, "task_id"),
@@ -499,6 +533,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/tasks/delete":
                 result = self.backend.delete_task(self._require_string(payload, "task_id"))
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/calendar_candidates/assign_project":
+                result = self.backend.assign_calendar_candidate_to_project(
+                    candidate_id=self._require_string(payload, "candidate_id"),
+                    project_id=self._require_string(payload, "project_id"),
+                )
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
 
@@ -533,6 +575,53 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     decision_note=self._optional_str(payload, "decision_note"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "approval": result})
+                return
+
+            if path == "/api/braindump/create":
+                result = self.backend.create_braindump_item(
+                    category=self._require_string(payload, "category"),
+                    text=self._require_string(payload, "text"),
+                    tags=self._optional_list_of_strings(payload, "tags"),
+                    review_bucket=self._optional_str(payload, "review_bucket"),
+                    notes=self._optional_str(payload, "notes"),
+                    source=self._optional_str(payload, "source") or "dashboard",
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/braindump/capture":
+                result = self.backend.capture_braindump_text(
+                    text=self._require_string(payload, "text"),
+                    source=self._optional_str(payload, "source") or "channel_text",
+                    notes=self._optional_str(payload, "notes"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/braindump/park":
+                result = self.backend.park_braindump_item(
+                    item_id=self._require_string(payload, "item_id"),
+                    review_bucket=self._optional_str(payload, "review_bucket"),
+                    note=self._optional_str(payload, "note"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/braindump/promote":
+                result = self.backend.promote_braindump_item(
+                    item_id=self._require_string(payload, "item_id"),
+                    target=self._require_string(payload, "target"),
+                    note=self._optional_str(payload, "note"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/braindump/archive":
+                result = self.backend.archive_braindump_item(
+                    item_id=self._require_string(payload, "item_id"),
+                    note=self._optional_str(payload, "note"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
 
         except ValueError as exc:

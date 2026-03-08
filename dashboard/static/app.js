@@ -132,6 +132,54 @@ function parseCommaList(value) {
     .filter(Boolean);
 }
 
+function currentProjects() {
+  return (((state.snapshot || {}).workspace || {}).projects || []).slice();
+}
+
+function promptForProjectSelection(currentProjectId = "") {
+  const projects = currentProjects().filter((project) => project.status !== "archived");
+  if (!projects.length) {
+    throw new Error("No project spaces are available.");
+  }
+
+  const defaultProject = projects.find((project) => project.id === currentProjectId) || projects[0];
+  const options = projects.map((project, index) => {
+    const currentTag = project.id === currentProjectId ? " [current]" : "";
+    return `${index + 1}. ${project.name} (${project.space_key || project.id})${currentTag}`;
+  });
+
+  const raw = window.prompt(
+    `Choose project by number, project id, or space key:\n${options.join("\n")}`,
+    defaultProject.space_key || defaultProject.id
+  );
+  if (raw === null) {
+    return null;
+  }
+
+  const clean = raw.trim();
+  if (!clean) {
+    throw new Error("Project selection is required.");
+  }
+
+  const numericIndex = Number(clean);
+  if (Number.isInteger(numericIndex) && numericIndex >= 1 && numericIndex <= projects.length) {
+    return projects[numericIndex - 1];
+  }
+
+  const lowered = clean.toLowerCase();
+  const direct = projects.find(
+    (project) =>
+      project.id.toLowerCase() === lowered ||
+      String(project.space_key || "").toLowerCase() === lowered ||
+      project.name.toLowerCase() === lowered
+  );
+  if (direct) {
+    return direct;
+  }
+
+  throw new Error(`Unknown project selection: ${clean}`);
+}
+
 function renderProfiles(snapshot) {
   const intSelect = byId("integration-profile-select");
   const memSelect = byId("memory-profile-select");
@@ -382,6 +430,275 @@ function renderTodoQueue(snapshot) {
   }
 }
 
+function renderGmailInbox(snapshot) {
+  const body = byId("gmail-body");
+  body.innerHTML = "";
+
+  const gmail = snapshot.gmail_inbox || {};
+  if (!gmail.available) {
+    setText("gmail-status-summary", "No Gmail inbox status file yet.");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const summary = gmail.summary || {};
+  const promotions = gmail.promotions || {};
+  const taskPromotions = promotions.tasks || {};
+  const calendarPromotions = promotions.calendar || {};
+  setText(
+    "gmail-status-summary",
+    `run=${gmail.run_id || "-"} | dry_run=${gmail.dry_run ? "yes" : "no"} | processed=${summary.processed_count || 0} | manual_review_open=${gmail.manual_review_open || 0} | task_promotions=${(taskPromotions.created || 0) + (taskPromotions.updated || 0)} | calendar_promotions=${(calendarPromotions.created || 0) + (calendarPromotions.updated || 0)}`
+  );
+
+  const rows = gmail.recent_results || [];
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const row of rows.slice(0, 20)) {
+    const tr = document.createElement("tr");
+    appendCells(tr, [
+      row.from_email || "-",
+      row.subject || "-",
+      row.primary_action || "-",
+      row.reason || "-",
+    ]);
+    body.appendChild(tr);
+  }
+}
+
+function renderDriveWorkspace(snapshot) {
+  const drive = snapshot.drive_workspace || {};
+  const summary = drive.summary || {};
+  const root = summary.root || {};
+
+  if (!drive.available) {
+    setText("drive-root-meta", "No Drive workspace check yet.");
+    setText("drive-missing-meta", "-");
+    setText("drive-extra-meta", "-");
+    setText("drive-checked-meta", "-");
+    return;
+  }
+
+  setText("drive-root-meta", `${root.name || "-"} (${root.id || "-"})`);
+  setText("drive-missing-meta", (summary.missing || []).join(", ") || "none");
+  setText("drive-extra-meta", (summary.extra || []).join(", ") || "none");
+  setText("drive-checked-meta", drive.generated_at || "-");
+}
+
+function renderCalendarCandidates(snapshot) {
+  const body = byId("calendar-candidates-body");
+  body.innerHTML = "";
+
+  const calendar = snapshot.calendar_candidates || {};
+  const items = calendar.items || [];
+  if (!calendar.available) {
+    setText("calendar-candidates-summary", "No calendar candidate file yet.");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const counts = calendar.status_counts || {};
+  const countParts = Object.entries(counts).map(([key, value]) => `${key}=${value}`);
+  setText(
+    "calendar-candidates-summary",
+    `${calendar.count || 0} candidates${countParts.length ? ` | ${countParts.join(", ")}` : ""}`
+  );
+
+  if (items.length === 0) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const item of items.slice(0, 30)) {
+    const tr = document.createElement("tr");
+    const projectLabel = item.project_name || item.space_key || "-";
+    appendCells(tr, [
+      item.title || "-",
+      item.from_email || "-",
+      (item.intent_tags || []).join(", ") || "-",
+      projectLabel,
+      item.status || "-",
+      item.updated_at || "-",
+    ]);
+
+    const actionsTd = document.createElement("td");
+    const assignBtn = document.createElement("button");
+    assignBtn.className = "secondary";
+    assignBtn.textContent = item.project_id ? "Move" : "Project";
+    assignBtn.addEventListener("click", async () => {
+      assignBtn.disabled = true;
+      try {
+        const project = promptForProjectSelection(item.project_id || "");
+        if (!project) {
+          return;
+        }
+        const result = await api("/api/calendar_candidates/assign_project", {
+          method: "POST",
+          body: {
+            candidate_id: item.id,
+            project_id: project.id,
+          },
+        });
+        setText(
+          "project-status",
+          `Calendar candidate routed to ${result.result.project.name} (${result.result.space.key}).`
+        );
+        await loadState();
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        assignBtn.disabled = false;
+      }
+    });
+    actionsTd.appendChild(assignBtn);
+    tr.appendChild(actionsTd);
+    body.appendChild(tr);
+  }
+}
+
+function renderBraindump(snapshot) {
+  const body = byId("braindump-body");
+  body.innerHTML = "";
+
+  const braindump = snapshot.braindump || {};
+  const catalog = braindump.category_catalog || {};
+  const categoryList = byId("braindump-category-list");
+  const bucketSelect = byId("braindump-review-bucket-select");
+  if (categoryList) {
+    categoryList.innerHTML = "";
+    for (const category of catalog.curated_categories || []) {
+      const option = document.createElement("option");
+      option.value = category;
+      categoryList.appendChild(option);
+    }
+  }
+  if (bucketSelect) {
+    const current = bucketSelect.value || "";
+    bucketSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "default";
+    bucketSelect.appendChild(placeholder);
+    for (const bucket of catalog.review_buckets || []) {
+      const option = document.createElement("option");
+      option.value = bucket;
+      option.textContent = bucket;
+      bucketSelect.appendChild(option);
+    }
+    bucketSelect.value = current;
+  }
+
+  if (!braindump.available) {
+    setText("braindump-status-meta", "No braindump snapshot yet.");
+    setText("braindump-bucket-meta", "-");
+    setText("braindump-due-meta", "-");
+    setText("braindump-category-meta", "-");
+    setText("braindump-generated-meta", "-");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const statusCounts = braindump.counts_by_status || {};
+  const bucketCounts = braindump.counts_by_bucket || {};
+  const categoryCounts = braindump.counts_by_category || {};
+  const dueItems = braindump.due_items || [];
+  const recentItems = braindump.recent_items || [];
+
+  const topCategories = Object.entries(categoryCounts)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 4)
+    .map(([name, count]) => `${name}=${count}`);
+
+  setText(
+    "braindump-status-meta",
+    Object.entries(statusCounts)
+      .map(([name, count]) => `${name}=${count}`)
+      .join(", ") || "none"
+  );
+  setText(
+    "braindump-bucket-meta",
+    Object.entries(bucketCounts)
+      .map(([name, count]) => `${name}=${count}`)
+      .join(", ") || "none"
+  );
+  setText("braindump-due-meta", `${braindump.due_count || 0} due for review`);
+  setText("braindump-category-meta", topCategories.join(", ") || "none");
+  setText("braindump-generated-meta", braindump.generated_at || "-");
+
+  const rows = dueItems.length > 0 ? dueItems : recentItems;
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const item of rows.slice(0, 20)) {
+    const tr = document.createElement("tr");
+
+    appendCells(tr, [
+      item.short_text || "-",
+      item.category || "-",
+      item.status || "-",
+      item.review_bucket || "-",
+      item.next_review_at || item.updated_at || item.captured_at || "-",
+    ]);
+
+    const actionsTd = document.createElement("td");
+    const addButton = (label, handler) => {
+      const btn = document.createElement("button");
+      btn.className = "secondary";
+      btn.textContent = label;
+      btn.style.marginRight = "6px";
+      btn.addEventListener("click", handler);
+      actionsTd.appendChild(btn);
+    };
+
+    if (item.status !== "promoted" && item.status !== "archived") {
+      addButton("Park", async () => {
+        const bucket = window.prompt("Review bucket", item.review_bucket || "weekly");
+        if (bucket === null) {
+          return;
+        }
+        await runBraindumpAction("park", { item_id: item.id, review_bucket: bucket.trim() || item.review_bucket });
+      });
+      addButton("Task", async () => {
+        await runBraindumpAction("promote", { item_id: item.id, target: "task" });
+      });
+      addButton("Cal", async () => {
+        await runBraindumpAction("promote", { item_id: item.id, target: "calendar" });
+      });
+      addButton("Proj", async () => {
+        await runBraindumpAction("promote", { item_id: item.id, target: "project" });
+      });
+    }
+
+    if (item.status !== "archived") {
+      addButton("Archive", async () => {
+        if (!window.confirm(`Archive braindump item "${item.short_text || item.id}"?`)) {
+          return;
+        }
+        await runBraindumpAction("archive", { item_id: item.id });
+      });
+    }
+
+    tr.appendChild(actionsTd);
+    body.appendChild(tr);
+  }
+}
+
 function renderProjects(snapshot) {
   const body = byId("projects-body");
   const projectSelect = byId("task-project-select");
@@ -401,7 +718,19 @@ function renderProjects(snapshot) {
     const tr = document.createElement("tr");
 
     const nameTd = document.createElement("td");
-    nameTd.textContent = project.name;
+    const nameWrap = document.createElement("div");
+    const nameStrong = document.createElement("strong");
+    nameStrong.textContent = project.name;
+    nameWrap.appendChild(nameStrong);
+    if (project.space_key || project.space_entry_command_hint) {
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `${project.space_key || "-"} | ${project.space_session_strategy || "-"} | ${project.space_agent_strategy || "-"}${
+        project.space_entry_command_hint ? ` | ${project.space_entry_command_hint}` : ""
+      }`;
+      nameWrap.appendChild(meta);
+    }
+    nameTd.appendChild(nameWrap);
 
     const statusTd = document.createElement("td");
     const statusSelect = document.createElement("select");
@@ -594,6 +923,14 @@ function renderTasks(snapshot) {
     deleteBtn.className = "secondary";
     deleteBtn.textContent = "Delete";
 
+    const projectBtn = document.createElement("button");
+    projectBtn.className = "secondary";
+    projectBtn.textContent = "Project";
+
+    const moveBtn = document.createElement("button");
+    moveBtn.className = "secondary";
+    moveBtn.textContent = "Move";
+
     const runUpdate = async (payload) => {
       await api("/api/tasks/update", {
         method: "POST",
@@ -674,9 +1011,48 @@ function renderTasks(snapshot) {
       }
     });
 
+    projectBtn.addEventListener("click", async () => {
+      projectBtn.disabled = true;
+      try {
+        await promoteTaskToProject(task);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        projectBtn.disabled = false;
+      }
+    });
+
+    moveBtn.addEventListener("click", async () => {
+      moveBtn.disabled = true;
+      try {
+        const project = promptForProjectSelection(task.project_id || "");
+        if (!project) {
+          return;
+        }
+        const result = await api("/api/tasks/move_to_project_space", {
+          method: "POST",
+          body: {
+            task_id: task.id,
+            project_id: project.id,
+          },
+        });
+        setText(
+          "task-create-status",
+          `Task moved to ${result.result.project.name} (${result.result.space.key}).`
+        );
+        await loadState();
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        moveBtn.disabled = false;
+      }
+    });
+
     actionsTd.appendChild(queueBtn);
     actionsTd.appendChild(saveBtn);
     actionsTd.appendChild(doneBtn);
+    actionsTd.appendChild(moveBtn);
+    actionsTd.appendChild(projectBtn);
     actionsTd.appendChild(deleteBtn);
 
     tr.appendChild(titleTd);
@@ -1045,14 +1421,44 @@ async function createProject() {
     payload.description = description;
   }
 
-  await api("/api/projects/create", {
+  const result = await api("/api/projects/create", {
     method: "POST",
     body: payload,
   });
 
   byId("project-name-input").value = "";
   byId("project-description-input").value = "";
-  setText("project-status", "Project created.");
+  setText("project-status", `Project created. Space: space-${result.project.id}`);
+  await loadState();
+}
+
+async function promoteTaskToProject(task) {
+  const name = window.prompt("New project name", task.title || "Project");
+  if (name === null) {
+    return;
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    throw new Error("project name is required");
+  }
+
+  const description = window.prompt("Project description", task.notes || task.title || "");
+  if (description === null) {
+    return;
+  }
+
+  const result = await api("/api/projects/promote_task", {
+    method: "POST",
+    body: {
+      task_id: task.id,
+      name: cleanName,
+      description: description.trim() || undefined,
+    },
+  });
+  setText(
+    "task-create-status",
+    `Task promoted to project ${result.result.project.name} with space ${result.result.space.key}.`
+  );
   await loadState();
 }
 
@@ -1198,6 +1604,70 @@ async function logout() {
   window.location.href = "/login.html";
 }
 
+async function runBraindumpAction(action, body) {
+  const endpoint = `/api/braindump/${action}`;
+  await api(endpoint, { method: "POST", body });
+  setText("braindump-capture-status", `Braindump ${action} applied.`);
+  await loadState();
+}
+
+async function captureBraindump() {
+  const text = byId("braindump-capture-input").value.trim();
+  const category = byId("braindump-category-input").value.trim();
+  const tags = parseCommaList(byId("braindump-tags-input").value || "");
+  const reviewBucket = byId("braindump-review-bucket-select").value || "";
+
+  if (!text) {
+    throw new Error("braindump capture text is required");
+  }
+
+  const routeResponse = await api("/api/spaces/route_text", {
+    method: "POST",
+    body: { text },
+  });
+  const route = ((routeResponse || {}).result || {}).route || null;
+  if (route && route.kind === "project" && route.matched && !route.resolved) {
+    throw new Error(`Project space not found: ${route.space_key}`);
+  }
+  const routedText =
+    route && route.kind === "project" && route.resolved && route.stripped_text ? route.stripped_text : text;
+  const routeNote = route && route.kind === "project" && route.resolved ? `space=${route.space_key}` : undefined;
+
+  if (category) {
+    await api("/api/braindump/create", {
+      method: "POST",
+      body: {
+        category,
+        text: routedText,
+        tags,
+        review_bucket: reviewBucket || undefined,
+        notes: routeNote,
+        source: "web_dashboard",
+      },
+    });
+  } else {
+    await api("/api/braindump/capture", {
+      method: "POST",
+      body: {
+        text,
+        source: "web_dashboard",
+      },
+    });
+  }
+
+  byId("braindump-capture-input").value = "";
+  byId("braindump-category-input").value = "";
+  byId("braindump-tags-input").value = "";
+  byId("braindump-review-bucket-select").value = "";
+  setText(
+    "braindump-capture-status",
+    route && route.kind === "project" && route.resolved
+      ? `Braindump item captured in ${route.space_key}.`
+      : "Braindump item captured."
+  );
+  await loadState();
+}
+
 function configureAutoRefresh(snapshot) {
   const refreshSeconds = Number(
     (((snapshot.dashboard || {}).dashboard || {}).ui || {}).auto_refresh_seconds || 20
@@ -1230,6 +1700,10 @@ async function loadState() {
     renderIntegrationLists(snapshot);
     renderReminders(snapshot);
     renderTodoQueue(snapshot);
+    renderGmailInbox(snapshot);
+    renderDriveWorkspace(snapshot);
+    renderCalendarCandidates(snapshot);
+    renderBraindump(snapshot);
     renderProjects(snapshot);
     renderTaskAssignees(snapshot);
     renderTaskTemplates(snapshot);
@@ -1264,6 +1738,25 @@ function bindEvents() {
   byId("save-dashboard-settings").addEventListener("click", async () => {
     try {
       await saveDashboardSettings();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("capture-braindump-button").addEventListener("click", async () => {
+    try {
+      await captureBraindump();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("braindump-capture-input").addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    try {
+      await captureBraindump();
     } catch (error) {
       showError(error.message);
     }
