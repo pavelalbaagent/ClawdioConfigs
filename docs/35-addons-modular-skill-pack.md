@@ -18,8 +18,15 @@ Structure:
 ## Current Recommendation Tiers
 
 1. `recommended_now`: `gemini`, `github`, `model_usage`, `markdown_converter`, `video_transcript_downloader`, `summarize`.
-2. `optional`: `brave_search`, `slack`, `trello`, `nano_pdf`, `frontend_design`, `onepassword`.
+2. `optional`: `brave_search`, `slack`, `trello`, `nano_pdf`, `frontend_design`, `onepassword`, `agent_mail`.
 3. `skip_for_now`: `gog`, `mcporter`, `self_improving_agent`, `tavily_search`.
+
+## AgentMail Note
+
+1. `agent_mail` is worth keeping as a future optional add-in when you want a dedicated programmable inbox for the agent.
+2. It is not the default replacement for the Gmail integration path in this repo.
+3. Use it when the goal is agent-specific email workflows, signups, alerts, or inbox automation.
+4. Keep Gmail/Google Calendar when the goal is broader Google ecosystem integration.
 
 ## Commands
 

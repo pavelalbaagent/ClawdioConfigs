@@ -61,7 +61,7 @@ class ValidateConfigsTests(unittest.TestCase):
 
             integrations_path = tmp_path / "integrations.yaml"
             text = integrations_path.read_text()
-            text = text.replace("active_profile: lean_manual", "active_profile: missing_profile")
+            text = text.replace("active_profile: bootstrap_minimal", "active_profile: missing_profile")
             integrations_path.write_text(text)
 
             proc = subprocess.run(
@@ -99,7 +99,7 @@ class ValidateConfigsTests(unittest.TestCase):
 
             dashboard_path = tmp_path / "dashboard.yaml"
             text = dashboard_path.read_text()
-            text = text.replace("integrations_profile: lean_manual", "integrations_profile: missing_profile", 1)
+            text = text.replace("integrations_profile: bootstrap_minimal", "integrations_profile: missing_profile", 1)
             dashboard_path.write_text(text)
 
             proc = subprocess.run(
@@ -109,6 +109,29 @@ class ValidateConfigsTests(unittest.TestCase):
             )
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("integrations_profile references unknown profile", proc.stdout)
+
+    def test_missing_gmail_inbox_contract_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            integrations_path = tmp_path / "integrations.yaml"
+            text = integrations_path.read_text()
+            text = text.replace(
+                "contract_file: contracts/gmail/inbox-processing-rules.yaml",
+                "contract_file: contracts/gmail/missing-rules.yaml",
+                1,
+            )
+            integrations_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("inbox_processing.contract_file file not found", proc.stdout)
 
 
 if __name__ == "__main__":

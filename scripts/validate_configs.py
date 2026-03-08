@@ -81,6 +81,13 @@ def add_warning(warnings: list[str], code: str, message: str) -> None:
     warnings.append(f"[{code}] {message}")
 
 
+def resolve_repo_path(path_value: str) -> Path:
+    path = Path(str(path_value))
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
 def require_dict(data: Any, errors: list[str], name: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         add_error(errors, "TYPE", f"{name} must be a mapping")
@@ -90,6 +97,19 @@ def require_dict(data: Any, errors: list[str], name: str) -> dict[str, Any]:
 
 def ensure_dict(data: Any) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
+
+
+def validate_existing_repo_file(path_value: Any, field_name: str, errors: list[str], *, required: bool) -> None:
+    if path_value is None:
+        if required:
+            add_error(errors, "REQ", f"{field_name} is required")
+        return
+    if not is_non_empty_str(path_value):
+        add_error(errors, "TYPE", f"{field_name} must be a non-empty string")
+        return
+    path = resolve_repo_path(str(path_value))
+    if not path.exists():
+        add_error(errors, "PATH", f"{field_name} file not found: {path_value}")
 
 
 def validate_string_list(value: Any, field_name: str, errors: list[str], *, allow_empty: bool = True) -> list[str]:
@@ -289,6 +309,43 @@ def validate_integrations(data: dict[str, Any], errors: list[str], warnings: lis
             validate_string_list(row.get("read_actions", []), f"{section_name}.read_actions", errors, allow_empty=True)
             validate_string_list(row.get("write_actions", []), f"{section_name}.write_actions", errors, allow_empty=True)
 
+        if integration_name == "gmail":
+            inbox_processing = require_dict(row.get("inbox_processing", {}), errors, f"{section_name}.inbox_processing")
+            if inbox_processing.get("enabled") is True:
+                poll_every = inbox_processing.get("poll_every_minutes")
+                if not isinstance(poll_every, int) or poll_every <= 0:
+                    add_error(errors, "RANGE", f"{section_name}.inbox_processing.poll_every_minutes must be integer > 0")
+                validate_existing_repo_file(
+                    inbox_processing.get("contract_file"),
+                    f"{section_name}.inbox_processing.contract_file",
+                    errors,
+                    required=True,
+                )
+                if not is_non_empty_str(inbox_processing.get("state_store")):
+                    add_error(errors, "REQ", f"{section_name}.inbox_processing.state_store is required")
+                if not is_non_empty_str(inbox_processing.get("state_db_path")):
+                    add_error(errors, "REQ", f"{section_name}.inbox_processing.state_db_path is required")
+                validate_string_list(
+                    inbox_processing.get("default_actions", []),
+                    f"{section_name}.inbox_processing.default_actions",
+                    errors,
+                    allow_empty=False,
+                )
+
+        if integration_name == "drive":
+            workspace_policy = require_dict(row.get("workspace_policy", {}), errors, f"{section_name}.workspace_policy")
+            if row.get("enabled") is True:
+                if not is_non_empty_str(workspace_policy.get("mode")):
+                    add_error(errors, "REQ", f"{section_name}.workspace_policy.mode is required")
+                if not is_non_empty_str(workspace_policy.get("root_folder_env")):
+                    add_error(errors, "REQ", f"{section_name}.workspace_policy.root_folder_env is required")
+                validate_existing_repo_file(
+                    workspace_policy.get("contract_file"),
+                    f"{section_name}.workspace_policy.contract_file",
+                    errors,
+                    required=True,
+                )
+
         if integration_name == "linkedin" and row.get("enabled") is True:
             if row.get("execution_mode") != "manual_review_only":
                 add_warning(
@@ -300,7 +357,7 @@ def validate_integrations(data: dict[str, Any], errors: list[str], warnings: lis
         if integration_name == "n8n":
             contracts_file = row.get("workflow_contracts_file")
             if is_non_empty_str(contracts_file):
-                contracts_path = ROOT / str(contracts_file)
+                contracts_path = resolve_repo_path(str(contracts_file))
                 if not contracts_path.exists():
                     add_warning(
                         warnings,

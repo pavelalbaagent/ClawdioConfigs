@@ -1,0 +1,56 @@
+mailbox:
+  role: agent_operational_inbox
+  source_of_truth: gmail_account
+  processing_mode: scheduled_batch
+
+schedule:
+  poll_every_minutes: 15
+  batch_limit: 50
+  reprocess_on_rule_change: false
+
+storage:
+  state_store: sqlite
+  db_path: .memory/inbox_processing.db
+  keep_raw_headers: true
+  keep_body_excerpt_chars: 1200
+  keep_full_body_by_default: false
+  attachment_policy:
+    store_metadata_only: true
+    fetch_content_on_demand: true
+
+default_pipeline:
+  - fetch_unprocessed_messages
+  - classify_sender_and_intent
+  - store_metadata
+  - choose_action
+  - execute_allowed_action
+  - log_decision
+
+allowed_actions:
+  - archive_message
+  - trash_message
+  - keep_in_inbox
+  - draft_reply
+  - promote_task_candidate
+  - promote_calendar_candidate
+  - save_attachment_to_drive
+  - mark_for_manual_review
+
+heuristics:
+  low_value_patterns:
+    - newsletter
+    - marketing
+    - receipt
+    - automated_notification
+  high_value_patterns:
+    - human_request
+    - deadline
+    - meeting_change
+    - billing_issue
+    - verification_code
+
+guardrails:
+  never_send_without_approval: true
+  never_delete_permanently: true
+  prefer_archive_over_trash: true
+  require_manual_review_for_unknown_sender_with_links: true

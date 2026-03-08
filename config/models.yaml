@@ -43,7 +43,7 @@ routing:
       model: balanced_paid_model
       provider_priority:
         - google_ai_studio_free
-        - codex_subscription_cli
+        - openrouter_free_overflow
         - anthropic_credit_pool
       max_input_tokens: 12000
       max_output_tokens: 2000
@@ -53,12 +53,14 @@ routing:
         - troubleshooting
 
     L3_heavy:
-      provider: supervised_cli_session
-      model: codex_or_gemini_advanced
+      provider: approval_gated_heavy
+      model: heavy_reasoning_or_supervised_tool
       provider_priority:
-        - codex_subscription_cli
         - anthropic_credit_pool
         - google_ai_studio_free
+      manual_tool_fallbacks:
+        - codex_cli
+        - gemini_cli
       max_input_tokens: 24000
       max_output_tokens: 4000
       use_for:
@@ -140,7 +142,7 @@ routing:
       preferred_lane: L2_balanced
       provider_preference:
         - google_ai_studio_free
-        - codex_subscription_cli
+        - anthropic_credit_pool
       fallback_lanes:
         - L1_low_cost
         - L3_heavy
@@ -152,8 +154,8 @@ routing:
         - integration_fix
       preferred_lane: L2_balanced
       provider_preference:
-        - codex_subscription_cli
         - google_ai_studio_free
+        - anthropic_credit_pool
       fallback_lanes:
         - L1_low_cost
         - L3_heavy
@@ -165,8 +167,8 @@ routing:
         - major_tradeoff
       preferred_lane: L3_heavy
       provider_preference:
-        - codex_subscription_cli
         - anthropic_credit_pool
+        - google_ai_studio_free
       fallback_lanes:
         - L2_balanced
       approval_required: true
@@ -220,12 +222,13 @@ provider_inventory:
   codex_subscription_cli:
     enabled_if:
       - codex_cli_available
-    budget_type: subscription_manual
+    budget_type: supervised_local_tool
     strengths:
-      - high_quality_coding_and_planning
-      - best_for_supervised_heavy_tasks
+      - high_quality_repo_local_coding_and_planning
+      - strong_when_filesystem_context_matters
     weaknesses:
-      - not_ideal_for_unattended_background_automation
+      - not_safe_as_background_automation_provider
+      - session_and_auth_state_can_be_operator_dependent
   anthropic_credit_pool:
     enabled_if_env:
       - ANTHROPIC_API_KEY

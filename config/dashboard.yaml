@@ -15,12 +15,17 @@ dashboard:
     allow_generated_token: false
   presets:
     manual_min_cost:
-      description: Lean manual approvals and lowest runtime cost.
-      integrations_profile: lean_manual
+      description: Lean manual approvals with MVP channel, reminders, and calendar enabled.
+      integrations_profile: bootstrap_minimal
       memory_profile: md_only
       integration_toggles:
+        gmail: false
+        drive: false
+        github: false
+        personal_task_manager: false
+        agent_task_manager: false
         n8n: false
-        calendar: false
+        calendar: true
         linkedin: false
       memory_module_toggles:
         semantic_embeddings: false

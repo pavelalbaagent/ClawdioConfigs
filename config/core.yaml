@@ -21,6 +21,12 @@ runtime:
   base_dir: /opt/openclaw
   logs_dir: /var/log/openclaw
   data_dir: /var/lib/openclaw
+  mvp_live_services:
+    - openclaw-gateway.service
+  deferred_service_split:
+    - openclaw-worker.service
+    - openclaw-scheduler.service
+    - openclaw-watchdog.service
 
 limits:
   request_timeout_seconds: 120
@@ -30,4 +36,3 @@ budgets:
   daily_usd_cap: 5.0
   monthly_usd_cap: 60.0
   hard_stop_on_cap: true
-

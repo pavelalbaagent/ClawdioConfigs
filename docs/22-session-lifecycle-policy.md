@@ -45,3 +45,14 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
 1. Morning: start one planning session and generate checkpoint.
 2. During day: use focused task sessions; summarize at each milestone.
 3. End of day: write one compact state checkpoint so next session can cold-start quickly.
+
+## Project Space Rules
+
+1. Ongoing projects should use separate project spaces.
+2. A project space normally maps to a dedicated session thread, not a dedicated always-on agent.
+3. Continue the same project session while objective, tool state, and milestone remain stable.
+4. Start a new session in the same project space when:
+   - milestone changes
+   - toolchain/integration state changes materially
+   - the existing session has been compacted enough that a fresh checkpoint is cheaper than replay
+5. Spawn a dedicated agent from a project space only when the same specialist role is needed across repeated sessions or background loops.

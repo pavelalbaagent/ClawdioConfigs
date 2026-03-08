@@ -7,6 +7,12 @@ channels:
     - gmail_inbox
   disabled:
     - whatsapp
+  adapter_modes:
+    telegram: long_polling
+    web_dashboard: local_http
+    gmail_inbox: scheduled_batch_pull
+  deferred_candidates:
+    - slack
 
 notifications:
   reminders:
@@ -23,4 +29,3 @@ commands:
   add_task: add-task
   run_agent_task: run-agent-task
   approve: approve
-

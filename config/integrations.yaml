@@ -1,10 +1,11 @@
 profiles:
-  active_profile: lean_manual
+  active_profile: bootstrap_minimal
   definitions:
     bootstrap_minimal:
-      description: Lowest-friction bootstrap. No external write integrations.
+      description: Day-one live profile. One channel, dashboard, reminders, Google Calendar, and optional web browsing.
       enabled_integrations:
         - web_browsing
+        - calendar
       enabled_tool_clis:
         - codex_cli
         - gemini_cli
@@ -53,7 +54,7 @@ profiles:
         - codex_cli
         - gemini_cli
     lean_manual:
-      description: Minimal onboarding with manual approval before external side effects.
+      description: Prewired manual-approval profile with major integrations ready but not required for day-one go-live.
       enabled_integrations:
         - web_browsing
         - gmail
@@ -124,15 +125,31 @@ integrations:
       - GOOGLE_REFRESH_TOKEN
       - GMAIL_USER_EMAIL
     scopes:
-      - https://www.googleapis.com/auth/gmail.readonly
-      - https://www.googleapis.com/auth/gmail.send
+      - https://www.googleapis.com/auth/gmail.modify
     read_actions:
       - read_threads
       - classify_inbox
     write_actions:
       - draft_reply
       - send_reply_with_approval
+      - archive_message
+      - trash_message
     cost_class: low
+    inbox_processing:
+      enabled: true
+      mode: scheduled_batch
+      poll_every_minutes: 15
+      source_label: INBOX
+      contract_file: contracts/gmail/inbox-processing-rules.yaml
+      state_store: sqlite
+      state_db_path: .memory/inbox_processing.db
+      default_actions:
+        - archive_message
+        - store_metadata
+        - promote_task_candidate
+        - promote_calendar_candidate
+        - draft_reply
+      notes: Process all inbound mail in scheduled batches, not one model call per message.
 
   drive:
     enabled: true
@@ -145,15 +162,25 @@ integrations:
       - GOOGLE_REFRESH_TOKEN
       - GOOGLE_DRIVE_ROOT_FOLDER_ID
     scopes:
-      - https://www.googleapis.com/auth/drive.file
-      - https://www.googleapis.com/auth/drive.metadata.readonly
+      - https://www.googleapis.com/auth/drive
     read_actions:
       - list_files
       - read_file
     write_actions:
       - create_file
       - update_file_with_approval
+      - create_subfolder
+      - share_folder_with_approval
     cost_class: low
+    workspace_policy:
+      mode: shared_root_folder
+      root_folder_env: GOOGLE_DRIVE_ROOT_FOLDER_ID
+      contract_file: contracts/drive/shared-workspace.yaml
+      ownership_recommendation: human_owned_shared_root
+      access_recommendation: both_human_and_agent_editor
+      allow_agent_create_project_subfolders: true
+      allow_human_dropzone: true
+      notes: Shared root folder is the collaboration boundary. Agent should stay inside this root by policy even though OAuth scope is broader.
 
   github:
     enabled: true
@@ -196,7 +223,7 @@ integrations:
     cost_class: low
 
   calendar:
-    enabled: false
+    enabled: true
     execution_mode: semi_auto
     provider: google_calendar
     auth_type: oauth

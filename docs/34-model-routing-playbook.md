@@ -29,8 +29,8 @@ Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.
 
 1. `L1_low_cost`: Google free first.
 2. `L1_openrouter_free_fallback`: OpenRouter free overflow.
-3. `L2_balanced`: Google free then Codex supervised when quality needs increase.
-4. `L3_heavy`: Codex supervised first, Anthropic credits second.
+3. `L2_balanced`: background-safe API providers only.
+4. `L3_heavy`: approval-gated heavy reasoning, with local CLIs treated as manual tool fallbacks rather than unattended providers.
 
 ## Fallback Rules
 
@@ -62,5 +62,6 @@ If you want the simplest stable setup:
 
 1. Keep `balanced_default`.
 2. Use Google free + OpenRouter free for `L1`.
-3. Use Codex subscription for `L2/L3` supervised tasks.
-4. Enable Anthropic only when explicitly needed.
+3. Keep unattended/background work on API-safe lanes only.
+4. Use Codex CLI or Gemini CLI only as explicit local tools for supervised coding/repo tasks.
+5. Enable Anthropic only when explicitly needed.

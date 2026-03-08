@@ -1,21 +1,24 @@
 # Integrations Backlog and Priority
 
+Last updated: 2026-03-07
+
 Use this backlog together with [docs/20-integration-connection-structure.md](/Users/palba/Projects/Clawdio/docs/20-integration-connection-structure.md) and [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
 
-## Tier 1: Baseline (lean_manual)
+## Tier 1: Immediate next unlocks after MVP
 
-1. Gmail read/send with approval gate.
-2. Drive root-folder file operations.
-3. GitHub read/write (approval-gated writes).
-4. Personal task manager (single provider selected).
-5. Agent task manager (single provider selected).
-6. n8n webhook bridge.
+These are the first integrations worth activating after the Telegram + dashboard + reminders + calendar loop is stable.
 
-## Tier 2: Productivity upgrades
+1. Gmail scheduled inbox processing with archive/trash/draft/task/calendar promotion logic.
+2. Shared-root Google Drive workspace for human/agent collaboration.
+3. Personal task manager (single provider selected).
+4. Agent task manager (single provider selected).
 
-1. Calendar sync for planning and reminders.
+## Tier 2: Productive expansion
+
+1. GitHub read/write (approval-gated writes).
 2. Better search provider for web browsing.
-3. Web dashboard for approvals and task visibility.
+3. n8n webhook bridge.
+4. Dashboard views for reminders, tasks, calendar, and inbox state.
 
 ## Tier 3: Optional/high-risk
 

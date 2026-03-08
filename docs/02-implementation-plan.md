@@ -31,25 +31,28 @@
 ## Phase 4: Core services install (non-container)
 
 1. Install OpenClaw code and dependencies on VPS filesystem.
-2. Create systemd units for api, worker, scheduler, and watchdog.
+2. MVP first: create only the gateway systemd unit and validate Telegram + dashboard access.
 3. Add health endpoints and startup checks.
-4. Exit criteria: services boot and survive reboot.
+4. Defer worker/scheduler/watchdog service split until the single-service MVP is stable.
+5. Exit criteria: gateway boots, survives reboot, and supports one live human channel.
 
 ## Phase 5: Integrations
 
-1. Choose profile in `config/integrations.yaml` (`lean_manual` first).
-2. Enable Gmail and Drive with minimal scopes first.
-3. Add GitHub, personal task manager, and agent task manager.
-4. Add n8n only for deterministic automation glue and approved write actions.
+1. Choose profile in `config/integrations.yaml` (`bootstrap_minimal` first).
+2. Keep day-one live scope to: one human channel, dashboard, reminders, Google Calendar, optional browsing.
+3. Prewire Gmail and Drive next, but keep them disabled until activation testing day.
+4. Add GitHub, task managers, and n8n only as staged unlocks.
 5. Add LinkedIn only if terms and auth method are compliant and stable.
-6. Exit criteria: each integration has explicit permissions, env vars, and rollback path.
+6. Exit criteria: each integration has explicit permissions, env vars, health check, and rollback path before enablement.
 
 ## Phase 6: Model routing and budget enforcement
 
 1. Apply model routing policy from `docs/03-model-routing-policy.md`.
 2. Log every model call with tier, latency, and estimated cost.
 3. Add soft and hard budget limits.
-4. Exit criteria: predictable cost and graceful degradation when quotas are hit.
+4. Keep background automation on API-safe providers only.
+5. Treat Codex CLI and Gemini CLI as supervised local tools, not unattended background providers.
+6. Exit criteria: predictable cost and graceful degradation when quotas are hit.
 
 ## Phase 7: Sub-agent policy rollout
 

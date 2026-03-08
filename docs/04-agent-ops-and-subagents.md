@@ -29,6 +29,19 @@
 6. Before spawning, announce in one line which sub-agent role and model lane will be used.
 7. On failure, report failure reason and fallback path in one line.
 
+## Project Spaces: New Session vs New Agent
+
+1. New ongoing project: create a new project space first.
+2. Default for a new project space is a new coordinator session, not a new dedicated agent.
+3. Keep one coordinator session per active project objective or milestone.
+4. Start a new session inside the same project space when milestone, toolchain, or objective shifts materially.
+5. Create a dedicated project agent only when the project repeatedly needs:
+   - the same specialized toolchain
+   - the same narrow domain context
+   - autonomous background work across multiple sessions
+6. Do not create one always-on agent per project by default. That raises maintenance cost and context drift.
+7. Project spaces own checkpoints; agents are temporary workers unless proven otherwise.
+
 ## Dedicated sub-agents worth keeping always-on
 
 1. `inbox_triage_agent`: classifies incoming requests.

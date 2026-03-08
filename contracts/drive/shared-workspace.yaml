@@ -1,0 +1,37 @@
+workspace:
+  mode: shared_root_folder
+  root_folder_env: GOOGLE_DRIVE_ROOT_FOLDER_ID
+  recommended_owner: human_primary_google_account
+  recommended_collaborators:
+    - human_editor
+    - agent_editor
+
+folder_layout:
+  - name: 00_inbox
+    purpose: Human dropzone for files the agent should inspect or process.
+  - name: 01_working
+    purpose: Active agent-generated working files and intermediate outputs.
+  - name: 02_outputs
+    purpose: Final deliverables meant for human review and reuse.
+  - name: 03_reference
+    purpose: Stable reference documents, templates, and reusable source material.
+  - name: 04_archive
+    purpose: Retired or completed project material.
+  - name: 10_projects
+    purpose: Project-specific subfolders created by human or agent.
+
+collaboration_rules:
+  human_can_create_top_level_folders: true
+  agent_can_create_project_subfolders: true
+  agent_must_stay_within_shared_root: true
+  shared_root_is_only_allowed_drive_write_boundary: true
+
+preferred_patterns:
+  human_creates_and_shares_root: recommended
+  agent_creates_subfolders_inside_shared_root: allowed
+  agent_creates_top_level_root_and_invites_human: fallback_only
+
+guardrails:
+  require_approval_for_folder_sharing_changes: true
+  require_approval_for_external_non_owner_shares: true
+  deny_writes_outside_root: true

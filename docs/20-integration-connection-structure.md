@@ -1,6 +1,6 @@
 # Integration Connection Structure (Modular + Cost-Aware)
 
-Last updated: 2026-03-02
+Last updated: 2026-03-07
 
 ## Goal
 
@@ -17,20 +17,22 @@ Define one stable integration map so onboarding is simple, services are optional
 
 ## Profiles
 
-1. `lean_manual`: default. Lowest-risk onboarding, manual approval before external writes.
-2. `standard_productive`: adds calendar and higher automation convenience.
-3. `full_auto_candidate`: includes LinkedIn and broader automation. Keep off until compliance and observability are stable.
+1. `bootstrap_minimal`: default day-one live profile. One human channel, dashboard, reminders, Google Calendar, optional browsing.
+2. `stage_2_comms_google`: adds Gmail scheduled inbox processing and the shared-root Google Drive workspace.
+3. `lean_manual`: prewired manual-approval profile with major integrations ready but not required for MVP.
+4. `standard_productive`: higher-convenience profile with Gmail, Drive, calendar, tasks, and GitHub active.
+5. `full_auto_candidate`: includes LinkedIn and broader automation. Keep off until compliance and observability are stable.
 
 ## Integration Modules
 
 1. `web_browsing`: search/open/extract actions. Keep write actions disabled.
-2. `gmail`: read, classify, draft, send-with-approval.
-3. `drive`: read/write working files under a dedicated root folder.
+2. `gmail`: scheduled inbox triage, classify, archive/trash/keep, draft, and send-with-approval. Contract: [docs/43-gmail-inbox-processing-plan.md](/Users/palba/Projects/Clawdio/docs/43-gmail-inbox-processing-plan.md).
+3. `drive`: read/write only within a shared human-owned root folder, with project subfolder creation and approval-gated sharing. Contract: [docs/44-drive-shared-workspace-plan.md](/Users/palba/Projects/Clawdio/docs/44-drive-shared-workspace-plan.md).
 4. `github`: issues/PR/code read, controlled writes for repo workflows.
 5. `personal_task_manager`: your reminders/tasks (`todoist`, `google_tasks`, or `asana`).
 6. `agent_task_manager`: agent work queue (`asana`, `github_projects`, or `linear`).
 7. `n8n`: external automation bridge via authenticated webhooks.
-8. `calendar`: optional schedule sync and reminder alignment.
+8. `calendar`: canonical personal calendar for MVP scheduling and reminder alignment.
 9. `linkedin`: disabled by default, manual-review mode only.
 
 ## n8n Contract Link

@@ -18,10 +18,17 @@ Keep one communication model that works the same way across Slack, Telegram, Dis
 8. `news`: digests, watchlist summaries, and intelligence briefs.
 9. `alerts`: incidents, failures, and quota warnings.
 
+## Project Space Rule
+
+1. Every ongoing project gets its own derived project space, for example `projects/calendar-review`.
+2. A project space is not just a tag. It is a separate working context with its own checkpoints and summaries.
+3. Promoting a task into a project should create that project space automatically.
+4. Project spaces inherit the `projects` visibility lane, but keep their own context boundary.
+
 ## Platform Mapping
 
 1. Slack/Discord: map each canonical space to a channel.
-2. Telegram/WhatsApp: map spaces by prefix tags, for example `[tasks]`, `[news]`.
+2. Telegram/WhatsApp: map spaces by prefix tags, for example `[tasks]`, `[news]`, or `[project:calendar-review]`.
 3. Email: map spaces by labels or subject prefixes.
 4. Web dashboard: map spaces by tabs/lanes.
 
@@ -42,6 +49,12 @@ Keep one communication model that works the same way across Slack, Telegram, Dis
 3. Daily digest goes to `news`.
 4. Incident and health events go to `alerts`.
 
+## Current Project Routing Syntax
+
+1. Use `[project:<slug>]` at the start of a message to target a specific project space.
+2. Example: `[project:calendar-review] review tomorrow's conflicts`.
+3. The transport layer should pass the cleaned body into the relevant app or workflow after routing resolves the project space.
+
 ## Evolution Rule
 
 Only split a space when one of these is true:
@@ -49,3 +62,8 @@ Only split a space when one of these is true:
 1. Context mixing causes repeated mistakes.
 2. Volume makes review difficult for 7+ days.
 3. Different audiences need different visibility.
+
+Project spaces are the main planned exception:
+
+1. once work becomes a real ongoing project, split it immediately
+2. do not wait for the generic `projects` lane to become noisy first

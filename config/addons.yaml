@@ -34,6 +34,16 @@ profiles:
         - gemini
         - slack
         - trello
+    addons_agent_inbox:
+      description: Core recommended add-ons plus AgentMail for a dedicated programmable agent inbox.
+      enabled_addons:
+        - markdown_converter
+        - video_transcript_downloader
+        - summarize
+        - model_usage
+        - github
+        - gemini
+        - agent_mail
 
 addons:
   brave_search:
@@ -85,6 +95,15 @@ addons:
     optional_env:
       - SLACK_APP_TOKEN
     notes: Keep platform-agnostic contract first; enable channel-specific bridge only when needed.
+
+  agent_mail:
+    enabled: true
+    tier: optional
+    cost_class: low
+    required_env:
+      - AGENTMAIL_API_KEY
+    optional_env: []
+    notes: Useful as a dedicated programmable inbox for the agent. Keep optional; do not treat it as a replacement for Gmail when Drive or Calendar integration is required.
 
   frontend_design:
     enabled: true

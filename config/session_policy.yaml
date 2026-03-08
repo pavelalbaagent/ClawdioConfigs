@@ -41,3 +41,18 @@ handoff:
     - decisions
     - blockers
     - next_actions
+
+project_spaces:
+  create_separate_space_per_project: true
+  default_session_strategy: separate_session
+  default_agent_strategy: spawn_on_demand
+  start_new_session_when:
+    - milestone_changed
+    - toolchain_changed
+    - long_idle_gap
+    - checkpoint_cheaper_than_replay
+  use_dedicated_agent_when:
+    - repeated_specialist_role
+    - persistent_narrow_domain_context
+    - background_monitoring_or_retries
+    - isolated_toolchain_boundary

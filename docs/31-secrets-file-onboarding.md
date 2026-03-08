@@ -1,6 +1,6 @@
 # Secrets File Onboarding (Fast Path)
 
-Last updated: 2026-03-03
+Last updated: 2026-03-07
 
 ## Goal
 
@@ -13,9 +13,13 @@ Use dotenv style (`KEY=value`), one per line.
 Example:
 
 ```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_ALLOWED_CHAT_ID=...
+OPENCLAW_DASHBOARD_TOKEN=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...
+GOOGLE_CALENDAR_ID=...
 GMAIL_USER_EMAIL=...
 GOOGLE_DRIVE_ROOT_FOLDER_ID=...
 GITHUB_TOKEN=...
@@ -56,6 +60,7 @@ If you enable add-on profiles in [config/addons.yaml](/Users/palba/Projects/Claw
 3. `OP_SERVICE_ACCOUNT_TOKEN`
 4. `YTDLP_COOKIES_FILE`, `YTDLP_EXTRA_ARGS`
 5. `CODEXBAR_API_KEY`
+6. `AGENTMAIL_API_KEY`
 
 ## VPS placement
 
@@ -63,5 +68,5 @@ Recommended runtime target is `/etc/openclaw/openclaw.env` (keep this file out o
 
 After placing the file on VPS, run:
 
-1. `python3 /home/pavel/Projects/Clawdio/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`
-2. `python3 /home/pavel/Projects/Clawdio/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --include-optional --addons-profile addons_search_brave`
+1. `python3 /opt/openclaw/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`
+2. `python3 /opt/openclaw/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --include-optional --addons-profile addons_search_brave`

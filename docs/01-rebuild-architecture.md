@@ -35,15 +35,27 @@ Telegram | Email | Web Dashboard
 ## Recommended channel strategy (not WhatsApp-only)
 
 1. Primary: Telegram bot for quick interaction and reminders.
-2. Secondary: lightweight web dashboard for review, approvals, and task board.
-3. Optional async channel: Gmail command inbox for longer requests.
+2. Use Telegram long polling for the first VPS cut. It avoids exposing public webhooks and is materially simpler than Slack app setup.
+3. Secondary: lightweight web dashboard for review, approvals, and task board.
+4. Optional async channel later: Gmail operational inbox for scheduled triage and longer requests.
+5. Slack should stay as a deferred candidate until you actually need team-style lanes and richer collaboration surfaces.
 
 ## VPS native deployment shape
 
-1. `openclaw-api.service` for inbound commands.
-2. `openclaw-worker.service` for async tasks.
-3. `openclaw-scheduler.service` for reminders and recurring jobs.
-4. `openclaw-watchdog.service` for health checks and auto-restart.
+### MVP live shape
+
+1. `openclaw-gateway.service` as the only required live systemd service.
+2. Telegram adapter in long-polling mode.
+3. Local dashboard over loopback/Tailscale tunnel.
+4. Reminder runtime as an internal module, not a separate service boundary yet.
+
+### Deferred service split
+
+1. `openclaw-worker.service`
+2. `openclaw-scheduler.service`
+3. `openclaw-watchdog.service`
+
+Only split these out after the MVP path is stable and observable.
 
 ## Config-first behavior model
 
@@ -54,4 +66,3 @@ Telegram | Email | Web Dashboard
 5. `config/agents.yaml`: available agents and spawn policy.
 6. `config/tasks.yaml`: personal task manager and agent task manager.
 7. `config/security.yaml`: allowed tools, secret paths, audit controls.
-

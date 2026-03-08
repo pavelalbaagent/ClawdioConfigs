@@ -29,7 +29,8 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
         self.assertEqual(data["preferred_lane"], "L2_balanced")
-        self.assertIn("codex_subscription_cli", data["provider_preference"])
+        self.assertIn("google_ai_studio_free", data["provider_preference"])
+        self.assertNotIn("codex_subscription_cli", data["provider_preference"])
 
     def test_strict_cost_limits_fallback_to_l2(self):
         proc = self.run_script(

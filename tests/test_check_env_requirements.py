@@ -22,6 +22,7 @@ class CheckEnvRequirementsTests(unittest.TestCase):
     def test_env_file_strict_passes_with_required_values(self):
         env_text = "\n".join(
             [
+                "GOOGLE_CALENDAR_ID=test_calendar_id",
                 "GOOGLE_CLIENT_ID=test_google_client_id",
                 "GOOGLE_CLIENT_SECRET=test_google_client_secret",
                 "GOOGLE_REFRESH_TOKEN=test_google_refresh_token",
