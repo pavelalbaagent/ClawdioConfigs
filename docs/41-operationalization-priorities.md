@@ -1,6 +1,6 @@
 # Operationalization Priorities
 
-Last updated: 2026-03-06
+Last updated: 2026-03-08
 
 ## Selection Rule
 
@@ -38,56 +38,12 @@ Recommended implementation scope:
 2. keep provider abstraction at the event-contract layer
 3. do not add smart natural-language parsing beyond the supported grammar yet
 
-### 2. Google Calendar Integration
+### 2. Dashboard Operations Layer
 
 Why this is second:
 
-1. Calendar mess is a real day-to-day pain point.
-2. A single canonical calendar gives OpenClaw one clean scheduling target.
-3. It materially improves the usefulness of reminders, planning, and future task scheduling.
-
-What "done" means:
-
-1. read upcoming events from one Google calendar
-2. create events with approval
-3. update events with approval
-4. expose next events in the dashboard
-5. keep Outlook out of the MVP write path
-
-Recommended implementation scope:
-
-1. support one canonical Google calendar only
-2. avoid Outlook write support
-3. keep work-calendar mirroring as a later optional layer
-
-### 3. Personal Task Manager Integration
-
-Why this is third:
-
-1. To-dos are one of your highest-friction daily problems.
-2. Tasks combine naturally with reminders and calendar planning.
-3. It can stay low-risk if you pick one provider and keep writes approval-aware.
-
-What "done" means:
-
-1. list personal tasks
-2. create tasks
-3. complete tasks
-4. defer/reschedule tasks
-5. expose them cleanly in the dashboard and main channel
-
-Recommended implementation scope:
-
-1. pick one provider only
-2. avoid multi-provider abstraction complexity in the first live cut
-3. keep task capture and reminder linkage explicit
-
-### 4. Dashboard Operations Layer
-
-Why this is fourth:
-
-1. The dashboard already exists and is now safer.
-2. It becomes more useful once reminders, calendar, tasks, and telemetry surface there.
+1. The dashboard already exists and now surfaces Gmail, Drive, braindump, Google Calendar, and personal tasks.
+2. It becomes materially better once reminders are fully operational too.
 3. It gives you one operator view instead of scattered files and chat history.
 
 What "done" means:
@@ -103,6 +59,50 @@ Recommended implementation scope:
 1. use local JSON/SQLite-backed views first
 2. avoid adding broad remote writes from the dashboard until read-side visibility is strong
 
+### 3. Telegram Channel Adapter
+
+Why this is third:
+
+1. Telegram is still the most realistic MVP human channel.
+2. Multiple runtimes now exist locally and need one thin command surface.
+3. It can stay lightweight if it routes into existing app/runtime handlers instead of owning business logic.
+
+What "done" means:
+
+1. one private chat receives commands and capture
+2. route braindump, reminders, project-space text, and simple calendar/task requests
+3. reuse existing backend/runtime paths instead of duplicating logic
+4. keep long-polling only
+5. keep WhatsApp out of the first live cut
+
+Recommended implementation scope:
+
+1. keep Telegram as a thin transport adapter
+2. do not use Telegram channels as memory
+3. route into app state and selective context, not raw chat history
+
+### 4. Reminder/Task/Calendar Linkage
+
+Why this is fourth:
+
+1. The individual modules now exist, but they are still loosely connected.
+2. This is where the system starts feeling coherent in daily use.
+3. Linkage is higher leverage now than adding more providers.
+
+What "done" means:
+
+1. a task can create a reminder
+2. a task can promote to calendar candidate
+3. reminders can reference task ids cleanly
+4. dashboard shows linked objects without ambiguity
+5. model usage stays low because linkage remains deterministic
+
+Recommended implementation scope:
+
+1. do not invent a universal object graph
+2. link by explicit ids and small metadata only
+3. keep cross-module writes approval-aware where needed
+
 ## Modules To Delay
 
 ### Broad integrations pack
@@ -112,6 +112,14 @@ Delay because:
 1. it is credential-heavy
 2. it expands failure surface quickly
 3. it is easy to overbuild before the core loops are stable
+
+### Personal task provider expansion
+
+Delay because:
+
+1. the Todoist-first runtime now exists
+2. Google Tasks and Asana add provider complexity, not immediate leverage
+3. linkage and channel routing now matter more than more provider coverage
 
 ### Transcript intake pipeline
 
@@ -137,6 +145,6 @@ Delay because:
 ## Suggested Sequence
 
 1. finish Reminder Service v2 end to end
-2. finish Google Calendar integration end to end
-3. finish personal task manager integration end to end
-4. turn the dashboard into the operator cockpit for those systems
+2. turn the dashboard into the operator cockpit for reminders, calendar, and tasks
+3. add the Telegram adapter as a thin transport layer over those systems
+4. link reminders, tasks, and calendar deterministically

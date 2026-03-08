@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import shutil
 import tempfile
@@ -58,6 +59,8 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("env", state)
         self.assertIn("routing", state)
         self.assertIn("braindump", state)
+        self.assertIn("calendar_runtime", state)
+        self.assertIn("personal_tasks", state)
 
         self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_minimal")
         self.assertEqual(state["profiles"]["memory"]["active"], "hybrid_124")
@@ -261,6 +264,168 @@ class DashboardBackendTests(unittest.TestCase):
         item = state["calendar_candidates"]["items"][0]
         self.assertEqual(item["project_name"], "Calendar Conflict Review")
         self.assertEqual(item["space_key"], "projects/calendar-conflict-review")
+
+    def test_update_calendar_candidate_schedule_marks_ready(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "cal-2",
+                            "title": "Parent teacher meeting",
+                            "status": "proposed",
+                            "updated_at": "2026-03-07T12:00:00+00:00",
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        updated = self.backend.update_calendar_candidate(
+            candidate_id="cal-2",
+            status="ready",
+            timezone_name="America/Guayaquil",
+            start_at="2026-03-10T18:00:00-05:00",
+            end_at="2026-03-10T18:30:00-05:00",
+            location="School",
+            attendees=["parent@example.com"],
+        )
+
+        self.assertEqual(updated["item"]["status"], "ready")
+        self.assertEqual(updated["item"]["location"], "School")
+        self.assertEqual(updated["item"]["attendees"], ["parent@example.com"])
+
+        state = self.backend.build_state()
+        item = next(row for row in state["calendar_candidates"]["items"] if row["id"] == "cal-2")
+        self.assertEqual(item["status"], "ready")
+        self.assertEqual(item["start_at"], "2026-03-10T18:00:00-05:00")
+
+    def test_update_calendar_candidate_ready_requires_valid_schedule(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "cal-3",
+                            "title": "Incomplete event",
+                            "status": "proposed",
+                            "updated_at": "2026-03-07T12:00:00+00:00",
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError):
+            self.backend.update_calendar_candidate(
+                candidate_id="cal-3",
+                status="approved",
+                start_at="2026-03-10T18:00:00-05:00",
+            )
+
+    def test_apply_calendar_candidates_runtime_updates_status_and_candidate(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fixture_path = self.tmp_path / "calendar-fixture.json"
+        fixture_path.write_text(json.dumps({"events": []}), encoding="utf-8")
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "cal-apply-1",
+                            "title": "Review syllabus",
+                            "status": "approved",
+                            "start_at": "2026-03-10T09:00:00-05:00",
+                            "end_at": "2026-03-10T09:30:00-05:00",
+                            "timezone": "America/Guayaquil",
+                            "updated_at": "2026-03-07T12:00:00+00:00",
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        previous_calendar_id = os.environ.get("GOOGLE_CALENDAR_ID")
+        os.environ["GOOGLE_CALENDAR_ID"] = "primary"
+        try:
+            result = self.backend.apply_calendar_candidates_runtime(
+                apply=True,
+                fixtures_file=fixture_path,
+            )
+        finally:
+            if previous_calendar_id is None:
+                os.environ.pop("GOOGLE_CALENDAR_ID", None)
+            else:
+                os.environ["GOOGLE_CALENDAR_ID"] = previous_calendar_id
+
+        self.assertEqual(result["status"]["summary"]["created_count"], 1)
+        self.assertTrue((data_dir / "calendar-runtime-status.json").exists())
+
+        updated = json.loads((data_dir / "calendar-candidates.json").read_text(encoding="utf-8"))
+        self.assertEqual(updated["items"][0]["status"], "scheduled")
+        self.assertTrue(updated["items"][0]["event_id"])
+
+    def test_personal_task_runtime_methods_and_status(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fixture_path = self.tmp_path / "todoist-fixture.json"
+        fixture_path.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "1",
+                            "content": "Pay insurance",
+                            "priority": 3,
+                            "due": {"date": "2026-03-10"},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        sync_result = self.backend.sync_personal_tasks_runtime(fixtures_file=fixture_path)
+        self.assertEqual(sync_result["status"]["summary"]["open_count"], 1)
+
+        create_result = self.backend.create_personal_task_runtime(
+            title="Buy gift",
+            due_string="tomorrow 6pm",
+            priority=2,
+            apply=True,
+            fixtures_file=fixture_path,
+        )
+        self.assertEqual(create_result["status"]["summary"]["action"], "create_task")
+
+        defer_result = self.backend.defer_personal_task_runtime(
+            task_id="1",
+            due_date="2026-03-15",
+            apply=True,
+            fixtures_file=fixture_path,
+        )
+        self.assertEqual(defer_result["status"]["summary"]["action"], "defer_task")
+
+        complete_result = self.backend.complete_personal_task_runtime(
+            task_id="1",
+            apply=True,
+            fixtures_file=fixture_path,
+        )
+        self.assertEqual(complete_result["status"]["summary"]["action"], "complete_task")
+
+        state = self.backend.build_state()
+        self.assertTrue(state["personal_tasks"]["available"])
+        self.assertEqual(state["personal_tasks"]["provider"], "todoist")
 
     def test_create_task_from_template(self):
         project = self.backend.create_project(name="Template Project")
@@ -535,6 +700,73 @@ class DashboardBackendTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        (data_dir / "calendar-runtime-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-07T12:10:00+00:00",
+                    "calendar_id": "primary",
+                    "summary": {
+                        "action": "apply_candidates",
+                        "dry_run": False,
+                        "upcoming_count": 2,
+                        "created_count": 1,
+                        "updated_count": 0,
+                        "skipped_count": 1,
+                        "pending_candidate_count": 1,
+                    },
+                    "recent_results": [
+                        {
+                            "candidate_id": "cal-gmail-m1",
+                            "title": "Meeting change",
+                            "action": "create_event",
+                            "status": "scheduled",
+                        }
+                    ],
+                    "upcoming_events": [
+                        {
+                            "id": "evt-1",
+                            "summary": "Meeting change",
+                            "start_value": "2026-03-08T16:00:00+00:00",
+                            "end_value": "2026-03-08T16:30:00+00:00",
+                            "all_day": False,
+                        },
+                        {
+                            "id": "evt-2",
+                            "summary": "Holiday",
+                            "start_value": "2026-03-09",
+                            "end_value": "2026-03-10",
+                            "all_day": True,
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (data_dir / "personal-task-runtime-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-07T12:15:00+00:00",
+                    "provider": "todoist",
+                    "summary": {
+                        "action": "snapshot",
+                        "dry_run": False,
+                        "open_count": 2,
+                        "overdue_count": 1,
+                    },
+                    "recent_results": [],
+                    "tasks": [
+                        {
+                            "id": "pt-1",
+                            "title": "Pay insurance",
+                            "priority": 3,
+                            "due_value": "2026-03-07",
+                            "due_mode": "date",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         (data_dir / "drive-workspace-status.json").write_text(
             json.dumps(
                 {
@@ -586,8 +818,13 @@ class DashboardBackendTests(unittest.TestCase):
         state = self.backend.build_state()
         self.assertTrue(state["gmail_inbox"]["available"])
         self.assertEqual(state["gmail_inbox"]["summary"]["processed_count"], 3)
+        self.assertTrue(state["calendar_runtime"]["available"])
+        self.assertEqual(state["calendar_runtime"]["summary"]["created_count"], 1)
+        self.assertEqual(len(state["calendar_runtime"]["upcoming_events"]), 2)
         self.assertTrue(state["calendar_candidates"]["available"])
         self.assertEqual(state["calendar_candidates"]["count"], 1)
+        self.assertTrue(state["personal_tasks"]["available"])
+        self.assertEqual(state["personal_tasks"]["summary"]["open_count"], 2)
         self.assertTrue(state["drive_workspace"]["available"])
         self.assertEqual(state["drive_workspace"]["summary"]["missing"], ["02_outputs"])
         self.assertTrue(state["braindump"]["available"])

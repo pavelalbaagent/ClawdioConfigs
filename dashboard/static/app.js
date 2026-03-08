@@ -491,6 +491,188 @@ function renderDriveWorkspace(snapshot) {
   setText("drive-checked-meta", drive.generated_at || "-");
 }
 
+function renderCalendarRuntime(snapshot) {
+  const body = byId("calendar-runtime-body");
+  body.innerHTML = "";
+
+  const runtime = snapshot.calendar_runtime || {};
+  if (!runtime.available) {
+    setText("calendar-runtime-summary", "No calendar runtime status file yet.");
+    setText("calendar-runtime-updated-meta", "-");
+    setText("calendar-runtime-candidates-meta", "-");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const summary = runtime.summary || {};
+  setText(
+    "calendar-runtime-summary",
+    `action=${summary.action || "-"} | dry_run=${summary.dry_run ? "yes" : "no"} | upcoming=${summary.upcoming_count || 0} | created=${summary.created_count || 0} | updated=${summary.updated_count || 0} | skipped=${summary.skipped_count || 0} | errors=${summary.error_count || 0}`
+  );
+  setText("calendar-runtime-updated-meta", runtime.generated_at || "-");
+  setText(
+    "calendar-runtime-candidates-meta",
+    summary.pending_candidate_count === undefined ? "-" : String(summary.pending_candidate_count)
+  );
+
+  const rows = runtime.upcoming_events || [];
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const row of rows.slice(0, 20)) {
+    const tr = document.createElement("tr");
+    appendCells(tr, [
+      row.summary || "-",
+      row.start_value || "-",
+      row.end_value || "-",
+      row.all_day ? "all_day" : "timed",
+      row.status || "-",
+    ]);
+    body.appendChild(tr);
+  }
+}
+
+function calendarCandidateAttendees(item) {
+  const attendees = item.attendees || [];
+  const out = [];
+  for (const entry of attendees) {
+    if (typeof entry === "string" && entry.trim()) {
+      out.push(entry.trim());
+      continue;
+    }
+    if (entry && typeof entry === "object" && typeof entry.email === "string" && entry.email.trim()) {
+      out.push(entry.email.trim());
+    }
+  }
+  return out;
+}
+
+function calendarCandidateWhenLabel(item) {
+  if (item.start_at || item.end_at) {
+    return `${item.start_at || "?"} -> ${item.end_at || "?"}`;
+  }
+  if (item.start_date || item.end_date) {
+    return `${item.start_date || "?"} -> ${item.end_date || "?"}`;
+  }
+  return item.context_ts || "-";
+}
+
+async function editCalendarCandidate(item) {
+  const timezoneDefault = item.timezone || (((state.snapshot || {}).owner || {}).timezone) || "UTC";
+  const titleValue = window.prompt("Calendar title", item.title || item.subject || "");
+  if (titleValue === null) {
+    return;
+  }
+
+  const modeDefault = item.start_date ? "all_day" : "timed";
+  const modeValue = window.prompt("Mode: timed or all_day", modeDefault);
+  if (modeValue === null) {
+    return;
+  }
+  const mode = modeValue.trim().toLowerCase() === "all_day" ? "all_day" : "timed";
+
+  const timezoneValue = window.prompt("Timezone", timezoneDefault);
+  if (timezoneValue === null) {
+    return;
+  }
+  const locationValue = window.prompt("Location", item.location || "");
+  if (locationValue === null) {
+    return;
+  }
+  const descriptionValue = window.prompt("Description", item.description || item.excerpt || "");
+  if (descriptionValue === null) {
+    return;
+  }
+  const attendeesValue = window.prompt("Attendees (comma list)", calendarCandidateAttendees(item).join(", "));
+  if (attendeesValue === null) {
+    return;
+  }
+
+  const body = {
+    candidate_id: item.id,
+    title: titleValue.trim(),
+    timezone: timezoneValue.trim(),
+    location: locationValue.trim(),
+    description: descriptionValue.trim(),
+    attendees: parseCommaList(attendeesValue || ""),
+    start_at: "",
+    end_at: "",
+    start_date: "",
+    end_date: "",
+  };
+
+  if (mode === "all_day") {
+    const startDateValue = window.prompt("Start date (YYYY-MM-DD)", item.start_date || "");
+    if (startDateValue === null) {
+      return;
+    }
+    const endDateValue = window.prompt(
+      "End date (YYYY-MM-DD, optional exclusive end)",
+      item.end_date || ""
+    );
+    if (endDateValue === null) {
+      return;
+    }
+    body.start_date = startDateValue.trim();
+    body.end_date = endDateValue.trim();
+  } else {
+    const startAtValue = window.prompt("Start datetime (ISO8601)", item.start_at || "");
+    if (startAtValue === null) {
+      return;
+    }
+    const endAtValue = window.prompt("End datetime (ISO8601)", item.end_at || "");
+    if (endAtValue === null) {
+      return;
+    }
+    body.start_at = startAtValue.trim();
+    body.end_at = endAtValue.trim();
+  }
+
+  const hasSchedule = Boolean(body.start_at || body.start_date);
+  body.status = item.status === "scheduled" ? "scheduled" : hasSchedule ? "ready" : "needs_details";
+
+  const result = await api("/api/calendar_candidates/update", {
+    method: "POST",
+    body,
+  });
+  setText("project-status", `Calendar candidate updated: ${result.result.item.title || item.title || item.id}.`);
+  await loadState();
+}
+
+async function updateCalendarCandidateStatus(item, status) {
+  const result = await api("/api/calendar_candidates/update", {
+    method: "POST",
+    body: {
+      candidate_id: item.id,
+      status,
+    },
+  });
+  setText("project-status", `Calendar candidate set to ${result.result.item.status}.`);
+  await loadState();
+}
+
+async function applyApprovedCalendarCandidates() {
+  const result = await api("/api/calendar_candidates/apply", {
+    method: "POST",
+    body: {
+      apply: true,
+    },
+  });
+  const summary = ((result || {}).result || {}).status || {};
+  const counts = summary.summary || {};
+  setText(
+    "project-status",
+    `Calendar apply finished: created=${counts.created_count || 0}, updated=${counts.updated_count || 0}, skipped=${counts.skipped_count || 0}, errors=${counts.error_count || 0}.`
+  );
+  await loadState();
+}
+
 function renderCalendarCandidates(snapshot) {
   const body = byId("calendar-candidates-body");
   body.innerHTML = "";
@@ -500,7 +682,7 @@ function renderCalendarCandidates(snapshot) {
   if (!calendar.available) {
     setText("calendar-candidates-summary", "No calendar candidate file yet.");
     const tr = document.createElement("tr");
-    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-"]);
+    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-", "-"]);
     body.appendChild(tr);
     return;
   }
@@ -514,7 +696,7 @@ function renderCalendarCandidates(snapshot) {
 
   if (items.length === 0) {
     const tr = document.createElement("tr");
-    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-"]);
+    appendCells(tr, ["-", "-", "-", "-", "-", "-", "-", "-"]);
     body.appendChild(tr);
     return;
   }
@@ -524,6 +706,7 @@ function renderCalendarCandidates(snapshot) {
     const projectLabel = item.project_name || item.space_key || "-";
     appendCells(tr, [
       item.title || "-",
+      calendarCandidateWhenLabel(item),
       item.from_email || "-",
       (item.intent_tags || []).join(", ") || "-",
       projectLabel,
@@ -532,6 +715,37 @@ function renderCalendarCandidates(snapshot) {
     ]);
 
     const actionsTd = document.createElement("td");
+    const editBtn = document.createElement("button");
+    editBtn.className = "secondary";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", async () => {
+      editBtn.disabled = true;
+      try {
+        await editCalendarCandidate(item);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        editBtn.disabled = false;
+      }
+    });
+    actionsTd.appendChild(editBtn);
+
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "secondary";
+    approveBtn.textContent = item.status === "approved" ? "Approved" : "Approve";
+    approveBtn.disabled = item.status === "approved" || item.status === "scheduled";
+    approveBtn.addEventListener("click", async () => {
+      approveBtn.disabled = true;
+      try {
+        await updateCalendarCandidateStatus(item, "approved");
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        approveBtn.disabled = item.status === "approved" || item.status === "scheduled";
+      }
+    });
+    actionsTd.appendChild(approveBtn);
+
     const assignBtn = document.createElement("button");
     assignBtn.className = "secondary";
     assignBtn.textContent = item.project_id ? "Move" : "Project";
@@ -561,6 +775,164 @@ function renderCalendarCandidates(snapshot) {
       }
     });
     actionsTd.appendChild(assignBtn);
+    tr.appendChild(actionsTd);
+    body.appendChild(tr);
+  }
+}
+
+function personalTaskDueLabel(task) {
+  return task.due_value || task.due_string || "-";
+}
+
+function personalTaskDuePayload(raw) {
+  const text = (raw || "").trim();
+  if (!text) {
+    return {};
+  }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text) || /[+-]\d{2}:\d{2}$/.test(text) || text.endsWith("Z")) {
+    return { due_datetime: text };
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return { due_date: text };
+  }
+  return { due_string: text };
+}
+
+async function syncPersonalTasks() {
+  const result = await api("/api/personal_tasks/sync", {
+    method: "POST",
+    body: {},
+  });
+  const summary = ((result || {}).result || {}).status || {};
+  const counts = summary.summary || {};
+  setText(
+    "personal-task-action-status",
+    `Personal tasks synced. Open=${counts.open_count || 0}, overdue=${counts.overdue_count || 0}.`
+  );
+  await loadState();
+}
+
+async function createPersonalTask() {
+  const title = byId("personal-task-title-input").value.trim();
+  if (!title) {
+    throw new Error("personal task title is required");
+  }
+  const dueRaw = byId("personal-task-due-input").value.trim();
+  const duePayload = personalTaskDuePayload(dueRaw);
+  const priority = Number(byId("personal-task-priority-select").value || "2");
+
+  await api("/api/personal_tasks/create", {
+    method: "POST",
+    body: {
+      title,
+      priority,
+      apply: true,
+      ...duePayload,
+    },
+  });
+
+  byId("personal-task-title-input").value = "";
+  byId("personal-task-due-input").value = "";
+  byId("personal-task-priority-select").value = "2";
+  setText("personal-task-action-status", "Personal task created.");
+  await loadState();
+}
+
+async function completePersonalTask(task) {
+  await api("/api/personal_tasks/complete", {
+    method: "POST",
+    body: {
+      task_id: task.id,
+      apply: true,
+    },
+  });
+  setText("personal-task-action-status", `Completed personal task: ${task.title || task.id}.`);
+  await loadState();
+}
+
+async function deferPersonalTask(task) {
+  const value = window.prompt("New due date/time or natural language", task.due_value || task.due_string || "");
+  if (value === null) {
+    return;
+  }
+  const duePayload = personalTaskDuePayload(value);
+  await api("/api/personal_tasks/defer", {
+    method: "POST",
+    body: {
+      task_id: task.id,
+      apply: true,
+      ...duePayload,
+    },
+  });
+  setText("personal-task-action-status", `Deferred personal task: ${task.title || task.id}.`);
+  await loadState();
+}
+
+function renderPersonalTasks(snapshot) {
+  const body = byId("personal-task-body");
+  body.innerHTML = "";
+
+  const personal = snapshot.personal_tasks || {};
+  if (!personal.available) {
+    setText("personal-task-summary", "No personal task runtime status file yet.");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const summary = personal.summary || {};
+  setText(
+    "personal-task-summary",
+    `provider=${personal.provider || "-"} | action=${summary.action || "-"} | dry_run=${summary.dry_run ? "yes" : "no"} | open=${summary.open_count || 0} | overdue=${summary.overdue_count || 0}`
+  );
+
+  const tasks = personal.tasks || [];
+  if (tasks.length === 0) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const task of tasks.slice(0, 30)) {
+    const tr = document.createElement("tr");
+    appendCells(tr, [
+      task.title || "-",
+      personalTaskDueLabel(task),
+      String(task.priority || "-"),
+    ]);
+
+    const actionsTd = document.createElement("td");
+    const completeBtn = document.createElement("button");
+    completeBtn.className = "secondary";
+    completeBtn.textContent = "Done";
+    completeBtn.addEventListener("click", async () => {
+      completeBtn.disabled = true;
+      try {
+        await completePersonalTask(task);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        completeBtn.disabled = false;
+      }
+    });
+    actionsTd.appendChild(completeBtn);
+
+    const deferBtn = document.createElement("button");
+    deferBtn.className = "secondary";
+    deferBtn.textContent = "Defer";
+    deferBtn.addEventListener("click", async () => {
+      deferBtn.disabled = true;
+      try {
+        await deferPersonalTask(task);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        deferBtn.disabled = false;
+      }
+    });
+    actionsTd.appendChild(deferBtn);
     tr.appendChild(actionsTd);
     body.appendChild(tr);
   }
@@ -1701,8 +2073,10 @@ async function loadState() {
     renderReminders(snapshot);
     renderTodoQueue(snapshot);
     renderGmailInbox(snapshot);
+    renderCalendarRuntime(snapshot);
     renderDriveWorkspace(snapshot);
     renderCalendarCandidates(snapshot);
+    renderPersonalTasks(snapshot);
     renderBraindump(snapshot);
     renderProjects(snapshot);
     renderTaskAssignees(snapshot);
@@ -1757,6 +2131,34 @@ function bindEvents() {
     event.preventDefault();
     try {
       await captureBraindump();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("calendar-apply-approved-button").addEventListener("click", async () => {
+    const button = byId("calendar-apply-approved-button");
+    button.disabled = true;
+    try {
+      await applyApprovedCalendarCandidates();
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId("create-personal-task-button").addEventListener("click", async () => {
+    try {
+      await createPersonalTask();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("sync-personal-task-button").addEventListener("click", async () => {
+    try {
+      await syncPersonalTasks();
     } catch (error) {
       showError(error.message);
     }

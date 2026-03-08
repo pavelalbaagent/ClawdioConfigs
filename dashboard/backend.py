@@ -25,6 +25,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from validate_configs import load_yaml  # type: ignore  # noqa: E402
 import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
+import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
+import personal_task_runtime as personal_task_runtime  # type: ignore  # noqa: E402
 from space_router import route_text as route_space_text  # type: ignore  # noqa: E402
 
 
@@ -33,6 +35,7 @@ PRIORITY_LEVELS = {"low", "medium", "high", "urgent"}
 PROJECT_STATUSES = {"active", "planned", "paused", "blocked", "done", "archived"}
 RUN_STATUSES = {"queued", "running", "succeeded", "failed", "cancelled"}
 APPROVAL_STATUSES = {"pending", "approved", "rejected", "cancelled"}
+CALENDAR_CANDIDATE_STATUSES = {"proposed", "needs_details", "ready", "approved", "scheduled", "archived", "error"}
 SPACE_KINDS = {"project"}
 SPACE_SESSION_STRATEGIES = {"shared_session", "separate_session", "checkpointed_session"}
 SPACE_AGENT_STRATEGIES = {"coordinator_only", "spawn_on_demand", "dedicated_specialist"}
@@ -280,13 +283,29 @@ class DashboardBackend:
         self.model_usage_report_path = self.telemetry_dir / "model-usage-latest.md"
         self.reminder_state_path = self.root / "data" / "reminders-state.json"
         self.gmail_status_path = self.root / "data" / "gmail-inbox-last-run.json"
+        self.calendar_runtime_status_path = self.root / "data" / "calendar-runtime-status.json"
         self.calendar_candidates_path = self.root / "data" / "calendar-candidates.json"
+        self.personal_task_status_path = self.root / "data" / "personal-task-runtime-status.json"
         self.drive_workspace_status_path = self.root / "data" / "drive-workspace-status.json"
         self.braindump_snapshot_path = self.root / "data" / "braindump-snapshot.json"
         self.gmail_db_path = self.root / ".memory" / "inbox_processing.db"
         self.braindump_db_path = self.root / ".memory" / "braindump.db"
         self.braindump_schema_path = self.root / "contracts" / "braindump" / "sqlite_schema.sql"
         self.set_profiles_script = self.root / "scripts" / "set_active_profiles.py"
+
+    def _integration_env_file_path(self) -> Path | None:
+        local_env = self.root / "secrets" / "openclaw.env"
+        if local_env.exists():
+            return local_env
+
+        integrations_data = self.load_yaml_dict(self.integrations_path)
+        secrets = ensure_dict(integrations_data.get("secrets"))
+        configured = str(secrets.get("env_file_path", "")).strip()
+        if configured:
+            configured_path = Path(configured).expanduser()
+            if configured_path.exists():
+                return configured_path
+        return None
 
     def load_yaml_dict(self, path: Path) -> dict[str, Any]:
         return ensure_dict(load_yaml(path)) if path.exists() else {}
@@ -314,12 +333,17 @@ class DashboardBackend:
                 },
                 "presets": {
                     "manual_min_cost": {
-                        "description": "Lean manual approvals and lowest runtime cost.",
-                        "integrations_profile": "lean_manual",
+                        "description": "Lean manual approvals with MVP channel, reminders, and calendar enabled.",
+                        "integrations_profile": "bootstrap_minimal",
                         "memory_profile": "md_only",
                         "integration_toggles": {
+                            "gmail": False,
+                            "drive": False,
+                            "github": False,
+                            "personal_task_manager": False,
+                            "agent_task_manager": False,
                             "n8n": False,
-                            "calendar": False,
+                            "calendar": True,
                             "linkedin": False,
                         },
                         "memory_module_toggles": {
@@ -1261,6 +1285,56 @@ class DashboardBackend:
             "items": items[:40],
             "count": len(items),
             "status_counts": dict(status_counts),
+        }
+
+    def _personal_task_runtime_status(self) -> dict[str, Any]:
+        raw = read_json(self.personal_task_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.personal_task_status_path),
+                "provider": None,
+                "summary": {},
+                "recent_results": [],
+                "tasks": [],
+            }
+
+        tasks = [ensure_dict(item) for item in raw.get("tasks", []) if isinstance(item, dict)]
+        tasks.sort(key=lambda row: (str(row.get("due_value") or "9999-12-31"), str(row.get("title") or "")))
+        return {
+            "available": True,
+            "path": str(self.personal_task_status_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "provider": str(raw.get("provider", "")).strip() or None,
+            "summary": ensure_dict(raw.get("summary")),
+            "recent_results": [ensure_dict(item) for item in raw.get("recent_results", []) if isinstance(item, dict)][:20],
+            "tasks": tasks[:40],
+        }
+
+    def _calendar_runtime_status(self) -> dict[str, Any]:
+        raw = read_json(self.calendar_runtime_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.calendar_runtime_status_path),
+                "calendar_id": None,
+                "summary": {},
+                "recent_results": [],
+                "upcoming_events": [],
+            }
+
+        summary = ensure_dict(raw.get("summary"))
+        recent_results = [ensure_dict(item) for item in raw.get("recent_results", []) if isinstance(item, dict)]
+        upcoming_events = [ensure_dict(item) for item in raw.get("upcoming_events", []) if isinstance(item, dict)]
+        upcoming_events.sort(key=lambda row: str(row.get("start_value") or ""))
+        return {
+            "available": True,
+            "path": str(self.calendar_runtime_status_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "calendar_id": str(raw.get("calendar_id", "")).strip() or None,
+            "summary": summary,
+            "recent_results": recent_results[:20],
+            "upcoming_events": upcoming_events[:20],
         }
 
     def _drive_workspace_status(self) -> dict[str, Any]:
@@ -2448,6 +2522,320 @@ class DashboardBackend:
             "space": space,
         }
 
+    def apply_calendar_candidates_runtime(
+        self,
+        *,
+        apply: bool = True,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> dict[str, Any]:
+        env_values: dict[str, str] = {}
+        resolved_env = env_file or self._integration_env_file_path()
+        if resolved_env is not None and resolved_env.exists():
+            env_values = calendar_runtime.load_env_file(resolved_env)
+
+        calendar_runtime.resolve_calendar_integration(self.integrations_path)
+        default_timezone = calendar_runtime.resolve_default_timezone(env_values, self.root)
+        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
+        client = calendar_runtime.build_client(
+            env_file_values=env_values,
+            fixtures_file=str(fixtures_file) if fixtures_file else None,
+        )
+        outcome = calendar_runtime.apply_calendar_candidates(
+            client,
+            calendar_id=calendar_id,
+            candidates_path=self.calendar_candidates_path,
+            default_timezone=default_timezone,
+            apply=apply,
+        )
+        upcoming_events = calendar_runtime.list_upcoming(
+            client,
+            calendar_id=calendar_id,
+            default_timezone=default_timezone,
+            limit=20,
+            window_days=14,
+        )
+        payload = calendar_runtime.build_status_payload(
+            calendar_id=calendar_id,
+            action="apply_candidates",
+            dry_run=not apply,
+            upcoming_events=upcoming_events,
+            recent_results=outcome["results"],
+            window_days=14,
+            pending_candidate_count=int(outcome["pending_candidate_count"]),
+            created_count=int(outcome["created_count"]),
+            updated_count=int(outcome["updated_count"]),
+            skipped_count=int(outcome["skipped_count"]),
+            error_count=int(outcome["error_count"]),
+        )
+        write_json(self.calendar_runtime_status_path, payload)
+        return {"status": payload, "outcome": outcome}
+
+    def _personal_task_runtime_common(
+        self,
+        *,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> tuple[dict[str, str], str, Any]:
+        env_values: dict[str, str] = {}
+        resolved_env = env_file or self._integration_env_file_path()
+        if resolved_env is not None and resolved_env.exists():
+            env_values = personal_task_runtime.load_env_file(resolved_env)
+        personal_task_runtime.resolve_personal_task_integration(self.integrations_path)
+        provider = personal_task_runtime.resolve_provider(
+            env_file_values=env_values,
+            override=None,
+            fixtures_file=str(fixtures_file) if fixtures_file else None,
+        )
+        client = personal_task_runtime.build_client(
+            provider=provider,
+            env_file_values=env_values,
+            fixtures_file=str(fixtures_file) if fixtures_file else None,
+        )
+        return env_values, provider, client
+
+    def sync_personal_tasks_runtime(
+        self,
+        *,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> dict[str, Any]:
+        _, provider, client = self._personal_task_runtime_common(env_file=env_file, fixtures_file=fixtures_file)
+        tasks = personal_task_runtime.list_personal_tasks(client, limit=50, filter_text=None)
+        payload = personal_task_runtime.build_status_payload(
+            provider=provider,
+            action="snapshot",
+            dry_run=False,
+            tasks=tasks,
+            recent_results=[],
+        )
+        write_json(self.personal_task_status_path, payload)
+        return {"status": payload}
+
+    def create_personal_task_runtime(
+        self,
+        *,
+        title: str,
+        description: str | None = None,
+        priority: int | None = None,
+        due_string: str | None = None,
+        due_datetime: str | None = None,
+        due_date: str | None = None,
+        apply: bool = True,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> dict[str, Any]:
+        _, provider, client = self._personal_task_runtime_common(env_file=env_file, fixtures_file=fixtures_file)
+        task_payload = personal_task_runtime.build_create_payload(
+            title=title,
+            description=description,
+            priority=priority,
+            due_string=due_string,
+            due_datetime=due_datetime,
+            due_date=due_date,
+        )
+        if apply:
+            created = personal_task_runtime.normalize_task(client.create_task(task_payload))
+            recent = {"action": "create_task", "status": "created", "task_id": created["id"], "title": created["title"]}
+        else:
+            recent = {"action": "create_task", "status": "preview", "payload": task_payload}
+        tasks = personal_task_runtime.list_personal_tasks(client, limit=50, filter_text=None)
+        payload = personal_task_runtime.build_status_payload(
+            provider=provider,
+            action="create_task",
+            dry_run=not apply,
+            tasks=tasks,
+            recent_results=[recent],
+        )
+        write_json(self.personal_task_status_path, payload)
+        return {"status": payload}
+
+    def complete_personal_task_runtime(
+        self,
+        *,
+        task_id: str,
+        apply: bool = True,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> dict[str, Any]:
+        clean_task_id = task_id.strip()
+        if not clean_task_id:
+            raise ValueError("task_id is required")
+        _, provider, client = self._personal_task_runtime_common(env_file=env_file, fixtures_file=fixtures_file)
+        if apply:
+            result = client.close_task(clean_task_id)
+            recent = {"action": "complete_task", "status": "completed", "task_id": str(result.get("id") or clean_task_id)}
+        else:
+            recent = {"action": "complete_task", "status": "preview", "task_id": clean_task_id}
+        tasks = personal_task_runtime.list_personal_tasks(client, limit=50, filter_text=None)
+        payload = personal_task_runtime.build_status_payload(
+            provider=provider,
+            action="complete_task",
+            dry_run=not apply,
+            tasks=tasks,
+            recent_results=[recent],
+        )
+        write_json(self.personal_task_status_path, payload)
+        return {"status": payload}
+
+    def defer_personal_task_runtime(
+        self,
+        *,
+        task_id: str,
+        due_string: str | None = None,
+        due_datetime: str | None = None,
+        due_date: str | None = None,
+        apply: bool = True,
+        env_file: Path | None = None,
+        fixtures_file: Path | None = None,
+    ) -> dict[str, Any]:
+        clean_task_id = task_id.strip()
+        if not clean_task_id:
+            raise ValueError("task_id is required")
+        _, provider, client = self._personal_task_runtime_common(env_file=env_file, fixtures_file=fixtures_file)
+        defer_payload = personal_task_runtime.build_defer_payload(
+            due_string=due_string,
+            due_datetime=due_datetime,
+            due_date=due_date,
+        )
+        if apply:
+            updated = personal_task_runtime.normalize_task(client.update_task(clean_task_id, defer_payload))
+            recent = {
+                "action": "defer_task",
+                "status": "updated",
+                "task_id": updated["id"],
+                "title": updated["title"],
+                "due_value": updated["due_value"],
+            }
+        else:
+            recent = {"action": "defer_task", "status": "preview", "task_id": clean_task_id, "payload": defer_payload}
+        tasks = personal_task_runtime.list_personal_tasks(client, limit=50, filter_text=None)
+        payload = personal_task_runtime.build_status_payload(
+            provider=provider,
+            action="defer_task",
+            dry_run=not apply,
+            tasks=tasks,
+            recent_results=[recent],
+        )
+        write_json(self.personal_task_status_path, payload)
+        return {"status": payload}
+
+    def update_calendar_candidate(
+        self,
+        *,
+        candidate_id: str,
+        title: str | None = None,
+        status: str | None = None,
+        description: str | None = None,
+        location: str | None = None,
+        timezone_name: str | None = None,
+        start_at: str | None = None,
+        end_at: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        attendees: list[str] | None = None,
+    ) -> dict[str, Any]:
+        clean_candidate_id = candidate_id.strip()
+        if not clean_candidate_id:
+            raise ValueError("candidate_id is required")
+
+        raw = read_json(self.calendar_candidates_path)
+        if not isinstance(raw, dict) or not isinstance(raw.get("items"), list):
+            raise ValueError("calendar candidates file not available")
+
+        items = [ensure_dict(item) for item in raw.get("items", []) if isinstance(item, dict)]
+        target_item: dict[str, Any] | None = None
+        for item in items:
+            if str(item.get("id")) == clean_candidate_id:
+                target_item = item
+                break
+        if target_item is None:
+            raise ValueError(f"calendar candidate not found: {clean_candidate_id}")
+
+        if title is not None:
+            clean_title = title.strip()
+            if not clean_title:
+                raise ValueError("title cannot be empty")
+            target_item["title"] = clean_title
+
+        if status is not None:
+            clean_status = status.strip().lower()
+            if clean_status not in CALENDAR_CANDIDATE_STATUSES:
+                raise ValueError(
+                    "invalid calendar candidate status: "
+                    + status
+                    + ". allowed: "
+                    + ", ".join(sorted(CALENDAR_CANDIDATE_STATUSES))
+                )
+            target_item["status"] = clean_status
+
+        if description is not None:
+            clean_description = description.strip()
+            if clean_description:
+                target_item["description"] = clean_description
+            else:
+                target_item.pop("description", None)
+
+        if location is not None:
+            clean_location = location.strip()
+            if clean_location:
+                target_item["location"] = clean_location
+            else:
+                target_item.pop("location", None)
+
+        if timezone_name is not None:
+            clean_timezone = timezone_name.strip()
+            if clean_timezone:
+                target_item["timezone"] = clean_timezone
+            else:
+                target_item.pop("timezone", None)
+
+        if start_at is not None:
+            clean_start_at = start_at.strip()
+            if clean_start_at:
+                target_item["start_at"] = clean_start_at
+            else:
+                target_item.pop("start_at", None)
+
+        if end_at is not None:
+            clean_end_at = end_at.strip()
+            if clean_end_at:
+                target_item["end_at"] = clean_end_at
+            else:
+                target_item.pop("end_at", None)
+
+        if start_date is not None:
+            clean_start_date = start_date.strip()
+            if clean_start_date:
+                target_item["start_date"] = clean_start_date
+            else:
+                target_item.pop("start_date", None)
+
+        if end_date is not None:
+            clean_end_date = end_date.strip()
+            if clean_end_date:
+                target_item["end_date"] = clean_end_date
+            else:
+                target_item.pop("end_date", None)
+
+        if attendees is not None:
+            clean_attendees = [item.strip() for item in attendees if isinstance(item, str) and item.strip()]
+            if clean_attendees:
+                target_item["attendees"] = clean_attendees
+            else:
+                target_item.pop("attendees", None)
+
+        current_status = str(target_item.get("status") or "proposed").strip().lower() or "proposed"
+        if current_status in {"ready", "approved"}:
+            core_data = self.load_yaml_dict(self.core_path)
+            default_timezone = str(ensure_dict(core_data.get("owner")).get("timezone", "UTC")).strip() or "UTC"
+            calendar_runtime.build_event_from_candidate(dict(target_item), default_timezone)
+
+        target_item["updated_at"] = iso_now_utc()
+        raw["items"] = items
+        write_json(self.calendar_candidates_path, raw)
+        return {"item": target_item}
+
     def update_run(
         self,
         *,
@@ -2929,7 +3317,9 @@ class DashboardBackend:
         reminder_counts = self._count_reminders()
         reminder_pending = self._pending_reminders()
         gmail_inbox = self._gmail_inbox_status()
+        calendar_runtime = self._calendar_runtime_status()
         calendar_candidates = self._calendar_candidates()
+        personal_tasks = self._personal_task_runtime_status()
         drive_workspace = self._drive_workspace_status()
         braindump = self._braindump_status()
         workspace = self._workspace_summary()
@@ -3004,7 +3394,9 @@ class DashboardBackend:
                 "pending_items": reminder_pending,
             },
             "gmail_inbox": gmail_inbox,
+            "calendar_runtime": calendar_runtime,
             "calendar_candidates": calendar_candidates,
+            "personal_tasks": personal_tasks,
             "drive_workspace": drive_workspace,
             "braindump": braindump,
             "workspace": workspace,

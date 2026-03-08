@@ -1,6 +1,6 @@
 # Runtime Status Matrix
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 
 ## Status Legend
 
@@ -28,7 +28,8 @@ Last updated: 2026-03-07
 | Dashboard control plane | done | partial | done | partial | Good local control surface with hardened auth and approval checks. | Add real operational widgets: jobs, failures, queue health, spend by lane. |
 | Model routing and cost policy | done | done | done | partial | Routing policy is coherent and test-backed, but still needs live provider telemetry in normal use. | Feed real usage logs into routing review and dashboard. |
 | Reminder engine | done | partial | done | partial | Specs and state machine are solid; the end-user flow is still not fully closed as a live service. | Build the real runner path from message intake to scheduled delivery and reply handling. |
-| Google Calendar integration | done | none | none | none | Clear canonical direction now exists, but runtime/API implementation is not built yet. | Implement read upcoming events + create/update with approval against one canonical calendar. |
+| Google Calendar integration | done | done | done | partial | Canonical calendar runtime now exists: upcoming snapshot, explicit create/update, candidate application, and dashboard visibility. | Add a thin candidate-scheduling UI/API and then wire a VPS timer for snapshot refresh. |
+| Personal task manager integration | done | done | done | partial | Todoist-first runtime now exists with snapshot/create/complete/defer flows and dashboard visibility. | Activate against live Todoist, then decide whether reminder/calendar linkage should stay local or become provider-aware. |
 | Hybrid memory (`1+2+4`) | done | partial | partial | partial | Good architecture and helper scripts; missing stronger end-to-end use in agent flows. | Wire memory sync/search into one live workflow and validate costs. |
 | Transcript ingest / YouTube intake | done | partial | none | none | You have runbooks and prior recovery work, but not a stable ingest pipeline inside this repo yet. | Pick one deterministic URL-to-transcript ingestion path and lock it. |
 | Integrations pack (Gmail, Drive, GitHub, tasks, n8n) | done | partial | partial | partial | Gmail inbox processing and Drive shared-root bootstrap now have runnable local/runtime scripts and tests; the broader pack is still staged. | Activate Gmail + Drive against real accounts, then add one task provider. |
@@ -45,8 +46,8 @@ Last updated: 2026-03-07
    - config/readiness validation
    - model routing policy
    - dashboard auth/approval hardening
-3. The weakest area is the gap between planning and live runtime in:
-   - calendar and integrations
+3. The weakest area is now the gap between planning and live runtime in:
+   - reminders
    - transcript ingest
    - fitness
 4. Current bottleneck is not architecture quality.

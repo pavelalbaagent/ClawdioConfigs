@@ -221,6 +221,44 @@
 
       <section class="grid">
         <article class="card col-12">
+          <h2>Google Calendar</h2>
+          <p class="footnote" id="calendar-runtime-summary">No calendar runtime snapshot yet.</p>
+          <div class="controls" style="margin-bottom: 12px">
+            <button id="calendar-apply-approved-button" class="secondary">Apply Approved Candidates</button>
+          </div>
+          <div class="list" style="margin-bottom: 12px">
+            <div class="list-item">
+              <div>
+                <strong>Last Sync</strong>
+                <div class="meta" id="calendar-runtime-updated-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Pending Candidates</strong>
+                <div class="meta" id="calendar-runtime-candidates-meta">-</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Mode</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="calendar-runtime-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-12">
           <h2>Calendar Candidates</h2>
           <p class="footnote" id="calendar-candidates-summary">No calendar candidates yet.</p>
           <div class="table-wrap">
@@ -228,6 +266,7 @@
               <thead>
                 <tr>
                   <th>Title</th>
+                  <th>When</th>
                   <th>From</th>
                   <th>Tags</th>
                   <th>Project Space</th>
@@ -237,6 +276,50 @@
                 </tr>
               </thead>
               <tbody id="calendar-candidates-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-12">
+          <h2>Personal Tasks</h2>
+          <p class="footnote" id="personal-task-summary">No personal task runtime snapshot yet.</p>
+          <div class="controls" style="margin-bottom: 12px">
+            <div class="control-row">
+              <label for="personal-task-title-input">New task</label>
+              <input id="personal-task-title-input" type="text" placeholder="Pay insurance, call school, buy gift" />
+            </div>
+            <div class="control-row">
+              <label for="personal-task-due-input">Due</label>
+              <input id="personal-task-due-input" type="text" placeholder="tomorrow 6pm or 2026-03-10T18:00:00-05:00" />
+            </div>
+            <div class="control-row">
+              <label for="personal-task-priority-select">Priority</label>
+              <select id="personal-task-priority-select">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <button id="create-personal-task-button" class="secondary">Create</button>
+              <button id="sync-personal-task-button" class="secondary">Sync</button>
+            </div>
+          </div>
+          <p class="footnote" id="personal-task-action-status">Use Todoist as the current MVP provider.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Due</th>
+                  <th>Priority</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="personal-task-body"></tbody>
             </table>
           </div>
         </article>

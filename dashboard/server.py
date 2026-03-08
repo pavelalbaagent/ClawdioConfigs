@@ -298,7 +298,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "POST /api/tasks/move_to_project_space",
                         "POST /api/tasks/update",
                         "POST /api/tasks/delete",
+                        "POST /api/calendar_candidates/apply",
+                        "POST /api/calendar_candidates/update",
                         "POST /api/calendar_candidates/assign_project",
+                        "POST /api/personal_tasks/sync",
+                        "POST /api/personal_tasks/create",
+                        "POST /api/personal_tasks/complete",
+                        "POST /api/personal_tasks/defer",
                         "POST /api/runs/update",
                         "POST /api/approvals/create",
                         "POST /api/approvals/decision",
@@ -536,10 +542,71 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
 
+            if path == "/api/calendar_candidates/apply":
+                result = self.backend.apply_calendar_candidates_runtime(
+                    apply=self._optional_bool(payload, "apply") is not False,
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/calendar_candidates/update":
+                result = self.backend.update_calendar_candidate(
+                    candidate_id=self._require_string(payload, "candidate_id"),
+                    title=self._optional_str(payload, "title"),
+                    status=self._optional_str(payload, "status"),
+                    description=self._optional_str(payload, "description"),
+                    location=self._optional_str(payload, "location"),
+                    timezone_name=self._optional_str(payload, "timezone"),
+                    start_at=self._optional_str(payload, "start_at"),
+                    end_at=self._optional_str(payload, "end_at"),
+                    start_date=self._optional_str(payload, "start_date"),
+                    end_date=self._optional_str(payload, "end_date"),
+                    attendees=self._optional_list_of_strings(payload, "attendees"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
             if path == "/api/calendar_candidates/assign_project":
                 result = self.backend.assign_calendar_candidate_to_project(
                     candidate_id=self._require_string(payload, "candidate_id"),
                     project_id=self._require_string(payload, "project_id"),
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/personal_tasks/sync":
+                result = self.backend.sync_personal_tasks_runtime()
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/personal_tasks/create":
+                result = self.backend.create_personal_task_runtime(
+                    title=self._require_string(payload, "title"),
+                    description=self._optional_str(payload, "description"),
+                    priority=self._optional_int(payload, "priority"),
+                    due_string=self._optional_str(payload, "due_string"),
+                    due_datetime=self._optional_str(payload, "due_datetime"),
+                    due_date=self._optional_str(payload, "due_date"),
+                    apply=self._optional_bool(payload, "apply") is not False,
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/personal_tasks/complete":
+                result = self.backend.complete_personal_task_runtime(
+                    task_id=self._require_string(payload, "task_id"),
+                    apply=self._optional_bool(payload, "apply") is not False,
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/personal_tasks/defer":
+                result = self.backend.defer_personal_task_runtime(
+                    task_id=self._require_string(payload, "task_id"),
+                    due_string=self._optional_str(payload, "due_string"),
+                    due_datetime=self._optional_str(payload, "due_datetime"),
+                    due_date=self._optional_str(payload, "due_date"),
+                    apply=self._optional_bool(payload, "apply") is not False,
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return

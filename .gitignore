@@ -18,7 +18,9 @@ external/
 data/dashboard-workspace.json
 data/reminders-state.json
 data/gmail-inbox-last-run.json
+data/calendar-runtime-status.json
 data/calendar-candidates.json
+data/personal-task-runtime-status.json
 data/drive-workspace-status.json
 data/braindump-snapshot.json
 fitness/logs/*.md

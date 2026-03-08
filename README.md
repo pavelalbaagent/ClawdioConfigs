@@ -47,6 +47,8 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 41. Braindump micro-app plan and runtime in [docs/46-braindump-app-plan.md](/Users/palba/Projects/Clawdio/docs/46-braindump-app-plan.md), [braindump_app.py](/Users/palba/Projects/Clawdio/scripts/braindump_app.py), and schema [contracts/braindump/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/braindump/sqlite_schema.sql).
 42. Project-space boundary and session-vs-agent rules in [docs/47-project-spaces-and-session-agent-strategy.md](/Users/palba/Projects/Clawdio/docs/47-project-spaces-and-session-agent-strategy.md).
 43. Project-space routing and assignment are now exposed through the dashboard and routing helpers, including [space_router.py](/Users/palba/Projects/Clawdio/scripts/space_router.py).
+44. Google Calendar runtime in [docs/48-google-calendar-runtime.md](/Users/palba/Projects/Clawdio/docs/48-google-calendar-runtime.md) and [google_calendar_runtime.py](/Users/palba/Projects/Clawdio/scripts/google_calendar_runtime.py).
+45. Personal task runtime in [docs/49-personal-task-runtime.md](/Users/palba/Projects/Clawdio/docs/49-personal-task-runtime.md) and [personal_task_runtime.py](/Users/palba/Projects/Clawdio/scripts/personal_task_runtime.py).
 
 ## Suggested starting sequence
 
