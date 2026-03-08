@@ -5,14 +5,13 @@ Date: 2026-03-02
 ## Outcome
 
 1. Full VPS snapshot captured under `external/vps-salvage-20260302/`.
-2. Consolidated salvage set created under `salvage/vps-20260302/consolidated/`.
-3. Structure now split into:
-4. `keep-core`: direct migration candidates.
-5. `archive-reference`: contextual/reference-only assets.
+2. Consolidated salvage set was created under `salvage/vps-20260302/consolidated/`.
+3. That intermediate consolidation is no longer the source of truth.
+4. Unique assets were either promoted or dropped after review.
 
-## Keep-Core (directly useful)
+## Keep-Core (directly useful at the time)
 
-Path: `salvage/vps-20260302/consolidated/keep-core/`
+Path at consolidation time: `salvage/vps-20260302/consolidated/keep-core/`
 
 1. `policies/`:
 2. `AGENTS.md`, `AUTONOMY.md`, `MODEL_POLICY.md`, `FAILOVER_POLICY.md`.
@@ -27,9 +26,9 @@ Path: `salvage/vps-20260302/consolidated/keep-core/`
 11. `ops/`:
 12. `safe-restart.sh`, `openclaw-ops.sudoers.template`.
 
-## Archive-Reference (keep for context)
+## Archive-Reference (kept for context at the time)
 
-Path: `salvage/vps-20260302/consolidated/archive-reference/`
+Path at consolidation time: `salvage/vps-20260302/consolidated/archive-reference/`
 
 1. `docs/`:
 2. `PROJECTS.md`, `PROJECT_IDEAS_FROM_OPENCLAW_VIDEOS.md`.
@@ -55,3 +54,12 @@ Path: `salvage/vps-20260302/consolidated/archive-reference/`
 4. A deterministic state-machine helper was added:
 5. [reminder_state_machine.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_state_machine.py)
 6. `SLACK_STRUCTURE.md` was kept and rewritten as platform-agnostic.
+
+## Current status after cleanup
+
+1. Redundant recovered policy docs were removed.
+2. Redundant consolidated salvage copies were removed.
+3. Remaining tracked recovery assets are limited to:
+4. `ops/recovered/vps-20260302/` unique templates
+5. `config/recovered/openclaw-v1-derived.yaml`
+6. docs that summarize what was learned from the salvage pass

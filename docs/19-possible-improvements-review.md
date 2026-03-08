@@ -3,8 +3,8 @@
 Date: 2026-03-02
 Source reviewed:
 
-1. [all_files.md](/Users/palba/Projects/Clawdio/PossibleImprovements/all_files.md)
-2. [prompts.md](/Users/palba/Projects/Clawdio/PossibleImprovements/prompts.md)
+1. `PossibleImprovements/all_files.md` (raw source removed after distillation)
+2. `PossibleImprovements/prompts.md` (raw source removed after distillation)
 
 ## Verdict
 
@@ -44,5 +44,6 @@ Source reviewed:
 
 ## Recommendation
 
-1. Keep `PossibleImprovements/` as an archive reference.
+1. Keep this review, not the raw `PossibleImprovements/` dump.
 2. Only promote items after converting them into concrete scripts/config/tests.
+3. The original `PossibleImprovements/` source folder was removed after this summary was captured.

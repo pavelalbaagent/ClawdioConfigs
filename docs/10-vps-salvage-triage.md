@@ -22,9 +22,9 @@
 11. hourly quota watcher.
 12. Codex CLI, Gemini CLI, and n8n were not found on VPS PATH during inventory.
 
-## Keep now (high value)
+## Keep now (high value at triage time)
 
-These were consolidated into `salvage/vps-20260302/consolidated/keep-core/`:
+These were initially consolidated into `salvage/vps-20260302/consolidated/keep-core/`:
 
 1. Core operating docs (`AGENTS`, `AUTONOMY`, `MODEL_POLICY`, `FAILOVER_POLICY`, `WORKFLOWS`, `GATEWAY_CHANGE_PROTOCOL`, `VPS_RECOVERY_GUIDE`).
 2. Integration/ops docs (`SLACK_STRUCTURE`, `REMINDERS_ARCHITECTURE`, `CONFIG_BASELINE`).
@@ -33,7 +33,7 @@ These were consolidated into `salvage/vps-20260302/consolidated/keep-core/`:
 5. Systemd runtime definition (`openclaw-gateway.service` and drop-ins), token redacted.
 6. Watchlist seeds (`watchlist.yaml`, `youtube-watchlist.md`).
 
-Reference-only items are in `salvage/vps-20260302/consolidated/archive-reference/`.
+That consolidation pack was later reduced. Only unique templates and derived references remain tracked in canonical locations.
 
 ## Quarantine (do not commit as-is)
 
