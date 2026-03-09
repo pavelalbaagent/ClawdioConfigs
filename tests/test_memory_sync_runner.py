@@ -1,3 +1,4 @@
+import fcntl
 import json
 import shutil
 import subprocess
@@ -51,6 +52,42 @@ class MemorySyncRunnerTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["profile"], "hybrid_124")
         self.assertTrue(status_path.exists())
+
+    def test_runner_skips_when_lock_is_held(self):
+        status_path = self.root / "data" / "memory-sync-status.json"
+        lock_dir = self.root / ".memory"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = lock_dir / "memory-sync.lock"
+        handle = lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "--root",
+                    str(self.root),
+                    "--config",
+                    str(self.root / "config" / "memory.yaml"),
+                    "--status-file",
+                    str(status_path),
+                    "--lock-timeout-seconds",
+                    "0",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["skipped"])
+        self.assertEqual(payload["reason"], "lock_held")
+        self.assertFalse(status_path.exists())
 
 
 if __name__ == "__main__":

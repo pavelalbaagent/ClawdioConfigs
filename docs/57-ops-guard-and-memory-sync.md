@@ -22,6 +22,7 @@ Purpose:
 1. run [memory_index_sync.py](/Users/palba/Projects/Clawdio/scripts/memory_index_sync.py)
 2. persist a dashboard-readable snapshot to `data/memory-sync-status.json`
 3. make hybrid-memory health visible without reading raw logs
+4. serialize concurrent sync attempts so timer-driven and manual runs do not collide at the SQLite layer
 
 Typical run:
 

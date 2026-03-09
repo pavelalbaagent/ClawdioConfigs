@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,6 +34,21 @@ def ensure_string_list(value: Any) -> list[str]:
 
 def iso_now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def try_acquire_lock(lock_path: Path, timeout_seconds: float):
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    deadline = time.monotonic() + max(timeout_seconds, 0.0)
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                handle.close()
+                return None
+            time.sleep(0.25)
 
 
 def parse_summary(stdout: str) -> dict[str, Any]:
@@ -63,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--status-file", default=str(DEFAULT_STATUS))
     parser.add_argument("--env-file", help="optional env file with OPENAI_API_KEY")
     parser.add_argument("--max-files", type=int)
+    parser.add_argument("--lock-timeout-seconds", type=float, default=90.0)
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -78,6 +96,29 @@ def main() -> int:
     if args.env_file:
         env.update(load_env_file(Path(args.env_file).expanduser().resolve(), strict=True))
 
+    config_data = ensure_dict(model_route_decider.load_yaml(config_path)) if config_path.exists() else {}
+    profiles = ensure_dict(config_data.get("profiles"))
+    definitions = ensure_dict(profiles.get("definitions"))
+    active_profile = str(profiles.get("active_profile") or "").strip() or None
+    profile_cfg = ensure_dict(definitions.get(active_profile)) if active_profile else {}
+    lock_handle = try_acquire_lock(root / ".memory" / "memory-sync.lock", args.lock_timeout_seconds)
+    if lock_handle is None:
+        payload = {
+            "generated_at": iso_now_utc(),
+            "ok": True,
+            "skipped": True,
+            "reason": "lock_held",
+            "profile": active_profile,
+            "enabled_modules": ensure_string_list(profile_cfg.get("enabled_modules", [])),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print("Memory sync skipped")
+            print(f"- Profile: {payload['profile'] or '-'}")
+            print("- Reason: another sync is already running")
+        return 0
+
     cmd = [
         "python3",
         str(root / "scripts" / "memory_index_sync.py"),
@@ -89,13 +130,11 @@ def main() -> int:
     if isinstance(args.max_files, int) and args.max_files > 0:
         cmd.extend(["--max-files", str(args.max_files)])
 
-    proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, env=env)
-
-    config_data = ensure_dict(model_route_decider.load_yaml(config_path)) if config_path.exists() else {}
-    profiles = ensure_dict(config_data.get("profiles"))
-    definitions = ensure_dict(profiles.get("definitions"))
-    active_profile = str(profiles.get("active_profile") or "").strip() or None
-    profile_cfg = ensure_dict(definitions.get(active_profile)) if active_profile else {}
+    try:
+        proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, env=env)
+    finally:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        lock_handle.close()
 
     payload = {
         "generated_at": iso_now_utc(),
