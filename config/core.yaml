@@ -18,7 +18,7 @@ communication:
 
 runtime:
   deploy_mode: vps_native
-  base_dir: /opt/openclaw
+  base_dir: /opt/clawdio
   logs_dir: /var/log/openclaw
   data_dir: /var/lib/openclaw
   mvp_live_services:

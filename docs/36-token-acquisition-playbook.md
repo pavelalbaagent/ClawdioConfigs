@@ -165,4 +165,4 @@ Validate at any point:
 3. Move to runtime path on VPS:
 4. `sudo mkdir -p /etc/openclaw && sudo mv /tmp/openclaw.env /etc/openclaw/openclaw.env && sudo chmod 600 /etc/openclaw/openclaw.env`
 5. Validate on VPS:
-6. `python3 /opt/openclaw/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`
+6. `python3 /opt/clawdio/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`

@@ -6,7 +6,7 @@ set -euo pipefail
 
 OPENCLAW_USER="${OPENCLAW_USER:-pavel}"
 OPENCLAW_HOME="${OPENCLAW_HOME:-/home/${OPENCLAW_USER}}"
-OPENCLAW_BASE="${OPENCLAW_BASE:-/opt/openclaw}"
+OPENCLAW_BASE="${OPENCLAW_BASE:-/opt/clawdio}"
 OPENCLAW_ENV="${OPENCLAW_ENV:-/etc/openclaw/openclaw.env}"
 
 say() {

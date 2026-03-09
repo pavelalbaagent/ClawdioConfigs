@@ -68,5 +68,5 @@ Recommended runtime target is `/etc/openclaw/openclaw.env` (keep this file out o
 
 After placing the file on VPS, run:
 
-1. `python3 /opt/openclaw/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`
-2. `python3 /opt/openclaw/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --include-optional --addons-profile addons_search_brave`
+1. `python3 /opt/clawdio/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --strict --addons-profile addons_off`
+2. `python3 /opt/clawdio/scripts/check_env_requirements.py --env-file /etc/openclaw/openclaw.env --include-optional --addons-profile addons_search_brave`

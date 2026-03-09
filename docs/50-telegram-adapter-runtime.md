@@ -77,7 +77,7 @@ Planned activation:
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp /opt/openclaw/ops/systemd/openclaw-telegram-adapter.service ~/.config/systemd/user/
+cp /opt/clawdio/ops/systemd/openclaw-telegram-adapter.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now openclaw-telegram-adapter.service
 systemctl --user status openclaw-telegram-adapter.service --no-pager

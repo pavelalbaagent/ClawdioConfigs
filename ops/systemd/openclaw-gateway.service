@@ -6,7 +6,7 @@ ConditionPathExists=/etc/openclaw/openclaw.env
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/openclaw
+WorkingDirectory=/opt/clawdio
 EnvironmentFile=/etc/openclaw/openclaw.env
 ExecStart=/usr/bin/node /usr/lib/node_modules/openclaw/dist/index.js gateway --port 18789
 Restart=always

@@ -3,12 +3,12 @@ Description=OpenClaw Telegram Adapter
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/openclaw/openclaw.env
-ConditionPathExists=/opt/openclaw/scripts/telegram_adapter.py
+ConditionPathExists=/opt/clawdio/scripts/telegram_adapter.py
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/openclaw
-ExecStart=/usr/bin/env python3 /opt/openclaw/scripts/telegram_adapter.py --env-file /etc/openclaw/openclaw.env --state-file /var/lib/openclaw/telegram-adapter-state.json --reminder-state-file /var/lib/openclaw/reminders-state.json --poll-timeout 20 --interval-seconds 5
+WorkingDirectory=/opt/clawdio
+ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/telegram_adapter.py --env-file /etc/openclaw/openclaw.env --state-file /var/lib/openclaw/telegram-adapter-state.json --reminder-state-file /var/lib/openclaw/reminders-state.json --poll-timeout 20 --interval-seconds 5
 Restart=always
 RestartSec=5
 

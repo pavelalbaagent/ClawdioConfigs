@@ -3,13 +3,13 @@ Description=OpenClaw Manual Dashboard
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/openclaw/openclaw.env
-ConditionPathExists=/opt/openclaw/dashboard/server.py
+ConditionPathExists=/opt/clawdio/dashboard/server.py
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/openclaw
+WorkingDirectory=/opt/clawdio
 EnvironmentFile=/etc/openclaw/openclaw.env
-ExecStart=/usr/bin/env python3 /opt/openclaw/dashboard/server.py --host 127.0.0.1 --port 18890
+ExecStart=/usr/bin/env python3 /opt/clawdio/dashboard/server.py --host 127.0.0.1 --port 18890
 Restart=always
 RestartSec=5
 
