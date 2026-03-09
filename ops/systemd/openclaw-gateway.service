@@ -2,19 +2,21 @@
 Description=OpenClaw Gateway
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=/etc/openclaw/openclaw.env
+ConditionPathExists=/etc/openclaw/gateway.env
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/clawdio
-EnvironmentFile=/etc/openclaw/openclaw.env
-ExecStart=/usr/bin/node /usr/lib/node_modules/openclaw/dist/index.js gateway --port 18789
+EnvironmentFile=/etc/openclaw/gateway.env
+ExecStart=/usr/bin/node /usr/lib/node_modules/openclaw/dist/index.js gateway --port 18789 --allow-unconfigured
 Restart=always
 RestartSec=5
 KillMode=process
 Environment=HOME=/home/pavel
 Environment=TMPDIR=/tmp
 Environment=OPENCLAW_GATEWAY_PORT=18789
+Environment=OPENCLAW_STATE_DIR=/var/lib/openclaw/gateway-state
+Environment=OPENCLAW_CONFIG_PATH=/var/lib/openclaw/gateway-state/openclaw.json
 Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
 Environment=OPENCLAW_SERVICE_MARKER=openclaw
 Environment=OPENCLAW_SERVICE_KIND=gateway

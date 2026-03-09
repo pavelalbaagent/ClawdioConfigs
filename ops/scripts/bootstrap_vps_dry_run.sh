@@ -8,6 +8,7 @@ OPENCLAW_USER="${OPENCLAW_USER:-pavel}"
 OPENCLAW_HOME="${OPENCLAW_HOME:-/home/${OPENCLAW_USER}}"
 OPENCLAW_BASE="${OPENCLAW_BASE:-/opt/clawdio}"
 OPENCLAW_ENV="${OPENCLAW_ENV:-/etc/openclaw/openclaw.env}"
+OPENCLAW_GATEWAY_ENV="${OPENCLAW_GATEWAY_ENV:-/etc/openclaw/gateway.env}"
 
 say() {
   printf '%s\n' "$*"
@@ -41,6 +42,10 @@ cmd "sudo touch ${OPENCLAW_ENV}"
 cmd "sudo chmod 600 ${OPENCLAW_ENV}"
 cmd "sudo chown ${OPENCLAW_USER}:${OPENCLAW_USER} ${OPENCLAW_ENV}"
 cmd "echo '# add runtime secrets here' | sudo tee -a ${OPENCLAW_ENV}"
+cmd "sudo touch ${OPENCLAW_GATEWAY_ENV}"
+cmd "sudo chmod 600 ${OPENCLAW_GATEWAY_ENV}"
+cmd "sudo chown ${OPENCLAW_USER}:${OPENCLAW_USER} ${OPENCLAW_GATEWAY_ENV}"
+cmd "echo 'OPENCLAW_GATEWAY_TOKEN=<strong-random-token>' | sudo tee -a ${OPENCLAW_GATEWAY_ENV}"
 
 step "04" "App/config sync"
 cmd "rsync -av --exclude '.git' ./ ${OPENCLAW_BASE}/"

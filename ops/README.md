@@ -11,7 +11,7 @@
 7. `scripts/reminder_scheduler_adapter.py`: reminder scheduling guard that enforces `payload.kind=systemEvent` for main-session due reminders.
 8. `systemd/openclaw-gmail-processor.service` + `systemd/openclaw-gmail-processor.timer`: user-mode Gmail batch processor timer for the VPS.
 9. `systemd/openclaw-telegram-adapter.service`: user-mode Telegram long-polling adapter that also drives reminder due/follow-up delivery.
-10. `systemd/openclaw-gateway.service`: env-file-backed gateway unit for the rebuilt stack.
+10. `systemd/openclaw-gateway.service`: gateway unit backed by `/etc/openclaw/gateway.env` so it stays isolated from the main app secrets file.
 11. `systemd/openclaw-dashboard.service`: user-mode dashboard service on loopback port `18890` so it can run in parallel with the legacy gateway on `18789` during migration and replace it cleanly afterward.
 
 ## Recommended placement on VPS
