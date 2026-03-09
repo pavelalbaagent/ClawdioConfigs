@@ -48,7 +48,7 @@ cmd "python3 ${OPENCLAW_BASE}/scripts/validate_configs.py --config-dir ${OPENCLA
 
 step "05" "Systemd units (user-mode templates)"
 cmd "mkdir -p ${OPENCLAW_HOME}/.config/systemd/user"
-cmd "cp ${OPENCLAW_BASE}/ops/recovered/vps-20260302/systemd/openclaw-gateway.service ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-gateway.service ${OPENCLAW_HOME}/.config/systemd/user/"
 cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-telegram-adapter.service ${OPENCLAW_HOME}/.config/systemd/user/"
 cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-dashboard.service ${OPENCLAW_HOME}/.config/systemd/user/"
 cmd "systemctl --user daemon-reload"
