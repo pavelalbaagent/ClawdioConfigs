@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "integrations.yaml"
 DEFAULT_MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
 DEFAULT_ADDONS_CONFIG = ROOT / "config" / "addons.yaml"
+DEFAULT_CHANNELS_CONFIG = ROOT / "config" / "channels.yaml"
+DEFAULT_DASHBOARD_CONFIG = ROOT / "config" / "dashboard.yaml"
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -167,11 +169,48 @@ def resolve_addons_profile(
     return profile_name, profile, addons
 
 
+def resolve_channel_requirements(channels_data: dict[str, Any]) -> list[str]:
+    channels = ensure_dict(channels_data.get("channels"))
+    enabled = set(ensure_string_list(channels.get("enabled")))
+    primary = str(channels.get("primary_human_channel", "")).strip()
+    secondary = str(channels.get("secondary_human_channel", "")).strip()
+    if primary:
+        enabled.add(primary)
+    if secondary:
+        enabled.add(secondary)
+
+    notifications = ensure_dict(channels_data.get("notifications"))
+    for section_name in ("reminders", "incidents"):
+        section = ensure_dict(notifications.get(section_name))
+        if section.get("enabled") is True:
+            channel_name = str(section.get("channel", "")).strip()
+            if channel_name:
+                enabled.add(channel_name)
+
+    required: list[str] = []
+    if "telegram" in enabled:
+        required.extend(["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_CHAT_ID"])
+    return list(dict.fromkeys(required))
+
+
+def resolve_dashboard_requirements(dashboard_data: dict[str, Any]) -> list[str]:
+    dashboard = ensure_dict(dashboard_data.get("dashboard"))
+    auth = ensure_dict(dashboard.get("auth"))
+    if auth.get("require_token", True) is not True:
+        return []
+    token_env_key = str(auth.get("token_env_key", "OPENCLAW_DASHBOARD_TOKEN")).strip()
+    if not token_env_key:
+        token_env_key = "OPENCLAW_DASHBOARD_TOKEN"
+    return [token_env_key]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check required env vars for integration profile")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to integrations.yaml")
     parser.add_argument("--memory-config", default=str(DEFAULT_MEMORY_CONFIG), help="path to memory.yaml")
     parser.add_argument("--addons-config", default=str(DEFAULT_ADDONS_CONFIG), help="path to addons.yaml")
+    parser.add_argument("--channels-config", default=str(DEFAULT_CHANNELS_CONFIG), help="path to channels.yaml")
+    parser.add_argument("--dashboard-config", default=str(DEFAULT_DASHBOARD_CONFIG), help="path to dashboard.yaml")
     parser.add_argument("--env-file", help="dotenv-like file to use for checks without exporting vars")
     parser.add_argument("--include-optional", action="store_true", help="also report optional env vars")
     parser.add_argument("--profile", help="override active profile")
@@ -361,6 +400,36 @@ def main() -> int:
                 conflicts = ensure_string_list(addon.get("conflicts_with", []))
                 if conflicts:
                     print(f"- {display_name}: conflicts_with={', '.join(conflicts)}")
+
+    print("")
+    print("Channels:")
+    channels_config_path = Path(args.channels_config)
+    if not channels_config_path.exists():
+        print(f"- channels config not found: {channels_config_path}")
+    else:
+        channels_data = ensure_dict(load_yaml(channels_config_path))
+        required = resolve_channel_requirements(channels_data)
+        if not required:
+            print("- no required env vars")
+        else:
+            statuses = [f"{var}={env_state(var, env_overrides)}" for var in required]
+            print("- " + ", ".join(statuses))
+            append_missing(required, missing_required, env_overrides)
+
+    print("")
+    print("Dashboard auth:")
+    dashboard_config_path = Path(args.dashboard_config)
+    if not dashboard_config_path.exists():
+        print(f"- dashboard config not found: {dashboard_config_path}")
+    else:
+        dashboard_data = ensure_dict(load_yaml(dashboard_config_path))
+        required = resolve_dashboard_requirements(dashboard_data)
+        if not required:
+            print("- no required env vars")
+        else:
+            statuses = [f"{var}={env_state(var, env_overrides)}" for var in required]
+            print("- " + ", ".join(statuses))
+            append_missing(required, missing_required, env_overrides)
 
     unique_missing = sorted(set(missing_required))
     print("")

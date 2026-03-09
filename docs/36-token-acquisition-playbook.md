@@ -13,7 +13,7 @@ Validate at any point:
 1. `python3 scripts/check_env_requirements.py --env-file secrets/openclaw.env --strict --addons-profile addons_off`
 2. `python3 scripts/check_env_requirements.py --env-file secrets/openclaw.env --include-optional --addons-profile addons_search_brave`
 
-## Phase 1: Required for initial VPS go-live (`bootstrap_minimal` + `addons_off`)
+## Phase 1: Required for initial VPS go-live (`bootstrap_core` + `addons_off`)
 
 1. `TELEGRAM_BOT_TOKEN`
    - Go to Telegram, open `@BotFather`.
@@ -29,6 +29,8 @@ Validate at any point:
    - Generate one locally:
    - `openssl rand -hex 32`
    - Paste into `OPENCLAW_DASHBOARD_TOKEN`.
+
+## Phase 2: Turn on Google Calendar (`bootstrap_minimal`)
 
 4. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
    - In Google Cloud Console, create/select project.
@@ -46,7 +48,7 @@ Validate at any point:
    - Create or choose the Google calendar you want OpenClaw to use.
    - Copy the calendar ID from Google Calendar settings.
 
-## Phase 2: Core integrations after MVP
+## Phase 3: Core integrations after MVP
 
 7. `GMAIL_USER_EMAIL`
    - Put the exact Gmail address used in the OAuth grant.
@@ -89,10 +91,11 @@ Validate at any point:
     - Paste result into `N8N_WEBHOOK_SECRET`.
 
 16. `OPENAI_API_KEY`
-    - Create key at OpenAI platform API keys page.
-    - Paste into `OPENAI_API_KEY`.
+   - Create key at OpenAI platform API keys page.
+   - Paste into `OPENAI_API_KEY`.
+   - Needed only when you switch memory back from `md_only` to an embedding-enabled profile.
 
-## Phase 3: Strongly recommended (cost/routing quality)
+## Phase 4: Strongly recommended (cost/routing quality)
 
 17. `GEMINI_API_KEY`
     - Create API key in Google AI Studio.
@@ -113,7 +116,7 @@ Validate at any point:
     - `openssl rand -hex 32` -> `OPENCLAW_SIGNING_SECRET`
     - `openssl rand -hex 32` -> `OPENCLAW_DASHBOARD_TOKEN`
 
-## Phase 4: Optional add-ons (enable only when needed)
+## Phase 5: Optional add-ons (enable only when needed)
 
 20. Brave search add-on
     - `BRAVE_SEARCH_API_KEY` from Brave Search API account.

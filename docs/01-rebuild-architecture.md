@@ -46,7 +46,7 @@ Telegram | Email | Web Dashboard
 
 1. `openclaw-gateway.service` as the only required live systemd service.
 2. Telegram adapter in long-polling mode.
-3. Local dashboard over loopback/Tailscale tunnel.
+3. Local dashboard over loopback/Tailscale tunnel on a separate loopback port (`18890`) so it can run in parallel with the legacy gateway during migration.
 4. Reminder runtime as an internal module, not a separate service boundary yet.
 
 ### Deferred service split

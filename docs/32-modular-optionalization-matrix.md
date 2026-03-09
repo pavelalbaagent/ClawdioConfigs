@@ -20,7 +20,8 @@ Your current stack is modular enough to run in staged mode. The safest optionali
 
 Defined in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml):
 
-1. `bootstrap_minimal`: web browsing plus Google Calendar.
+1. `bootstrap_core`: web browsing only. Lowest-friction live cutover.
+2. `bootstrap_minimal`: web browsing plus Google Calendar.
 2. `stage_2_comms_google`: add Gmail + Drive.
 3. `stage_3_comms_dev`: add GitHub.
 4. `stage_4_tasks`: add personal + agent task managers.
@@ -49,7 +50,7 @@ Defined in [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml
 1. List available integration profiles + required env keys:
 2. `python3 scripts/profile_matrix.py`
 3. Switch active profiles safely:
-4. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_minimal --memory-profile md_only --addons-profile addons_off`
+4. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_core --memory-profile md_only --addons-profile addons_off`
 5. Validate required keys for chosen profiles from a secrets file:
 6. `python3 scripts/check_env_requirements.py --env-file /path/to/openclaw.env --strict --addons-profile addons_off`
 7. Show optional key status too (including Brave):
@@ -57,12 +58,12 @@ Defined in [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml
 
 ## Recommended Low-Risk Starting Mode
 
-1. Integrations: `bootstrap_minimal`
+1. Integrations: `bootstrap_core`
 2. Memory: `md_only`
-3. Keep reminders and calendar enabled.
+3. Keep reminders enabled. Turn Calendar on later with `bootstrap_minimal`.
 4. Add one stage at a time only after strict env check passes.
 
 ## Rollback
 
 1. Switch back to MVP baseline instantly:
-2. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_minimal --memory-profile md_only --addons-profile addons_off`
+2. `python3 scripts/set_active_profiles.py --integrations-profile bootstrap_core --memory-profile md_only --addons-profile addons_off`

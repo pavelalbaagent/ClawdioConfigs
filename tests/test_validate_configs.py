@@ -61,7 +61,7 @@ class ValidateConfigsTests(unittest.TestCase):
 
             integrations_path = tmp_path / "integrations.yaml"
             text = integrations_path.read_text()
-            text = text.replace("active_profile: bootstrap_minimal", "active_profile: missing_profile")
+            text = text.replace("active_profile: bootstrap_core", "active_profile: missing_profile", 1)
             integrations_path.write_text(text)
 
             proc = subprocess.run(
@@ -80,7 +80,7 @@ class ValidateConfigsTests(unittest.TestCase):
 
             memory_path = tmp_path / "memory.yaml"
             text = memory_path.read_text()
-            text = text.replace("active_profile: hybrid_124", "active_profile: missing_profile")
+            text = text.replace("active_profile: md_only", "active_profile: missing_profile", 1)
             memory_path.write_text(text)
 
             proc = subprocess.run(
@@ -99,7 +99,7 @@ class ValidateConfigsTests(unittest.TestCase):
 
             dashboard_path = tmp_path / "dashboard.yaml"
             text = dashboard_path.read_text()
-            text = text.replace("integrations_profile: bootstrap_minimal", "integrations_profile: missing_profile", 1)
+            text = text.replace("integrations_profile: bootstrap_core", "integrations_profile: missing_profile", 1)
             dashboard_path.write_text(text)
 
             proc = subprocess.run(

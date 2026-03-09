@@ -49,6 +49,9 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 43. Project-space routing and assignment are now exposed through the dashboard and routing helpers, including [space_router.py](/Users/palba/Projects/Clawdio/scripts/space_router.py).
 44. Google Calendar runtime in [docs/48-google-calendar-runtime.md](/Users/palba/Projects/Clawdio/docs/48-google-calendar-runtime.md) and [google_calendar_runtime.py](/Users/palba/Projects/Clawdio/scripts/google_calendar_runtime.py).
 45. Personal task runtime in [docs/49-personal-task-runtime.md](/Users/palba/Projects/Clawdio/docs/49-personal-task-runtime.md) and [personal_task_runtime.py](/Users/palba/Projects/Clawdio/scripts/personal_task_runtime.py).
+46. Telegram long-polling adapter runtime in [docs/50-telegram-adapter-runtime.md](/Users/palba/Projects/Clawdio/docs/50-telegram-adapter-runtime.md), [telegram_adapter.py](/Users/palba/Projects/Clawdio/scripts/telegram_adapter.py), and [openclaw-telegram-adapter.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-telegram-adapter.service).
+47. Dashboard VPS service template in [openclaw-dashboard.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-dashboard.service) with tunnel defaults in [openclaw-dashboard-tunnel.sh](/Users/palba/Projects/Clawdio/ops/scripts/openclaw-dashboard-tunnel.sh).
+48. Pre-calendar live profile in [integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml) (`bootstrap_core`) and low-cost memory default in [memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml) (`md_only`) so Telegram + dashboard + reminders can ship before Google OAuth and embeddings are ready.
 
 ## Suggested starting sequence
 
@@ -69,8 +72,10 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 15. `python3 scripts/memory_index_sync.py --workspace /path/to/workspace --dry-run`
 16. Set dashboard auth token before starting the dashboard: `export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'`
 17. Start the local dashboard control plane (optional): `python3 dashboard/server.py --host 127.0.0.1 --port 18789`
-18. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
-19. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
+18. Smoke-test the Telegram adapter locally: `python3 scripts/telegram_adapter.py --env-file secrets/openclaw.env --once --json`
+19. For the first VPS cutover, keep profiles at `bootstrap_core + md_only`; switch to `bootstrap_minimal` only after Google Calendar OAuth is ready.
+20. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
+21. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
 
 ## Important constraint
 

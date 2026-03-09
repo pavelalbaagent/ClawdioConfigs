@@ -10,10 +10,14 @@
 6. `scripts/run-gemini-safe.sh`: controlled Gemini CLI wrapper for agent usage.
 7. `scripts/reminder_scheduler_adapter.py`: reminder scheduling guard that enforces `payload.kind=systemEvent` for main-session due reminders.
 8. `systemd/openclaw-gmail-processor.service` + `systemd/openclaw-gmail-processor.timer`: user-mode Gmail batch processor timer for the VPS.
+9. `systemd/openclaw-telegram-adapter.service`: user-mode Telegram long-polling adapter that also drives reminder due/follow-up delivery.
+10. `systemd/openclaw-dashboard.service`: user-mode dashboard service on loopback port `18890` so it can run in parallel with the legacy gateway on `18789`.
 
 ## Recommended placement on VPS
 
 1. Copy `scripts/vps-*.sh` to `~/scripts/`.
 2. Set executable permissions: `chmod +x ~/scripts/vps-*.sh`.
 3. Copy any needed user-mode unit files from `ops/systemd/` into `~/.config/systemd/user/`.
-4. Test all scripts and timers in a controlled window before production cutover.
+4. Enable the Telegram adapter for MVP chat ingress: `systemctl --user enable --now openclaw-telegram-adapter.service`
+5. Enable the dashboard service: `systemctl --user enable --now openclaw-dashboard.service`
+6. Test all scripts and timers in a controlled window before production cutover.

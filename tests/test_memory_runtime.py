@@ -13,6 +13,16 @@ MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
 
 
 class MemoryRuntimeTests(unittest.TestCase):
+    def _hybrid_memory_config(self, workspace: Path) -> Path:
+        config_path = workspace / "memory.yaml"
+        text = MEMORY_CONFIG.read_text(encoding="utf-8").replace(
+            "active_profile: md_only",
+            "active_profile: hybrid_124",
+            1,
+        )
+        config_path.write_text(text, encoding="utf-8")
+        return config_path
+
     def run_script(self, script: Path, args: list[str]):
         return subprocess.run(
             ["python3", str(script), *args],
@@ -24,6 +34,7 @@ class MemoryRuntimeTests(unittest.TestCase):
     def test_index_sync_and_keyword_search(self):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
+            config_path = self._hybrid_memory_config(workspace)
             (workspace / "MEMORY.md").write_text(
                 "# MEMORY\n\n## Priorities\nFix the reminder scheduler and stabilize dashboard auth.\n",
                 encoding="utf-8",
@@ -31,7 +42,7 @@ class MemoryRuntimeTests(unittest.TestCase):
 
             sync = self.run_script(
                 SYNC_SCRIPT,
-                ["--workspace", str(workspace), "--config", str(MEMORY_CONFIG)],
+                ["--workspace", str(workspace), "--config", str(config_path)],
             )
             self.assertEqual(sync.returncode, 0, msg=sync.stdout + sync.stderr)
             self.assertIn("Sync summary:", sync.stdout)
@@ -43,7 +54,7 @@ class MemoryRuntimeTests(unittest.TestCase):
                     "--workspace",
                     str(workspace),
                     "--config",
-                    str(MEMORY_CONFIG),
+                    str(config_path),
                     "--query",
                     "dashboard auth",
                     "--mode",
@@ -60,6 +71,7 @@ class MemoryRuntimeTests(unittest.TestCase):
     def test_auto_search_falls_back_to_keyword_without_openai_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
+            config_path = self._hybrid_memory_config(workspace)
             (workspace / "MEMORY.md").write_text(
                 "# MEMORY\n\n## Notes\nUse Tailscale and keep reminders deterministic.\n",
                 encoding="utf-8",
@@ -67,7 +79,7 @@ class MemoryRuntimeTests(unittest.TestCase):
 
             sync = self.run_script(
                 SYNC_SCRIPT,
-                ["--workspace", str(workspace), "--config", str(MEMORY_CONFIG)],
+                ["--workspace", str(workspace), "--config", str(config_path)],
             )
             self.assertEqual(sync.returncode, 0, msg=sync.stdout + sync.stderr)
 
@@ -77,7 +89,7 @@ class MemoryRuntimeTests(unittest.TestCase):
                     "--workspace",
                     str(workspace),
                     "--config",
-                    str(MEMORY_CONFIG),
+                    str(config_path),
                     "--query",
                     "deterministic reminders",
                     "--mode",

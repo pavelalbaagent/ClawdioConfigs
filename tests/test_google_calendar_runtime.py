@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -23,21 +24,23 @@ class GoogleCalendarRuntimeTests(unittest.TestCase):
         )
 
     def test_snapshot_with_fixture_writes_status_file(self):
+        base = datetime.now(timezone.utc) + timedelta(days=1)
+        next_day = base + timedelta(days=1)
         fixture = {
             "events": [
                 {
                     "id": "evt-1",
                     "status": "confirmed",
                     "summary": "Advising call",
-                    "start": {"dateTime": "2026-03-09T15:00:00+00:00"},
-                    "end": {"dateTime": "2026-03-09T16:00:00+00:00"},
+                    "start": {"dateTime": base.replace(hour=15, minute=0, second=0, microsecond=0).isoformat()},
+                    "end": {"dateTime": base.replace(hour=16, minute=0, second=0, microsecond=0).isoformat()},
                 },
                 {
                     "id": "evt-2",
                     "status": "confirmed",
                     "summary": "School holiday",
-                    "start": {"date": "2026-03-10"},
-                    "end": {"date": "2026-03-11"},
+                    "start": {"date": next_day.date().isoformat()},
+                    "end": {"date": (next_day.date() + timedelta(days=1)).isoformat()},
                 },
             ]
         }

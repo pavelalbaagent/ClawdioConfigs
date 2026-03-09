@@ -63,7 +63,9 @@ Use the existing tunnel script:
 bash ops/scripts/openclaw-dashboard-tunnel.sh
 ```
 
-Then open `http://127.0.0.1:18789` locally.
+Then open `http://127.0.0.1:18890` locally.
+
+The VPS deployment uses loopback port `18890` by default so it can coexist with the legacy OpenClaw gateway on `18789` during migration.
 
 ## What It Controls
 

@@ -31,7 +31,7 @@
 ## Phase 4: Core services install (non-container)
 
 1. Install OpenClaw code and dependencies on VPS filesystem.
-2. MVP first: create only the gateway systemd unit and validate Telegram + dashboard access.
+2. MVP first: create the gateway, Telegram adapter, and dashboard user units, then validate Telegram + dashboard access.
 3. Add health endpoints and startup checks.
 4. Defer worker/scheduler/watchdog service split until the single-service MVP is stable.
 5. Exit criteria: gateway boots, survives reboot, and supports one live human channel.

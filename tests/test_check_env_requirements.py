@@ -22,6 +22,9 @@ class CheckEnvRequirementsTests(unittest.TestCase):
     def test_env_file_strict_passes_with_required_values(self):
         env_text = "\n".join(
             [
+                "TELEGRAM_BOT_TOKEN=test_telegram_bot_token",
+                "TELEGRAM_ALLOWED_CHAT_ID=12345",
+                "OPENCLAW_DASHBOARD_TOKEN=test_dashboard_token",
                 "GOOGLE_CALENDAR_ID=test_calendar_id",
                 "GOOGLE_CLIENT_ID=test_google_client_id",
                 "GOOGLE_CLIENT_SECRET=test_google_client_secret",
@@ -77,6 +80,30 @@ class CheckEnvRequirementsTests(unittest.TestCase):
             self.assertIn("Add-ons:", proc.stdout)
             self.assertIn("brave_search", proc.stdout)
             self.assertIn("BRAVE_SEARCH_API_KEY=MISSING", proc.stdout)
+
+    def test_strict_mode_reports_missing_telegram_and_dashboard_auth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / "runtime.env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "GOOGLE_CALENDAR_ID=test_calendar_id",
+                        "GOOGLE_CLIENT_ID=test_google_client_id",
+                        "GOOGLE_CLIENT_SECRET=test_google_client_secret",
+                        "GOOGLE_REFRESH_TOKEN=test_google_refresh_token",
+                        "OPENAI_API_KEY=test_openai_api_key",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            proc = self.run_script(["--env-file", str(env_path), "--strict"])
+            self.assertNotEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            self.assertIn("Channels:", proc.stdout)
+            self.assertIn("TELEGRAM_BOT_TOKEN=MISSING", proc.stdout)
+            self.assertIn("Dashboard auth:", proc.stdout)
+            self.assertIn("OPENCLAW_DASHBOARD_TOKEN=MISSING", proc.stdout)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Operationalization Priorities
 
-Last updated: 2026-03-08
+Last updated: 2026-03-09
 
 ## Selection Rule
 
@@ -14,36 +14,57 @@ Prioritize modules that satisfy all of the following:
 
 ## Top 4 Next Modules
 
-### 1. Reminder Service v2
+### 1. VPS MVP Deployment Pass
 
 Why this is first:
 
-1. It already has the clearest postmortem and deterministic spec.
-2. It directly improves your real daily use.
-3. It is the cleanest example of the repo philosophy: deterministic first, model second.
-4. It avoids wide integration scope if started with one message channel.
+1. The channel adapter and reminder loop now exist locally.
+2. The next highest-value step is proving the real go-live path cleanly on the VPS.
+3. This is where path mismatches, env mistakes, and service wiring issues usually appear.
+4. It prevents another “partially alive but practically dead” runtime like the old WhatsApp-centric box.
 
 What "done" means:
 
-1. inbound message creates reminder
-2. scheduler fires on time
-3. `done` clears it
-4. `defer` shifts it by exactly one hour
-5. no reply triggers exactly one follow-up one hour later
-6. reminder state is visible in dashboard
+1. Telegram adapter runs as a user service
+2. dashboard is reachable through the intended tunnel path
+3. reminder state file is shared correctly across runtime and dashboard
+4. Telegram, dashboard auth, and reminder state validate on the VPS
+5. one real end-to-end smoke test passes
 
 Recommended implementation scope:
 
-1. keep one primary chat channel only
-2. keep provider abstraction at the event-contract layer
-3. do not add smart natural-language parsing beyond the supported grammar yet
+1. keep the first live profile at `bootstrap_core`
+2. do not add extra providers during the deploy pass
+3. prove one private Telegram chat only
 
-### 2. Dashboard Operations Layer
+### 2. Reminder/Task/Calendar Linkage
 
 Why this is second:
 
-1. The dashboard already exists and now surfaces Gmail, Drive, braindump, Google Calendar, and personal tasks.
-2. It becomes materially better once reminders are fully operational too.
+1. The individual pieces now exist, but daily usefulness depends on deterministic linkage.
+2. Once deployed, this is the next biggest leverage increase.
+3. It will make the system feel coherent instead of like separate micro-tools.
+
+What "done" means:
+
+1. a task can create a reminder
+2. a task can promote to calendar candidate
+3. reminders can reference task ids cleanly
+4. dashboard shows linked objects without ambiguity
+5. model usage stays low because linkage remains deterministic
+
+Recommended implementation scope:
+
+1. do not invent a universal object graph
+2. link by explicit ids and small metadata only
+3. keep cross-module writes approval-aware where needed
+
+### 3. Dashboard Operations Layer
+
+Why this is third:
+
+1. The dashboard already exists and now surfaces Gmail, Drive, braindump, Google Calendar, and personal tasks, but the first live cut should not wait on the staged providers.
+2. It becomes materially better once live reminders and Telegram are on the VPS too.
 3. It gives you one operator view instead of scattered files and chat history.
 
 What "done" means:
@@ -59,49 +80,27 @@ Recommended implementation scope:
 1. use local JSON/SQLite-backed views first
 2. avoid adding broad remote writes from the dashboard until read-side visibility is strong
 
-### 3. Telegram Channel Adapter
-
-Why this is third:
-
-1. Telegram is still the most realistic MVP human channel.
-2. Multiple runtimes now exist locally and need one thin command surface.
-3. It can stay lightweight if it routes into existing app/runtime handlers instead of owning business logic.
-
-What "done" means:
-
-1. one private chat receives commands and capture
-2. route braindump, reminders, project-space text, and simple calendar/task requests
-3. reuse existing backend/runtime paths instead of duplicating logic
-4. keep long-polling only
-5. keep WhatsApp out of the first live cut
-
-Recommended implementation scope:
-
-1. keep Telegram as a thin transport adapter
-2. do not use Telegram channels as memory
-3. route into app state and selective context, not raw chat history
-
-### 4. Reminder/Task/Calendar Linkage
+### 4. Live Provider Activation Hardening
 
 Why this is fourth:
 
-1. The individual modules now exist, but they are still loosely connected.
-2. This is where the system starts feeling coherent in daily use.
-3. Linkage is higher leverage now than adding more providers.
+1. Calendar, Gmail, Drive, and Todoist runtimes exist, but they still need real-account proof.
+2. Provider bugs are easier to solve after the Telegram/reminder loop is live.
+3. This keeps the migration disciplined instead of turning into a credentials scramble mid-deploy.
 
 What "done" means:
 
-1. a task can create a reminder
-2. a task can promote to calendar candidate
-3. reminders can reference task ids cleanly
-4. dashboard shows linked objects without ambiguity
-5. model usage stays low because linkage remains deterministic
+1. Google Calendar snapshot works with the real account before switching the live profile from `bootstrap_core` to `bootstrap_minimal`
+2. one personal task create/complete/defer cycle works against the live provider
+3. Gmail batch processing runs once safely against the real inbox
+4. Drive root verification works against the real shared folder
+5. failures are visible in the dashboard or logs without guesswork
 
 Recommended implementation scope:
 
-1. do not invent a universal object graph
-2. link by explicit ids and small metadata only
-3. keep cross-module writes approval-aware where needed
+1. activate only one provider per surface
+2. prefer read-side or low-risk write-side proofs first
+3. keep Gmail/Drive off until Telegram/reminders are stable if the timeline forces a cut
 
 ## Modules To Delay
 
@@ -144,7 +143,7 @@ Delay because:
 
 ## Suggested Sequence
 
-1. finish Reminder Service v2 end to end
-2. turn the dashboard into the operator cockpit for reminders, calendar, and tasks
-3. add the Telegram adapter as a thin transport layer over those systems
-4. link reminders, tasks, and calendar deterministically
+1. deploy the Telegram + reminder MVP cleanly on the VPS
+2. link reminders, tasks, and calendar deterministically
+3. improve the dashboard as the operator cockpit
+4. activate live providers one by one

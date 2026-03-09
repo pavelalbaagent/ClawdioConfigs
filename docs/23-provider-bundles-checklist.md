@@ -9,10 +9,12 @@ Use this as the initial VPS go-live bundle:
 1. Core comms: `telegram`
 2. Control plane: `web_dashboard`
 3. Reminders: enabled
-4. Calendar: `google_calendar`
-5. Integrations profile: `bootstrap_minimal`
+4. Calendar: staged later
+5. Integrations profile: `bootstrap_core`
 6. Memory profile: `md_only`
 7. Optional search API: add later only if browser-only retrieval is insufficient
+
+Upgrade to `bootstrap_minimal` once Google Calendar OAuth is ready.
 
 ## Recommended Bundle After MVP Stabilizes
 
@@ -31,11 +33,12 @@ Use this as the first post-MVP expansion bundle:
 
 For staged optionalization, use profile presets in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml):
 
-1. `bootstrap_minimal`
-2. `stage_2_comms_google`
-3. `stage_3_comms_dev`
-4. `stage_4_tasks`
-5. `stage_5_automation`
+1. `bootstrap_core`
+2. `bootstrap_minimal`
+3. `stage_2_comms_google`
+4. `stage_3_comms_dev`
+5. `stage_4_tasks`
+6. `stage_5_automation`
 
 ## Required Env For Initial VPS Go-Live
 
@@ -44,27 +47,27 @@ Set these first:
 1. `TELEGRAM_BOT_TOKEN`
 2. `TELEGRAM_ALLOWED_CHAT_ID`
 3. `OPENCLAW_DASHBOARD_TOKEN`
-4. `GOOGLE_CLIENT_ID`
-5. `GOOGLE_CLIENT_SECRET`
-6. `GOOGLE_REFRESH_TOKEN`
-7. `GOOGLE_CALENDAR_ID`
 
 ## Required Env For Post-MVP Expansion
 
 Set these first:
 
-1. `GMAIL_USER_EMAIL`
-2. `GOOGLE_DRIVE_ROOT_FOLDER_ID`
-3. `GITHUB_TOKEN`
-4. `GITHUB_OWNER`
-5. `PERSONAL_TASK_PROVIDER=todoist`
-6. `TODOIST_API_TOKEN`
-7. `AGENT_TASK_PROVIDER=asana`
-8. `ASANA_PERSONAL_ACCESS_TOKEN`
-9. `ASANA_WORKSPACE_GID`
-10. `N8N_BASE_URL`
-11. `N8N_API_KEY`
-12. `N8N_WEBHOOK_SECRET`
+1. `GOOGLE_CLIENT_ID`
+2. `GOOGLE_CLIENT_SECRET`
+3. `GOOGLE_REFRESH_TOKEN`
+4. `GOOGLE_CALENDAR_ID`
+5. `GMAIL_USER_EMAIL`
+6. `GOOGLE_DRIVE_ROOT_FOLDER_ID`
+7. `GITHUB_TOKEN`
+8. `GITHUB_OWNER`
+9. `PERSONAL_TASK_PROVIDER=todoist`
+10. `TODOIST_API_TOKEN`
+11. `AGENT_TASK_PROVIDER=asana`
+12. `ASANA_PERSONAL_ACCESS_TOKEN`
+13. `ASANA_WORKSPACE_GID`
+14. `N8N_BASE_URL`
+15. `N8N_API_KEY`
+16. `N8N_WEBHOOK_SECRET`
 
 ## Alternative Bundle A (Google-Heavy)
 

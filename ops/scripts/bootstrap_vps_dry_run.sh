@@ -49,9 +49,15 @@ cmd "python3 ${OPENCLAW_BASE}/scripts/validate_configs.py --config-dir ${OPENCLA
 step "05" "Systemd units (user-mode templates)"
 cmd "mkdir -p ${OPENCLAW_HOME}/.config/systemd/user"
 cmd "cp ${OPENCLAW_BASE}/ops/recovered/vps-20260302/systemd/openclaw-gateway.service ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-telegram-adapter.service ${OPENCLAW_HOME}/.config/systemd/user/"
+cmd "cp ${OPENCLAW_BASE}/ops/systemd/openclaw-dashboard.service ${OPENCLAW_HOME}/.config/systemd/user/"
 cmd "systemctl --user daemon-reload"
 cmd "systemctl --user enable openclaw-gateway.service"
 cmd "systemctl --user start openclaw-gateway.service"
+cmd "systemctl --user enable openclaw-telegram-adapter.service"
+cmd "systemctl --user start openclaw-telegram-adapter.service"
+cmd "systemctl --user enable openclaw-dashboard.service"
+cmd "systemctl --user start openclaw-dashboard.service"
 
 step "05b" "Optional Gmail inbox processor timer (stage_2_comms_google)"
 cmd "mkdir -p ${OPENCLAW_HOME}/.config/systemd/user"
@@ -68,7 +74,10 @@ cmd "python3 ${OPENCLAW_BASE}/scripts/model_usage_report.py --input ${OPENCLAW_B
 
 step "07" "Manual checks"
 cmd "systemctl --user status openclaw-gateway.service --no-pager"
-cmd "ss -ltnup | grep -E ':18789|:8788' || true"
+cmd "systemctl --user status openclaw-telegram-adapter.service --no-pager"
+cmd "systemctl --user status openclaw-dashboard.service --no-pager"
+cmd "ss -ltnup | grep -E ':18789|:18890|:8788' || true"
 cmd "curl -sS http://127.0.0.1:18789/health || true"
+cmd "curl -sS http://127.0.0.1:18890/api/auth/status || true"
 
 say "\nDry-run complete. No changes were executed."

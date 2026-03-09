@@ -1,5 +1,5 @@
 profiles:
-  active_profile: hybrid_124
+  active_profile: md_only
   definitions:
     md_only:
       description: Structured markdown memory only (lowest cost).

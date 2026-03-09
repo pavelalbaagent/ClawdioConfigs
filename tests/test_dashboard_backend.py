@@ -62,8 +62,8 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("calendar_runtime", state)
         self.assertIn("personal_tasks", state)
 
-        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_minimal")
-        self.assertEqual(state["profiles"]["memory"]["active"], "hybrid_124")
+        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_core")
+        self.assertEqual(state["profiles"]["memory"]["active"], "md_only")
         self.assertEqual(state["routing"]["active_mode"], "balanced_default")
 
     def test_set_integration_enabled_updates_yaml(self):
@@ -133,7 +133,7 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertTrue(result["ok"])
 
         state = self.backend.build_state()
-        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_minimal")
+        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_core")
         self.assertEqual(state["profiles"]["memory"]["active"], "md_only")
 
         integrations = {row["name"]: row for row in state["modules"]["integrations"]}

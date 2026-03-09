@@ -1,8 +1,15 @@
 profiles:
-  active_profile: bootstrap_minimal
+  active_profile: bootstrap_core
   definitions:
+    bootstrap_core:
+      description: First live profile. One human channel, dashboard, reminders, and optional web browsing only.
+      enabled_integrations:
+        - web_browsing
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
     bootstrap_minimal:
-      description: Day-one live profile. One channel, dashboard, reminders, Google Calendar, and optional web browsing.
+      description: Day-one live plus Google Calendar. Enable after Google OAuth is ready.
       enabled_integrations:
         - web_browsing
         - calendar

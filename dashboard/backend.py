@@ -281,7 +281,7 @@ class DashboardBackend:
         self.telemetry_dir = self.root / "telemetry"
         self.ops_snapshot_path = self.telemetry_dir / "ops-snapshot.md"
         self.model_usage_report_path = self.telemetry_dir / "model-usage-latest.md"
-        self.reminder_state_path = self.root / "data" / "reminders-state.json"
+        self.reminder_state_path = self._resolve_reminder_state_path(prefer_configured=False)
         self.gmail_status_path = self.root / "data" / "gmail-inbox-last-run.json"
         self.calendar_runtime_status_path = self.root / "data" / "calendar-runtime-status.json"
         self.calendar_candidates_path = self.root / "data" / "calendar-candidates.json"
@@ -292,6 +292,22 @@ class DashboardBackend:
         self.braindump_db_path = self.root / ".memory" / "braindump.db"
         self.braindump_schema_path = self.root / "contracts" / "braindump" / "sqlite_schema.sql"
         self.set_profiles_script = self.root / "scripts" / "set_active_profiles.py"
+
+    def _resolve_reminder_state_path(self, *, prefer_configured: bool) -> Path:
+        fallback = self.root / "data" / "reminders-state.json"
+        data = self.load_yaml_dict(self.reminders_path)
+        storage = ensure_dict(data.get("storage"))
+        configured = str(storage.get("state_file", "")).strip()
+        if not configured:
+            return fallback
+
+        configured_path = Path(configured).expanduser()
+        if not configured_path.is_absolute():
+            return (self.root / configured_path).resolve()
+
+        if prefer_configured or configured_path.exists():
+            return configured_path
+        return fallback
 
     def _integration_env_file_path(self) -> Path | None:
         local_env = self.root / "secrets" / "openclaw.env"
