@@ -285,6 +285,8 @@ class DashboardBackend:
         self.workspace_path = self.root / "data" / "dashboard-workspace.json"
         self.agent_runtime_state_path = self.root / "data" / "agent-runtime-state.json"
         self.assistant_chat_state_path = self.root / "data" / "assistant-chat-state.json"
+        self.continuous_improvement_status_path = self.root / "data" / "continuous-improvement-status.json"
+        self.memory_sync_status_path = self.root / "data" / "memory-sync-status.json"
         self.todo_sources = [
             self.root / "TODO.md",
             self.root / "baselines" / "agent_md" / "TODO.md",
@@ -423,6 +425,7 @@ class DashboardBackend:
                 "label": self._display_label(name),
                 "kind": kind,
                 "enabled": bool(row.get("enabled") is True),
+                "interaction_mode": str(row.get("interaction_mode", "")).strip() or ("internal" if kind == "internal_role" else "structured"),
                 "default_lane": str(row.get("default_lane", "")).strip() or None,
                 "default_space": str(rule.get("default_space", "")).strip() or None,
                 "owned_spaces": owned_spaces,
@@ -1912,11 +1915,20 @@ class DashboardBackend:
         return status
 
     def _assistant_chat_status(self) -> dict[str, Any]:
-        raw = read_json(self.assistant_chat_state_path)
+        return self._agent_chat_status("assistant")
+
+    def _agent_chat_state_path(self, agent_id: str) -> Path:
+        clean_agent = agent_id.strip().lower().replace("_", "-") or "assistant"
+        return self.root / "data" / f"{clean_agent}-chat-state.json"
+
+    def _agent_chat_status(self, agent_id: str) -> dict[str, Any]:
+        path = self._agent_chat_state_path(agent_id)
+        raw = read_json(path)
         if not isinstance(raw, dict):
             return {
                 "available": False,
-                "path": str(self.assistant_chat_state_path),
+                "agent_id": agent_id,
+                "path": str(path),
                 "updated_at": None,
                 "spaces": [],
             }
@@ -1940,9 +1952,73 @@ class DashboardBackend:
         rows.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
         return {
             "available": True,
-            "path": str(self.assistant_chat_state_path),
+            "agent_id": agent_id,
+            "path": str(path),
             "updated_at": str(raw.get("updated_at") or "").strip() or None,
             "spaces": rows[:12],
+        }
+
+    def _agent_chats_status(self) -> dict[str, Any]:
+        runtime = self._agent_runtime_snapshot()
+        chat_agents = [
+            ensure_dict(row)
+            for row in runtime.get("visible_agents", [])
+            if str(ensure_dict(row).get("interaction_mode") or "").strip() == "chat"
+        ]
+        rows = [self._agent_chat_status(str(row.get("id") or "")) for row in chat_agents]
+        rows.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        return {
+            "available": any(bool(row.get("available")) for row in rows),
+            "agents": rows,
+        }
+
+    def _continuous_improvement_status(self) -> dict[str, Any]:
+        raw = read_json(self.continuous_improvement_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.continuous_improvement_status_path),
+                "mode": None,
+                "generated_at": None,
+                "report_path": None,
+                "findings_count": 0,
+                "recommended_changes": [],
+            }
+        return {
+            "available": True,
+            "path": str(self.continuous_improvement_status_path),
+            "mode": str(raw.get("mode") or "").strip() or None,
+            "generated_at": str(raw.get("generated_at") or "").strip() or None,
+            "report_path": str(raw.get("report_path") or "").strip() or None,
+            "findings_count": int(raw.get("findings_count", 0) or 0),
+            "recommended_changes": ensure_string_list(raw.get("recommended_changes", [])),
+            "approval_required_changes": ensure_string_list(raw.get("approval_required_changes", [])),
+            "archive_candidates": ensure_string_list(raw.get("archive_candidates", [])),
+        }
+
+    def _memory_sync_status(self) -> dict[str, Any]:
+        raw = read_json(self.memory_sync_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.memory_sync_status_path),
+                "ok": None,
+                "generated_at": None,
+                "profile": None,
+                "files_scanned": 0,
+                "embeddings_created": 0,
+            }
+        summary = ensure_dict(raw.get("summary"))
+        return {
+            "available": True,
+            "path": str(self.memory_sync_status_path),
+            "ok": bool(raw.get("ok") is True),
+            "generated_at": str(raw.get("generated_at") or "").strip() or None,
+            "profile": str(raw.get("profile") or "").strip() or None,
+            "files_scanned": int(summary.get("files_scanned", 0) or 0),
+            "embeddings_created": int(summary.get("embeddings_created", 0) or 0),
+            "stdout_tail": str(raw.get("stdout_tail") or "").strip() or None,
+            "stderr_tail": str(raw.get("stderr_tail") or "").strip() or None,
         }
 
     def run_provider_smoke_check(self, *, live: bool = False) -> dict[str, Any]:
@@ -3843,7 +3919,10 @@ class DashboardBackend:
         braindump = self._braindump_status()
         provider_health = self._provider_health_status()
         assistant_chat = self._assistant_chat_status()
+        agent_chats = self._agent_chats_status()
         agent_runtime = self._agent_runtime_snapshot()
+        continuous_improvement_status = self._continuous_improvement_status()
+        memory_sync_status = self._memory_sync_status()
         workspace = self._workspace_summary()
 
         local_telemetry_enabled = bool(
@@ -3923,7 +4002,10 @@ class DashboardBackend:
             "braindump": braindump,
             "provider_health": provider_health,
             "assistant_chat": assistant_chat,
+            "agent_chats": agent_chats,
             "agent_runtime": agent_runtime,
+            "continuous_improvement_status": continuous_improvement_status,
+            "memory_sync_status": memory_sync_status,
             "workspace": workspace,
             "env": env,
             "telemetry": {

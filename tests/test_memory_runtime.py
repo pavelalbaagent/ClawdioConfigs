@@ -15,11 +15,7 @@ MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
 class MemoryRuntimeTests(unittest.TestCase):
     def _hybrid_memory_config(self, workspace: Path) -> Path:
         config_path = workspace / "memory.yaml"
-        text = MEMORY_CONFIG.read_text(encoding="utf-8").replace(
-            "active_profile: md_only",
-            "active_profile: hybrid_124",
-            1,
-        )
+        text = MEMORY_CONFIG.read_text(encoding="utf-8")
         config_path.write_text(text, encoding="utf-8")
         return config_path
 

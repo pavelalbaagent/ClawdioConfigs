@@ -1,10 +1,19 @@
 profiles:
-  active_profile: bootstrap_core
+  active_profile: bootstrap_command_center
   definitions:
     bootstrap_core:
       description: First live profile. One human channel, dashboard, reminders, and optional web browsing only.
       enabled_integrations:
         - web_browsing
+      enabled_tool_clis:
+        - codex_cli
+        - gemini_cli
+    bootstrap_command_center:
+      description: Live command center profile. Adds calendar and personal tasks to the core Telegram + dashboard slice.
+      enabled_integrations:
+        - web_browsing
+        - calendar
+        - personal_task_manager
       enabled_tool_clis:
         - codex_cli
         - gemini_cli

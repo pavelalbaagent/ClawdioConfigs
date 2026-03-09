@@ -14,30 +14,30 @@ Prioritize modules that satisfy all of the following:
 
 ## Top 4 Next Modules
 
-### 1. VPS MVP Deployment Pass
+### 1. Multi-Agent Runtime VPS Hardening
 
 Why this is first:
 
-1. The channel adapter and reminder loop now exist locally.
-2. The next highest-value step is proving the real go-live path cleanly on the VPS.
-3. This is where path mismatches, env mistakes, and service wiring issues usually appear.
-4. It prevents another “partially alive but practically dead” runtime like the old WhatsApp-centric box.
+1. Conversational `assistant`, `researcher`, and `builder` now exist, along with memory sync and ops reviews.
+2. The next highest-value step is making those loops operational and visible on the VPS.
+3. This is where timer, path, and state-drift issues will show up.
+4. It prevents the new command-center surface from degrading into another half-live stack.
 
 What "done" means:
 
-1. Telegram adapter runs as a user service
-2. dashboard is reachable through the intended tunnel path
-3. reminder state file is shared correctly across runtime and dashboard
-4. Telegram, dashboard auth, and reminder state validate on the VPS
-5. one real end-to-end smoke test passes
+1. Telegram adapter and dashboard run cleanly on the VPS
+2. memory sync timer runs successfully
+3. ops-guard daily review timer runs successfully
+4. agent runtime state updates live from Telegram traffic
+5. one researcher chat and one builder chat turn succeed on the VPS
 
 Recommended implementation scope:
 
-1. keep the first live profile at `bootstrap_core`
-2. do not add extra providers during the deploy pass
-3. prove one private Telegram chat only
+1. keep the current live profile at `bootstrap_command_center`
+2. keep one private Telegram chat only
+3. use timers and dashboard state before adding more autonomy
 
-### 2. Reminder/Task/Calendar Linkage
+### 2. Deterministic Reminder/Task/Calendar Linkage
 
 Why this is second:
 
@@ -59,20 +59,20 @@ Recommended implementation scope:
 2. link by explicit ids and small metadata only
 3. keep cross-module writes approval-aware where needed
 
-### 3. Dashboard Operations Layer
+### 3. Dashboard Session And Governance Layer
 
 Why this is third:
 
-1. The dashboard already exists and now surfaces Gmail, Drive, braindump, Google Calendar, and personal tasks, but the first live cut should not wait on the staged providers.
-2. It becomes materially better once live reminders and Telegram are on the VPS too.
-3. It gives you one operator view instead of scattered files and chat history.
+1. The dashboard now exposes agent registry, provider health, and runtime state, but it still lacks a real session/governance cockpit.
+2. That matters more now that multiple conversational roles exist.
+3. It gives you one operator view instead of scattered state files and chat history.
 
 What "done" means:
 
-1. show pending reminders
-2. show upcoming calendar items
-3. show active projects/tasks
-4. show integration/module status
+1. show active agent sessions and checkpoints
+2. show pending reminders and linked tasks
+3. show upcoming calendar items
+4. show latest ops-guard review and memory-sync status
 5. show recent model usage by lane
 
 Recommended implementation scope:
@@ -80,27 +80,27 @@ Recommended implementation scope:
 1. use local JSON/SQLite-backed views first
 2. avoid adding broad remote writes from the dashboard until read-side visibility is strong
 
-### 4. Live Provider Activation Hardening
+### 4. Fitness Coach Runtime
 
 Why this is fourth:
 
-1. Calendar, Gmail, Drive, and Todoist runtimes exist, but they still need real-account proof.
-2. Provider bugs are easier to solve after the Telegram/reminder loop is live.
-3. This keeps the migration disciplined instead of turning into a credentials scramble mid-deploy.
+1. The fitness domain already has the cleanest structured-state design in the repo.
+2. It is the best next specialist to turn from routed capture into a real agent runtime.
+3. It will force good decisions about session boundaries and structured logging.
 
 What "done" means:
 
-1. Google Calendar snapshot works with the real account before switching the live profile from `bootstrap_core` to `bootstrap_minimal`
-2. one personal task create/complete/defer cycle works against the live provider
-3. Gmail batch processing runs once safely against the real inbox
-4. Drive root verification works against the real shared folder
-5. failures are visible in the dashboard or logs without guesswork
+1. `fitness:` opens a real specialist runtime instead of task capture
+2. today/start/log/finish flows work against the fitness state store
+3. workout progression is visible without raw chat replay
+4. dashboard shows fitness runtime state cleanly
+5. fitness logs stay app-backed, not memory-backed
 
 Recommended implementation scope:
 
-1. activate only one provider per surface
-2. prefer read-side or low-risk write-side proofs first
-3. keep Gmail/Drive off until Telegram/reminders are stable if the timeline forces a cut
+1. keep the first version tightly scoped to workout guidance and logging
+2. do not expand into nutrition or reminders yet
+3. keep progression deterministic and SQLite-backed
 
 ## Modules To Delay
 
@@ -143,7 +143,7 @@ Delay because:
 
 ## Suggested Sequence
 
-1. deploy the Telegram + reminder MVP cleanly on the VPS
+1. harden the multi-agent runtime loops on the VPS
 2. link reminders, tasks, and calendar deterministically
-3. improve the dashboard as the operator cockpit
-4. activate live providers one by one
+3. improve the dashboard as the session/governance cockpit
+4. build `fitness_coach` as the next real specialist runtime

@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenClaw Ops Guard Weekly Architecture Review Timer
+
+[Timer]
+OnBootSec=10m
+OnCalendar=Sun *-*-* 08:15:00
+Persistent=true
+Unit=openclaw-ops-guard-architecture-review.service
+
+[Install]
+WantedBy=timers.target

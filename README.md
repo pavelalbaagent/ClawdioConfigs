@@ -51,11 +51,13 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 45. Personal task runtime in [docs/49-personal-task-runtime.md](/Users/palba/Projects/Clawdio/docs/49-personal-task-runtime.md) and [personal_task_runtime.py](/Users/palba/Projects/Clawdio/scripts/personal_task_runtime.py).
 46. Telegram long-polling adapter runtime in [docs/50-telegram-adapter-runtime.md](/Users/palba/Projects/Clawdio/docs/50-telegram-adapter-runtime.md), [telegram_adapter.py](/Users/palba/Projects/Clawdio/scripts/telegram_adapter.py), and [openclaw-telegram-adapter.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-telegram-adapter.service).
 47. Gateway and dashboard VPS service templates in [openclaw-gateway.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-gateway.service), [openclaw-dashboard.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-dashboard.service), and tunnel defaults in [openclaw-dashboard-tunnel.sh](/Users/palba/Projects/Clawdio/ops/scripts/openclaw-dashboard-tunnel.sh).
-48. Pre-calendar live profile in [integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml) (`bootstrap_core`) and low-cost memory default in [memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml) (`md_only`) so Telegram + dashboard + reminders can ship before Google OAuth and embeddings are ready.
+48. Live command-center profile in [integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml) (`bootstrap_command_center`) and hybrid memory default in [memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml) (`hybrid_124`) so Telegram + dashboard + reminders + calendar + personal tasks can ship as one coherent operator surface.
 49. Provider wiring and live smoke-check tooling in [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Clawdio/docs/51-provider-smoke-checks.md) and [provider_smoke_check.py](/Users/palba/Projects/Clawdio/scripts/provider_smoke_check.py).
 50. Development thread/workstream policy in [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md) with kickoff template [feature-thread-kickoff.md](/Users/palba/Projects/Clawdio/docs/templates/feature-thread-kickoff.md) and quick starters [thread-starters.md](/Users/palba/Projects/Clawdio/docs/templates/thread-starters.md).
 51. Agent scheme and governance in [docs/54-agent-scheme-and-governance.md](/Users/palba/Projects/Clawdio/docs/54-agent-scheme-and-governance.md).
 52. Agent realization master plan in [docs/55-agent-realization-master-plan.md](/Users/palba/Projects/Clawdio/docs/55-agent-realization-master-plan.md).
+53. Multi-agent conversational runtime in [docs/56-multi-agent-chat-runtime.md](/Users/palba/Projects/Clawdio/docs/56-multi-agent-chat-runtime.md) and [assistant_chat_runtime.py](/Users/palba/Projects/Clawdio/scripts/assistant_chat_runtime.py).
+54. Memory sync + ops-guard review loops in [docs/57-ops-guard-and-memory-sync.md](/Users/palba/Projects/Clawdio/docs/57-ops-guard-and-memory-sync.md), [memory_sync_runner.py](/Users/palba/Projects/Clawdio/scripts/memory_sync_runner.py), and [ops_guard_review.py](/Users/palba/Projects/Clawdio/scripts/ops_guard_review.py).
 
 ## Suggested starting sequence
 
@@ -78,9 +80,11 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 17. Start the local dashboard control plane (optional): `python3 dashboard/server.py --host 127.0.0.1 --port 18789`
 18. Smoke-test the Telegram adapter locally: `python3 scripts/telegram_adapter.py --env-file secrets/openclaw.env --once --json`
 19. Check which providers are really wired: `python3 scripts/provider_smoke_check.py --env-file secrets/openclaw.env --json`
-20. For the first VPS cutover, keep profiles at `bootstrap_core + md_only`; switch to `bootstrap_minimal` only after Google Calendar OAuth is ready.
-21. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
-22. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
+20. For the current live command-center cutover, keep profiles at `bootstrap_command_center + hybrid_124`; fall back to `bootstrap_core + md_only` only for emergency cost-control or degraded-provider windows.
+21. Run one memory sync before leaning on recall-heavy agent chat: `python3 scripts/memory_sync_runner.py --env-file secrets/openclaw.env --json`
+22. Run one bounded ops review before widening autonomy: `python3 scripts/ops_guard_review.py --mode daily_ops_review --json`
+23. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
+24. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
 
 ## Important constraint
 

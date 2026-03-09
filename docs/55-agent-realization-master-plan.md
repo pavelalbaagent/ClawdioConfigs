@@ -26,10 +26,10 @@ What exists today:
 
 What is still missing:
 
-1. a true general chat mode
-2. a bounded improvement process with real outputs
-3. space-aware memory and cleanup loops
-4. richer specialist runtimes beyond routed task capture
+1. a real specialist runtime for `fitness_coach`
+2. a visible session registry and cleanup loop
+3. governance surfaced directly in the dashboard as an operator habit
+4. VPS-local access to the premium supervised coding lane
 
 The next system should not be built as “one more agent.”
 It should be built as:
@@ -53,20 +53,20 @@ Today:
 
 Remaining gap:
 
-1. specialist routing currently lands mostly as structured task capture, not rich live conversations
+1. `assistant`, `researcher`, and `builder` are now conversational, but `fitness_coach` and `ops_guard` still route through structured paths
 
 ### 2. Memory is underpowered for the intended multi-agent design
 
 Today:
 
 1. local provider wiring supports embeddings
-2. the active memory profile is still `md_only`
-3. project-space summaries exist only as policy and raw workspace state
+2. the active memory profile is now `hybrid_124`
+3. memory sync and checkpoints exist, but session/governance visibility is still thin
 
 Impact:
 
-1. the current stack is safe and cheap
-2. but it is too weak for high-quality assistant/researcher continuity across longer periods
+1. the current stack now supports stronger assistant/researcher/builder continuity
+2. but it still needs timer-backed sync discipline and more visible session cleanup
 
 ### 3. Session discipline is defined but not enforced as a runtime workflow
 
@@ -103,9 +103,9 @@ Today:
 
 Missing:
 
-1. no generated daily review
-2. no weekly review report
-3. no bounded recommendations workflow
+1. no timer-backed cadence on the VPS yet
+2. no visible operator workflow around acting on review outputs
+3. no cleanup automation that closes the loop on recommendations
 
 ## Target Operating Model
 
@@ -257,42 +257,21 @@ This should become the main runtime contract before adding more transport comple
 
 ### Recommendation
 
-Do not jump straight to full global hybrid memory for everything.
+The repo is now ready for hybrid memory by default.
 
-Use a phased memory model:
+Use a bounded hybrid model:
 
-#### Phase A
-
-Profile:
-
-1. keep live default at `md_only` while the agent surfaces are being made explicit
-
-Why:
-
-1. safest while routing and spaces are still stabilizing
-
-#### Phase B
-
-Profile:
-
-1. move to `md_plus_embeddings` for `assistant`, `researcher`, and `builder`
-
-Why:
-
-1. these benefit most from semantic recall
-2. cost stays bounded
-
-#### Phase C
-
-Profile:
-
-1. use `hybrid_124` selectively where structured state exists already
+1. keep `hybrid_124` live for `assistant`, `researcher`, and `builder`
+2. keep numeric and app-backed state in SQLite/service stores
+3. use retrieval selectively, not every turn
+4. downgrade to `md_only` only during degraded-provider or deliberate cost-control windows
 
 Best targets:
 
 1. fitness
 2. job-search
 3. project spaces
+4. ops reviews and durable architecture notes
 
 Rule:
 
@@ -432,45 +411,45 @@ No automatic structural changes.
 
 ## Missing Components To Build Next
 
-### 1. Agent registry and active-mode visibility
+### 1. Session registry and active-mode visibility
 
 Need:
 
-1. dashboard registry of agents
-2. active `agent + space + lane`
-3. visible specialist routing
+1. active session registry in the dashboard
+2. visible `agent + space + lane + checkpoint`
+3. explicit stale-session cleanup actions
 
-### 2. General chat mode
-
-Need:
-
-1. `Assistant` conversational entry mode
-2. routing into specialist agents
-3. explicit lane escalation logic
-
-### 3. Space-aware runtime state
+### 2. Fitness specialist runtime
 
 Need:
 
-1. active session registry
-2. active space summaries
-3. stale-space cleanup
+1. real `fitness_coach` conversational or semi-conversational flow
+2. structured workout state reads/writes
+3. progression review without raw chat replay
 
-### 4. Ops Guard review outputs
-
-Need:
-
-1. daily review artifact
-2. weekly review artifact
-3. dashboard visibility for recommendations and cleanup candidates
-
-### 5. Fitness runtime completion
+### 3. Ops review operationalization
 
 Need:
 
-1. actual workout logging loop
-2. session commands
-3. progression calculations
+1. daily timer on VPS
+2. weekly timer on VPS
+3. operator-facing review/cleanup habit
+
+### 4. VPS premium supervised lane
+
+Need:
+
+1. install `codex` on VPS if desired
+2. authenticate it cleanly
+3. decide when `builder` escalates to that lane
+
+### 5. Session cleanup
+
+Need:
+
+1. archive dormant project spaces
+2. compact stale chat state
+3. surface cleanup candidates directly in the dashboard
 
 ## Recommended Build Order
 
@@ -482,14 +461,14 @@ Need:
 
 ### Phase 2
 
-1. `Assistant` general chat mode
+1. `Assistant`, `Researcher`, and `Builder` conversational runtime
 2. space-aware context loading
 3. summary refresh hooks
 
 ### Phase 3
 
 1. `Ops Guard` daily and weekly review outputs
-2. cleanup candidate generation
+2. memory sync status loop
 3. stale-space management
 
 ### Phase 4

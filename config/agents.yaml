@@ -1,6 +1,7 @@
 agents:
   assistant:
     enabled: true
+    interaction_mode: chat
     default_lane: L1_low_cost
     can_spawn_subagents: true
     allowed_tools:
@@ -28,6 +29,7 @@ agents:
 
   researcher:
     enabled: true
+    interaction_mode: chat
     default_lane: L2_balanced
     allowed_tools:
       - web_retrieval
@@ -48,6 +50,7 @@ agents:
 
   fitness_coach:
     enabled: true
+    interaction_mode: structured
     default_lane: L1_low_cost
     allowed_tools:
       - fitness_runtime
@@ -63,6 +66,7 @@ agents:
 
   builder:
     enabled: true
+    interaction_mode: chat
     default_lane: L2_balanced
     allowed_tools:
       - codex_cli
@@ -81,6 +85,7 @@ agents:
 
   ops_guard:
     enabled: true
+    interaction_mode: governed_process
     default_lane: L1_low_cost
     allowed_tools:
       - service_health
@@ -99,6 +104,7 @@ internal_roles:
   coordinator:
     enabled: true
     visibility: internal_only
+    interaction_mode: internal
     default_lane: L1_low_cost
     allowed_tools:
       - task_router
@@ -112,6 +118,7 @@ internal_roles:
   knowledge_librarian:
     enabled: true
     visibility: internal_only
+    interaction_mode: internal
     default_lane: L1_low_cost
     allowed_tools:
       - memory_index
@@ -220,6 +227,7 @@ continuous_improvement:
     - telemetry/model-calls.ndjson
     - telemetry/session-checkpoints.ndjson
     - data/provider-smoke-status.json
+    - data/memory-sync-status.json
     - data/dashboard-workspace.json
     - data/job-search-daily-summary.json
   outputs:

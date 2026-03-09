@@ -38,8 +38,8 @@
 
 ## Phase 5: Integrations
 
-1. Choose profile in `config/integrations.yaml` (`bootstrap_minimal` first).
-2. Keep day-one live scope to: one human channel, dashboard, reminders, Google Calendar, optional browsing.
+1. Choose profile in `config/integrations.yaml` (`bootstrap_command_center` first).
+2. Keep day-one live scope to: one human channel, dashboard, reminders, Google Calendar, personal tasks, optional browsing.
 3. Prewire Gmail and Drive next, but keep them disabled until activation testing day.
 4. Add GitHub, task managers, and n8n only as staged unlocks.
 5. Add LinkedIn only if terms and auth method are compliant and stable.

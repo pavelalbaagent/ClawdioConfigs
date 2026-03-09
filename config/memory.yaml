@@ -1,5 +1,5 @@
 profiles:
-  active_profile: md_only
+  active_profile: hybrid_124
   definitions:
     md_only:
       description: Structured markdown memory only (lowest cost).
@@ -26,6 +26,19 @@ memory_modules:
       - SOUL.md
       - SESSION.md
       - TODO.md
+      - baselines/agent_md/MEMORY.md
+      - baselines/agent_md/USER.md
+      - baselines/agent_md/SOUL.md
+      - baselines/agent_md/SESSION.md
+      - baselines/agent_md/TODO.md
+      - docs/34-model-routing-playbook.md
+      - docs/40-runtime-status-matrix.md
+      - docs/47-project-spaces-and-session-agent-strategy.md
+      - docs/48-google-calendar-runtime.md
+      - docs/49-personal-task-runtime.md
+      - docs/50-telegram-adapter-runtime.md
+      - docs/54-agent-scheme-and-governance.md
+      - docs/55-agent-realization-master-plan.md
       - memory/*.md
     rules:
       preserve_h2_headings: true

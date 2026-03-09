@@ -63,9 +63,12 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("personal_tasks", state)
         self.assertIn("provider_health", state)
         self.assertIn("agent_runtime", state)
+        self.assertIn("agent_chats", state)
+        self.assertIn("continuous_improvement_status", state)
+        self.assertIn("memory_sync_status", state)
 
-        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_core")
-        self.assertEqual(state["profiles"]["memory"]["active"], "md_only")
+        self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_command_center")
+        self.assertEqual(state["profiles"]["memory"]["active"], "hybrid_124")
         self.assertEqual(state["routing"]["active_mode"], "balanced_default")
         self.assertEqual(state["agent_runtime"]["default_user_facing_agent"], "assistant")
 

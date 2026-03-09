@@ -25,9 +25,16 @@ data/drive-workspace-status.json
 data/braindump-snapshot.json
 data/provider-smoke-status.json
 data/telegram-adapter-state.json
+data/agent-runtime-state.json
+data/*-chat-state.json
+data/continuous-improvement-status.json
+data/memory-sync-status.json
 data/job-search-daily-summary.json
 data/job-search/inbox/
+docs/reviews/*.md
+!docs/reviews/README.md
 fitness/logs/*.md
 !fitness/logs/README.md
 output/spreadsheet/*
 tmp/
+telemetry/model-calls.ndjson

@@ -1,0 +1,166 @@
+import json
+import subprocess as real_subprocess
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+
+import sys
+
+sys.path.insert(0, str(ROOT / "dashboard"))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import assistant_chat_runtime  # noqa: E402
+from assistant_chat_runtime import AgentChatRuntime  # noqa: E402
+from backend import DashboardBackend  # noqa: E402
+
+REAL_SUBPROCESS_RUN = real_subprocess.run
+
+
+class AgentChatRuntimeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "config").mkdir(parents=True)
+        (self.root / "contracts" / "braindump").mkdir(parents=True)
+        (self.root / "telemetry").mkdir(parents=True)
+        (self.root / "baselines" / "agent_md").mkdir(parents=True)
+        (self.root / "scripts").mkdir(parents=True)
+
+        for name in (
+            "integrations.yaml",
+            "memory.yaml",
+            "models.yaml",
+            "core.yaml",
+            "channels.yaml",
+            "reminders.yaml",
+            "dashboard.yaml",
+            "agents.yaml",
+            "session_policy.yaml",
+        ):
+            shutil.copy(ROOT / "config" / name, self.root / "config" / name)
+
+        shutil.copy(
+            ROOT / "contracts" / "braindump" / "sqlite_schema.sql",
+            self.root / "contracts" / "braindump" / "sqlite_schema.sql",
+        )
+        for name in ("MEMORY.md", "USER.md", "SOUL.md", "SESSION.md", "TODO.md"):
+            (self.root / "baselines" / "agent_md" / name).write_text(f"# {name}\n\n## Notes\nExisting context for {name}.\n", encoding="utf-8")
+
+        self.backend = DashboardBackend(root=self.root)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_researcher_chat_uses_agent_specific_state_and_memory(self):
+        runtime = AgentChatRuntime(
+            root=self.root,
+            backend=self.backend,
+            env_values={"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": "emb-key"},
+            agent_id="researcher",
+        )
+        route = {"agent_id": "researcher", "space_key": "research", "route_mode": "explicit_agent_prefix"}
+
+        memory_payload = {
+            "mode": "semantic",
+            "results": [
+                {
+                    "source_path": str(self.root / "baselines" / "agent_md" / "MEMORY.md"),
+                    "heading": "Notes",
+                    "content": "Previous research context about provider tradeoffs.",
+                }
+            ],
+        }
+
+        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None):
+            joined = " ".join(str(part) for part in cmd)
+            if "memory_search.py" in joined:
+                return mock.Mock(returncode=0, stdout=json.dumps(memory_payload), stderr="")
+            return REAL_SUBPROCESS_RUN(cmd, cwd=cwd, capture_output=capture_output, text=text, env=env)
+
+        with mock.patch(
+            "assistant_chat_runtime.resolve_chat_route",
+            return_value={
+                "lane": "L2_balanced",
+                "requested_lane": "L2_balanced",
+                "downgraded_from_lane": None,
+                "provider": "google_ai_studio_free",
+                "provider_cfg": {"transport": "google_generative_language"},
+                "model": "gemini-2.5-flash",
+            },
+        ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(
+            "assistant_chat_runtime.invoke_chat_provider",
+            return_value={
+                "text": "Recommendation: keep Gemini first and OpenRouter as overflow.",
+                "prompt_tokens": 120,
+                "completion_tokens": 40,
+                "latency_ms": 80,
+            },
+        ) as provider_mock:
+            result = runtime.reply(text="Compare Gemini and OpenRouter for fallback routing.", route=route)
+
+        provider_mock.assert_called_once()
+        self.assertTrue(
+            any("memory_search.py" in " ".join(str(part) for part in call.args[0]) for call in run_mock.call_args_list),
+            msg=f"memory_search.py not invoked: {run_mock.call_args_list}",
+        )
+        self.assertEqual(result["agent_id"], "researcher")
+        self.assertEqual(result["space_key"], "research")
+        self.assertTrue(result["memory_context_used"])
+        self.assertTrue((self.root / "data" / "researcher-chat-state.json").exists())
+
+    def test_builder_chat_persists_project_space(self):
+        runtime = AgentChatRuntime(
+            root=self.root,
+            backend=self.backend,
+            env_values={"GEMINI_API_KEY": "test-key"},
+            agent_id="builder",
+        )
+        route = {
+            "agent_id": "builder",
+            "space_key": "projects/openclaw-v2-rebuild",
+            "project_name": "OpenClaw V2 Rebuild",
+            "route_mode": "explicit_agent_prefix",
+        }
+
+        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None):
+            joined = " ".join(str(part) for part in cmd)
+            if "memory_search.py" in joined:
+                return mock.Mock(returncode=0, stdout=json.dumps({"mode": "keyword", "results": []}), stderr="")
+            return REAL_SUBPROCESS_RUN(cmd, cwd=cwd, capture_output=capture_output, text=text, env=env)
+
+        with mock.patch(
+            "assistant_chat_runtime.resolve_chat_route",
+            return_value={
+                "lane": "L2_balanced",
+                "requested_lane": "L2_balanced",
+                "downgraded_from_lane": None,
+                "provider": "google_ai_studio_free",
+                "provider_cfg": {"transport": "google_generative_language"},
+                "model": "gemini-2.5-flash",
+            },
+        ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(
+            "assistant_chat_runtime.invoke_chat_provider",
+            return_value={
+                "text": "Start with the dashboard badge in the runtime panel and add a small backend field for status.",
+                "prompt_tokens": 110,
+                "completion_tokens": 36,
+                "latency_ms": 70,
+            },
+        ):
+            result = runtime.reply(text="Plan a runtime status badge implementation.", route=route)
+
+        self.assertTrue(
+            any("memory_search.py" in " ".join(str(part) for part in call.args[0]) for call in run_mock.call_args_list),
+            msg=f"memory_search.py not invoked: {run_mock.call_args_list}",
+        )
+        self.assertEqual(result["space_key"], "projects/openclaw-v2-rebuild")
+        raw = json.loads((self.root / "data" / "builder-chat-state.json").read_text(encoding="utf-8"))
+        self.assertIn("projects/openclaw-v2-rebuild", raw["spaces"])
+
+
+if __name__ == "__main__":
+    unittest.main()

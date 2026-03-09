@@ -4,17 +4,21 @@ Last updated: 2026-03-07
 
 ## Recommended Bundle Now
 
-Use this as the initial VPS go-live bundle:
+Use this as the current VPS command-center bundle:
 
 1. Core comms: `telegram`
 2. Control plane: `web_dashboard`
 3. Reminders: enabled
-4. Calendar: staged later
-5. Integrations profile: `bootstrap_core`
-6. Memory profile: `md_only`
-7. Optional search API: add later only if browser-only retrieval is insufficient
+4. Calendar: enabled
+5. Personal tasks: enabled
+6. Integrations profile: `bootstrap_command_center`
+7. Memory profile: `hybrid_124`
+8. Optional search API: add later only if browser-only retrieval is insufficient
 
-Upgrade to `bootstrap_minimal` once Google Calendar OAuth is ready.
+Fallback bundle for degraded-provider or cost-control windows:
+
+1. Integrations profile: `bootstrap_core`
+2. Memory profile: `md_only`
 
 ## Recommended Bundle After MVP Stabilizes
 
@@ -35,10 +39,11 @@ For staged optionalization, use profile presets in [config/integrations.yaml](/U
 
 1. `bootstrap_core`
 2. `bootstrap_minimal`
-3. `stage_2_comms_google`
-4. `stage_3_comms_dev`
-5. `stage_4_tasks`
-6. `stage_5_automation`
+3. `bootstrap_command_center`
+4. `stage_2_comms_google`
+5. `stage_3_comms_dev`
+6. `stage_4_tasks`
+7. `stage_5_automation`
 
 ## Required Env For Initial VPS Go-Live
 
@@ -47,27 +52,31 @@ Set these first:
 1. `TELEGRAM_BOT_TOKEN`
 2. `TELEGRAM_ALLOWED_CHAT_ID`
 3. `OPENCLAW_DASHBOARD_TOKEN`
+4. `GEMINI_API_KEY`
+5. `GOOGLE_CLIENT_ID`
+6. `GOOGLE_CLIENT_SECRET`
+7. `GOOGLE_REFRESH_TOKEN`
+8. `GOOGLE_CALENDAR_ID`
+9. `PERSONAL_TASK_PROVIDER=todoist`
+10. `TODOIST_API_TOKEN`
 
 ## Required Env For Post-MVP Expansion
 
 Set these first:
 
-1. `GOOGLE_CLIENT_ID`
-2. `GOOGLE_CLIENT_SECRET`
-3. `GOOGLE_REFRESH_TOKEN`
-4. `GOOGLE_CALENDAR_ID`
-5. `GMAIL_USER_EMAIL`
-6. `GOOGLE_DRIVE_ROOT_FOLDER_ID`
-7. `GITHUB_TOKEN`
-8. `GITHUB_OWNER`
-9. `PERSONAL_TASK_PROVIDER=todoist`
-10. `TODOIST_API_TOKEN`
-11. `AGENT_TASK_PROVIDER=asana`
-12. `ASANA_PERSONAL_ACCESS_TOKEN`
-13. `ASANA_WORKSPACE_GID`
-14. `N8N_BASE_URL`
-15. `N8N_API_KEY`
-16. `N8N_WEBHOOK_SECRET`
+1. `GMAIL_USER_EMAIL`
+2. `GOOGLE_DRIVE_ROOT_FOLDER_ID`
+3. `GITHUB_TOKEN`
+4. `GITHUB_OWNER`
+5. `AGENT_TASK_PROVIDER=asana`
+6. `ASANA_PERSONAL_ACCESS_TOKEN`
+7. `ASANA_WORKSPACE_GID`
+8. `N8N_BASE_URL`
+9. `N8N_API_KEY`
+10. `N8N_WEBHOOK_SECRET`
+11. `OPENROUTER_API_KEY`
+12. `ANTHROPIC_API_KEY`
+13. `OPENAI_API_KEY`
 
 ## Alternative Bundle A (Google-Heavy)
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenClaw Ops Guard Daily Review Timer
+
+[Timer]
+OnBootSec=5m
+OnCalendar=*-*-* 07:30:00
+Persistent=true
+Unit=openclaw-ops-guard-review.service
+
+[Install]
+WantedBy=timers.target

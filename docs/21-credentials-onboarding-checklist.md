@@ -11,12 +11,14 @@ Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/
 ## Phase A: Baseline (same day)
 
 1. Fill `.env` placeholders in local secure store from [.env.example](/Users/palba/Projects/Clawdio/.env.example).
-2. Configure `bootstrap_minimal` profile in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
+2. Configure `bootstrap_command_center` profile in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
 3. Set and verify:
 4. `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_ID`
 5. `OPENCLAW_DASHBOARD_TOKEN`
 6. `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`
-7. Optional search path: `BRAVE_SEARCH_API_KEY` or equivalent
+7. `GEMINI_API_KEY`
+8. `PERSONAL_TASK_PROVIDER=todoist`, `TODOIST_API_TOKEN`
+9. Optional search path: `BRAVE_SEARCH_API_KEY` or equivalent
 
 ## Phase B: Core integrations (after baseline is stable)
 

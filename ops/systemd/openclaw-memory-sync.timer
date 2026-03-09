@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenClaw Memory Sync Timer
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=30m
+Unit=openclaw-memory-sync.service
+
+[Install]
+WantedBy=timers.target

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Bounded assistant chat runtime for Telegram and dashboard-driven interactions."""
+"""Role-aware bounded chat runtime for Telegram and dashboard-driven interactions."""
 
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,10 +23,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "dashboard") not in sys.path:
     sys.path.insert(0, str(ROOT / "dashboard"))
 
-from backend import DashboardBackend, ensure_dict, ensure_string_list  # type: ignore  # noqa: E402
+from backend import DashboardBackend, ensure_dict, ensure_string_list, read_json  # type: ignore  # noqa: E402
 
-DEFAULT_STATE_PATH = ROOT / "data" / "assistant-chat-state.json"
 DEFAULT_TELEMETRY_PATH = ROOT / "telemetry" / "model-calls.ndjson"
+DEFAULT_CHECKPOINT_PATH = ROOT / "telemetry" / "session-checkpoints.ndjson"
+DEFAULT_AGENT_STATE_FILES = {
+    "assistant": "assistant-chat-state.json",
+    "researcher": "researcher-chat-state.json",
+    "builder": "builder-chat-state.json",
+}
 
 SUPPORTED_CHAT_TRANSPORTS = {
     "google_generative_language",
@@ -39,21 +45,65 @@ SPACE_CONTEXT_ITEM_LIMITS = {
     "tasks": 8,
     "reminders": 8,
     "braindump": 8,
+    "research": 6,
+    "job-search": 6,
+    "coding": 6,
+    "ops": 6,
+    "project": 8,
+}
+
+ROLE_PROMPTS = {
+    "assistant": {
+        "headline": "You are Assistant Agent for Pavel.",
+        "guidance": [
+            "You are the default front door for reminders, tasks, calendar, braindump, inbox questions, and project coordination.",
+            "Prefer concise, operational answers that clarify current state and the next concrete action.",
+            "If the user asks to schedule, defer, or rearrange things, reason from the provided state and avoid inventing side effects.",
+        ],
+    },
+    "researcher": {
+        "headline": "You are Researcher Agent for Pavel.",
+        "guidance": [
+            "You handle tech research, tool evaluation, recommendation synthesis, and job-search analysis.",
+            "Structure conclusions around tradeoffs, evidence, uncertainty, and the next decision Pavel should make.",
+            "Prefer comparisons and short recommendation frames over long generic prose.",
+        ],
+    },
+    "builder": {
+        "headline": "You are Builder Agent for Pavel.",
+        "guidance": [
+            "You handle coding, implementation planning, debugging, refactors, and repo-scoped execution guidance.",
+            "Think like a pragmatic software engineer: prioritize concrete file-level actions, risks, tests, and rollback safety.",
+            "Do not claim code or infra changed unless the deterministic tool path already executed it.",
+        ],
+    },
+    "ops_guard": {
+        "headline": "You are Ops Guard for Pavel.",
+        "guidance": [
+            "You focus on service health, failures, regressions, capacity issues, and runtime governance.",
+            "Keep outputs compact and evidence-driven.",
+        ],
+    },
+}
+
+MEMORY_ENABLED_AGENTS = {"assistant", "researcher", "builder"}
+MEMORY_HINT_KEYWORDS = {
+    "remember",
+    "previous",
+    "before",
+    "decided",
+    "history",
+    "context",
+    "similar",
+    "earlier",
+    "already",
+    "what did we",
+    "last time",
 }
 
 
 def iso_now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -82,7 +132,16 @@ def truncate(text: str, *, limit: int = 220) -> str:
     return clean[: limit - 1].rstrip() + "…"
 
 
-def choose_situation(*, text: str, space_key: str) -> str:
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def choose_situation(*, agent_id: str, text: str, space_key: str) -> str:
     lowered = text.strip().lower()
     heavy_keywords = (
         "architecture",
@@ -114,6 +173,12 @@ def choose_situation(*, text: str, space_key: str) -> str:
     )
     if any(keyword in lowered for keyword in heavy_keywords):
         return "architecture_or_high_ambiguity"
+    if agent_id == "builder":
+        return "coding_and_integration"
+    if agent_id == "researcher":
+        return "research_synthesis"
+    if space_key.startswith("projects/"):
+        return "research_synthesis"
     if space_key in {"calendar", "tasks", "reminders", "braindump"} and len(lowered) <= 120:
         return "quick_read_write"
     if len(lowered) > 180 or any(keyword in lowered for keyword in synthesis_keywords):
@@ -215,7 +280,7 @@ def resolve_chat_route(
                     "required_command": str(provider_cfg.get("required_command", "")).strip() or None,
                 }
             )
-    raise RuntimeError(f"no supported assistant-chat provider is ready for situation={situation}")
+    raise RuntimeError(f"no supported chat provider is ready for situation={situation}")
 
 
 def request_json(
@@ -312,7 +377,7 @@ def call_anthropic(*, api_key: str, model: str, system_prompt: str, messages: li
     data = request_json(
         "https://api.anthropic.com/v1/messages",
         headers={
-            "x-api-key": api_key,
+            "x-api-key": f"{api_key}",
             "anthropic-version": "2023-06-01",
         },
         payload={
@@ -370,7 +435,7 @@ def invoke_chat_provider(
             system_prompt=system_prompt,
             messages=messages,
         )
-    raise RuntimeError(f"unsupported assistant-chat transport: {transport or provider_name}")
+    raise RuntimeError(f"unsupported chat transport: {transport or provider_name}")
 
 
 def deterministic_checkpoint(summary: str, turns: list[dict[str, str]]) -> str:
@@ -400,37 +465,82 @@ def normalize_turns(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
     return out[-12:]
 
 
-def build_space_snapshot(backend: DashboardBackend, *, space_key: str) -> str:
-    snapshot = backend.build_state()
+def load_memory_profile(memory_path: Path) -> tuple[dict[str, Any], str, dict[str, Any], list[str]]:
+    memory_cfg = ensure_dict(model_route_decider.load_yaml(memory_path))
+    profiles = ensure_dict(memory_cfg.get("profiles"))
+    definitions = ensure_dict(profiles.get("definitions"))
+    active_profile = str(profiles.get("active_profile") or "").strip() or "md_only"
+    profile = ensure_dict(definitions.get(active_profile))
+    modules = ensure_dict(memory_cfg.get("memory_modules"))
+    enabled_module_names = ensure_string_list(profile.get("enabled_modules"))
+    return memory_cfg, active_profile, modules, enabled_module_names
+
+
+def should_query_memory(*, agent_id: str, text: str, space_key: str, route: dict[str, Any]) -> bool:
+    if agent_id not in MEMORY_ENABLED_AGENTS:
+        return False
+    lowered = text.strip().lower()
+    if not lowered:
+        return False
+    if space_key.startswith("projects/") or str(route.get("project_name") or "").strip():
+        return True
+    if agent_id in {"researcher", "builder"}:
+        return len(lowered) >= 20
+    if any(keyword in lowered for keyword in MEMORY_HINT_KEYWORDS):
+        return True
+    return len(lowered) >= 100
+
+
+def format_memory_context(results: list[dict[str, Any]], *, mode: str) -> str:
+    if not results:
+        return ""
+    lines = [f"Relevant memory recall ({mode}):"]
+    for item in results[:4]:
+        row = ensure_dict(item)
+        source_path = Path(str(row.get("source_path") or "memory")).name or "memory"
+        heading = str(row.get("heading") or "").strip()
+        label = f"{source_path}"
+        if heading:
+            label += f" :: {heading}"
+        lines.append(f"- {label}: {truncate(str(row.get('content') or ''), limit=190)}")
+    return "\n".join(lines)
+
+
+def build_space_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    root: Path,
+    agent_id: str,
+    space_key: str,
+    route: dict[str, Any],
+) -> str:
     reminders = ensure_dict(snapshot.get("reminders"))
     calendar = ensure_dict(snapshot.get("calendar_runtime"))
     personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
     braindump = ensure_dict(snapshot.get("braindump"))
     workspace = ensure_dict(snapshot.get("workspace"))
+    provider_health = ensure_dict(snapshot.get("provider_health"))
     pending_reminders = reminders.get("pending_items", [])
     reminder_lines = [
         f"- {truncate(str(item.get('message') or ''), limit=80)} @ {str(item.get('remind_at') or '-')}"
         for item in pending_reminders[: SPACE_CONTEXT_ITEM_LIMITS.get("reminders", 4)]
         if isinstance(item, dict)
     ]
-    upcoming = ensure_dict(calendar.get("upcoming_events"))
-    event_lines = []
-    for item in calendar.get("upcoming_events", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("calendar", 4)]:
-        row = ensure_dict(item)
-        event_lines.append(f"- {str(row.get('start_value') or '-')} | {truncate(str(row.get('summary') or '(untitled)'), limit=80)}")
-    task_lines = []
-    for item in personal_tasks.get("tasks", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("tasks", 6)]:
-        row = ensure_dict(item)
-        task_lines.append(f"- {truncate(str(row.get('title') or ''), limit=90)} | due={str(row.get('due_value') or '-')}")
-    due_braindump = []
-    for item in braindump.get("due_items", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("braindump", 6)]:
-        row = ensure_dict(item)
-        due_braindump.append(f"- [{str(row.get('category') or '-')}] {truncate(str(row.get('short_text') or ''), limit=90)}")
-    active_projects = [
-        f"- {truncate(str(item.get('name') or ''), limit=60)}"
-        for item in workspace.get("projects", [])
-        if isinstance(item, dict) and str(item.get("status") or "") == "active"
-    ][:4]
+    event_lines = [
+        f"- {str(row.get('start_value') or '-')} | {truncate(str(row.get('summary') or '(untitled)'), limit=80)}"
+        for row in calendar.get("upcoming_events", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("calendar", 4)]
+        if isinstance(row, dict)
+    ]
+    task_lines = [
+        f"- {truncate(str(row.get('title') or ''), limit=90)} | due={str(row.get('due_at') or row.get('due_value') or '-')}"
+        for row in workspace.get("todo_queue", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("tasks", 6)]
+        if isinstance(row, dict)
+    ]
+    due_braindump = [
+        f"- [{str(row.get('category') or '-')}] {truncate(str(row.get('short_text') or ''), limit=90)}"
+        for row in braindump.get("due_items", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("braindump", 6)]
+        if isinstance(row, dict)
+    ]
 
     sections = [
         f"Space: {space_key}",
@@ -451,51 +561,155 @@ def build_space_snapshot(backend: DashboardBackend, *, space_key: str) -> str:
         sections.extend(["Open tasks:", *task_lines])
     if space_key in {"general", "braindump"} and due_braindump:
         sections.extend(["Braindump due for review:", *due_braindump])
-    if space_key == "general" and active_projects:
-        sections.extend(["Active projects:", *active_projects])
+
+    if agent_id == "researcher" or space_key in {"research", "job-search"}:
+        summary_path = root / "data" / "job-search-daily-summary.json"
+        raw_summary = read_json(summary_path)
+        summary = ensure_dict(raw_summary.get("summary")) if isinstance(raw_summary, dict) else {}
+        if isinstance(raw_summary, dict) and raw_summary:
+            sections.extend(
+                [
+                    "Research/job-search state:",
+                    f"- generated_at={str(raw_summary.get('generated_at') or '-')}",
+                    f"- reviewed_items={summary.get('reviewed_items', 0)}",
+                    f"- shortlisted={summary.get('shortlisted_items', 0)}",
+                ]
+            )
+
+    if agent_id == "builder" or space_key == "coding":
+        builder_tasks = [
+            ensure_dict(row)
+            for row in workspace.get("tasks", [])
+            if isinstance(row, dict) and "builder" in [str(item) for item in row.get("assignees", [])]
+        ]
+        if builder_tasks:
+            sections.extend(
+                [
+                    "Builder queue:",
+                    *[
+                        f"- {truncate(str(row.get('title') or ''), limit=90)} | status={row.get('status') or '-'}"
+                        for row in builder_tasks[: SPACE_CONTEXT_ITEM_LIMITS.get('coding', 6)]
+                    ],
+                ]
+            )
+
+    if space_key.startswith("projects/"):
+        projects = [ensure_dict(row) for row in workspace.get("projects", []) if isinstance(row, dict)]
+        project = next((row for row in projects if str(row.get("space_key") or "") == space_key), None)
+        if project:
+            sections.extend(
+                [
+                    "Active project:",
+                    f"- name={project.get('name') or '-'}",
+                    f"- status={project.get('status') or '-'}",
+                    f"- progress={project.get('progress_pct') or 0}%",
+                ]
+            )
+            related_tasks = [
+                ensure_dict(row)
+                for row in workspace.get("tasks", [])
+                if isinstance(row, dict) and str(row.get("project_id") or "") == str(project.get("id") or "")
+            ]
+            if related_tasks:
+                sections.extend(
+                    [
+                        "Project tasks:",
+                        *[
+                            f"- {truncate(str(row.get('title') or ''), limit=90)} | status={row.get('status') or '-'} | assignees={','.join(str(item) for item in row.get('assignees', [])) or '-'}"
+                            for row in related_tasks[: SPACE_CONTEXT_ITEM_LIMITS.get('project', 8)]
+                        ],
+                    ]
+                )
+
+    if agent_id == "ops_guard" or space_key == "ops":
+        provider_summary = ensure_dict(provider_health.get("summary"))
+        sections.extend(
+            [
+                "Ops signals:",
+                f"- providers_local_ready={provider_summary.get('local_ready_count', 0)}",
+                f"- providers_live_ok={provider_summary.get('live_ok_count', 0)}",
+                f"- reminder_errors={ensure_dict(reminders.get('counts')).get('error', 0)}",
+                f"- blocked_tasks={ensure_dict(workspace.get('task_counts')).get('blocked', 0)}",
+            ]
+        )
+
     return "\n".join(sections)
 
 
-def build_system_prompt(*, space_key: str, route: dict[str, Any], backend: DashboardBackend, session_summary: str) -> str:
+def build_system_prompt(
+    *,
+    agent_id: str,
+    space_key: str,
+    route: dict[str, Any],
+    backend: DashboardBackend,
+    session_summary: str,
+    memory_context: str,
+) -> str:
     route_mode = str(route.get("route_mode") or "default_front_door")
     now_local = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    dashboard_snapshot = backend.build_state()
+    agent_runtime = ensure_dict(dashboard_snapshot.get("agent_runtime"))
+    roles = agent_runtime.get("visible_agents", []) + agent_runtime.get("internal_roles", [])
+    role = next((ensure_dict(row) for row in roles if str(ensure_dict(row).get("id")) == agent_id), {})
+    prompt_cfg = ROLE_PROMPTS.get(agent_id, ROLE_PROMPTS["assistant"])
     instructions = [
-        "You are Assistant Agent for Pavel.",
-        "You are the front door for reminders, tasks, calendar, braindump, and project coordination.",
-        "Be concise, operational, and accurate.",
+        prompt_cfg["headline"],
+        *prompt_cfg["guidance"],
         "Use the provided system state as ground truth where possible.",
         "Do not claim an action was executed unless the deterministic tool path already executed it.",
         "If the user is asking for an action you cannot execute from chat, say what is missing and propose the next concrete step.",
         "Prefer short answers with bullet points when that improves clarity.",
         f"Current route mode: {route_mode}.",
         f"Current local time: {now_local}.",
-        build_space_snapshot(backend, space_key=space_key),
     ]
+    responsibilities = ensure_string_list(role.get("responsibilities"))
+    if responsibilities:
+        instructions.extend(["Primary responsibilities:", *[f"- {item}" for item in responsibilities[:6]]])
+    tools = ensure_string_list(role.get("allowed_tools"))
+    if tools:
+        instructions.extend(["Available tool surface (read/plan against these, do not pretend writes happened):", *[f"- {item}" for item in tools[:8]]])
+    instructions.append(build_space_snapshot(dashboard_snapshot, root=backend.root, agent_id=agent_id, space_key=space_key, route=route))
+    if memory_context.strip():
+        instructions.extend([memory_context.strip()])
     if session_summary.strip():
         instructions.extend(["Session summary:", session_summary.strip()])
     return "\n\n".join(part for part in instructions if part and part.strip())
 
 
-class AssistantChatRuntime:
+class AgentChatRuntime:
     def __init__(
         self,
         *,
         root: Path,
         backend: DashboardBackend,
         env_values: dict[str, str],
+        agent_id: str = "assistant",
         state_path: Path | None = None,
         telemetry_path: Path | None = None,
+        checkpoint_path: Path | None = None,
     ) -> None:
+        clean_agent = agent_id.strip().lower() or "assistant"
         self.root = root
         self.backend = backend
         self.env_values = env_values
+        self.agent_id = clean_agent
         self.models_path = self.root / "config" / "models.yaml"
         self.agents_path = self.root / "config" / "agents.yaml"
-        self.state_path = state_path or DEFAULT_STATE_PATH
+        self.memory_path = self.root / "config" / "memory.yaml"
+        self.session_policy_path = self.root / "config" / "session_policy.yaml"
+        default_state_name = DEFAULT_AGENT_STATE_FILES.get(clean_agent, f"{clean_agent}-chat-state.json")
+        self.state_path = state_path or (self.root / "data" / default_state_name)
         self.telemetry_path = telemetry_path or DEFAULT_TELEMETRY_PATH
+        self.checkpoint_path = checkpoint_path or DEFAULT_CHECKPOINT_PATH
+        self.session_lifecycle = ensure_dict(ensure_dict(model_route_decider.load_yaml(self.session_policy_path)).get("session_lifecycle"))
+        self.context_token_limit = int(self.session_lifecycle.get("summarize_when_context_tokens_over", 8500) or 8500)
+        self.checkpoint_every_turns = int(self.session_lifecycle.get("checkpoint_every_turns", 20) or 20)
+        self.idle_reset_minutes = int(self.session_lifecycle.get("idle_reset_minutes", 120) or 120)
 
     def _load_state(self) -> dict[str, Any]:
         raw = read_json(self.state_path)
+        if not isinstance(raw, dict):
+            raw = {}
         spaces = ensure_dict(raw.get("spaces"))
         normalized_spaces: dict[str, dict[str, Any]] = {}
         for key, row in spaces.items():
@@ -508,11 +722,17 @@ class AssistantChatRuntime:
                 "last_lane": str(item.get("last_lane") or "").strip() or None,
                 "last_provider": str(item.get("last_provider") or "").strip() or None,
                 "last_model": str(item.get("last_model") or "").strip() or None,
+                "exchange_count": int(item.get("exchange_count", 0) or 0),
+                "last_checkpoint_at": str(item.get("last_checkpoint_at") or "").strip() or None,
             }
-        return {"spaces": normalized_spaces}
+        return {"agent_id": self.agent_id, "spaces": normalized_spaces}
 
     def _save_state(self, state: dict[str, Any]) -> None:
-        payload = {"updated_at": iso_now_utc(), "spaces": ensure_dict(state.get("spaces"))}
+        payload = {
+            "agent_id": self.agent_id,
+            "updated_at": iso_now_utc(),
+            "spaces": ensure_dict(state.get("spaces")),
+        }
         write_json(self.state_path, payload)
 
     def _space_state(self, state: dict[str, Any], space_key: str) -> dict[str, Any]:
@@ -520,17 +740,56 @@ class AssistantChatRuntime:
         return ensure_dict(
             spaces.setdefault(
                 space_key,
-                {"summary": "", "turns": [], "updated_at": None, "last_lane": None, "last_provider": None, "last_model": None},
+                {
+                    "summary": "",
+                    "turns": [],
+                    "updated_at": None,
+                    "last_lane": None,
+                    "last_provider": None,
+                    "last_model": None,
+                    "exchange_count": 0,
+                    "last_checkpoint_at": None,
+                },
             )
         )
 
-    def _prepare_history(self, *, space_state: dict[str, Any], user_text: str) -> tuple[str, list[dict[str, str]]]:
+    def _log_checkpoint(self, *, space_key: str, summary: str, turns: list[dict[str, str]], trigger: str) -> None:
+        append_ndjson(
+            self.checkpoint_path,
+            {
+                "ts": iso_now_utc(),
+                "agent_id": self.agent_id,
+                "space_key": space_key,
+                "trigger": trigger,
+                "summary": truncate(summary, limit=1200),
+                "turn_count": len(turns),
+            },
+        )
+
+    def _maybe_idle_reset(self, *, space_key: str, space_state: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
         summary = str(space_state.get("summary") or "").strip()
         turns = normalize_turns(space_state.get("turns", []))
-        if len(turns) > 8:
-            summary = deterministic_checkpoint(summary, turns[:-6])
-            turns = turns[-6:]
+        updated_at = _parse_iso(str(space_state.get("updated_at") or ""))
+        if not turns or updated_at is None:
+            return summary, turns
+        threshold = datetime.now(timezone.utc) - timedelta(minutes=max(self.idle_reset_minutes, 1))
+        if updated_at.astimezone(timezone.utc) >= threshold:
+            return summary, turns
+        refreshed = deterministic_checkpoint(summary, turns)
+        if refreshed:
+            self._log_checkpoint(space_key=space_key, summary=refreshed, turns=turns, trigger="idle_reset")
+        return refreshed, []
+
+    def _prepare_history(self, *, space_key: str, space_state: dict[str, Any], user_text: str) -> tuple[str, list[dict[str, str]]]:
+        summary, turns = self._maybe_idle_reset(space_key=space_key, space_state=space_state)
         turns.append({"role": "user", "content": user_text.strip()})
+        total_tokens = estimate_tokens(summary + "\n" + "\n".join(row["content"] for row in turns))
+        if total_tokens > self.context_token_limit or len(turns) > 8:
+            refreshed = deterministic_checkpoint(summary, turns[:-6] if len(turns) > 6 else turns[:-2])
+            if refreshed and refreshed != summary:
+                self._log_checkpoint(space_key=space_key, summary=refreshed, turns=turns, trigger="context_compaction")
+                summary = refreshed
+            turns = turns[-6:]
         return summary, turns[-8:]
 
     def _persist_turns(
@@ -543,14 +802,19 @@ class AssistantChatRuntime:
         lane: str,
         provider: str,
         model: str,
+        exchange_count: int,
     ) -> None:
-        assistant_space = self._space_state(state, space_key)
-        assistant_space["summary"] = summary[-1400:] if summary else ""
-        assistant_space["turns"] = turns[-10:]
-        assistant_space["updated_at"] = iso_now_utc()
-        assistant_space["last_lane"] = lane
-        assistant_space["last_provider"] = provider
-        assistant_space["last_model"] = model
+        chat_space = self._space_state(state, space_key)
+        chat_space["summary"] = summary[-1400:] if summary else ""
+        chat_space["turns"] = turns[-10:]
+        chat_space["updated_at"] = iso_now_utc()
+        chat_space["last_lane"] = lane
+        chat_space["last_provider"] = provider
+        chat_space["last_model"] = model
+        chat_space["exchange_count"] = exchange_count
+        if exchange_count and exchange_count % max(self.checkpoint_every_turns, 1) == 0:
+            chat_space["last_checkpoint_at"] = iso_now_utc()
+            self._log_checkpoint(space_key=space_key, summary=summary, turns=turns, trigger="turn_cadence")
         self._save_state(state)
 
     def _log_call(
@@ -570,7 +834,8 @@ class AssistantChatRuntime:
             self.telemetry_path,
             {
                 "ts": iso_now_utc(),
-                "task_id": f"assistant-chat-{space_key}",
+                "task_id": f"{self.agent_id}-chat-{space_key}",
+                "agent_id": self.agent_id,
                 "lane": lane,
                 "provider": provider,
                 "model": model,
@@ -584,9 +849,56 @@ class AssistantChatRuntime:
             },
         )
 
+    def _memory_context(self, *, text: str, route: dict[str, Any], space_key: str) -> str:
+        _, active_profile, modules, enabled_module_names = load_memory_profile(self.memory_path)
+        if "semantic_embeddings" not in enabled_module_names and "sqlite_state" not in enabled_module_names:
+            return ""
+        if not should_query_memory(agent_id=self.agent_id, text=text, space_key=space_key, route=route):
+            return ""
+        query_parts = []
+        project_name = str(route.get("project_name") or "").strip()
+        if project_name:
+            query_parts.append(project_name)
+        if space_key and space_key != "general":
+            query_parts.append(space_key.replace("projects/", "project ").replace("-", " "))
+        query_parts.append(text.strip())
+        query = " | ".join(part for part in query_parts if part)
+        env = os.environ.copy()
+        env.update({key: value for key, value in self.env_values.items() if isinstance(value, str)})
+        cmd = [
+            "python3",
+            str(self.root / "scripts" / "memory_search.py"),
+            "--workspace",
+            str(self.root),
+            "--config",
+            str(self.memory_path),
+            "--query",
+            query,
+            "--top-k",
+            "4",
+            "--mode",
+            "auto",
+            "--json",
+        ]
+        proc = subprocess.run(cmd, cwd=str(self.root), capture_output=True, text=True, env=env)
+        if proc.returncode != 0:
+            return ""
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            return ""
+        results = [ensure_dict(item) for item in payload.get("results", []) if isinstance(item, dict)]
+        if not results:
+            return ""
+        mode = str(payload.get("mode") or active_profile).strip() or active_profile
+        return format_memory_context(results, mode=mode)
+
     def reply(self, *, text: str, route: dict[str, Any]) -> dict[str, Any]:
+        route_agent = str(route.get("agent_id") or self.agent_id).strip().lower() or self.agent_id
+        if route_agent != self.agent_id:
+            raise RuntimeError(f"runtime agent mismatch: expected {self.agent_id}, got {route_agent}")
         space_key = str(route.get("space_key") or "general").strip() or "general"
-        situation = choose_situation(text=text, space_key=space_key)
+        situation = choose_situation(agent_id=self.agent_id, text=text, space_key=space_key)
         plan = resolve_chat_route(
             situation=situation,
             models_path=self.models_path,
@@ -596,12 +908,15 @@ class AssistantChatRuntime:
 
         state = self._load_state()
         space_state = self._space_state(state, space_key)
-        session_summary, turns = self._prepare_history(space_state=space_state, user_text=text)
+        session_summary, turns = self._prepare_history(space_key=space_key, space_state=space_state, user_text=text)
+        memory_context = self._memory_context(text=text, route=route, space_key=space_key)
         system_prompt = build_system_prompt(
+            agent_id=self.agent_id,
             space_key=space_key,
             route=route,
             backend=self.backend,
             session_summary=session_summary,
+            memory_context=memory_context,
         )
         messages = [{"role": row["role"], "content": row["content"]} for row in turns]
         try:
@@ -628,7 +943,7 @@ class AssistantChatRuntime:
             raise
         reply_text = str(result.get("text") or "").strip()
         if not reply_text:
-            raise RuntimeError("assistant chat provider returned an empty response")
+            raise RuntimeError("chat provider returned an empty response")
 
         prompt_tokens = int(result.get("prompt_tokens", 0) or 0) or estimate_tokens(system_prompt + "\n" + "\n".join(row["content"] for row in messages))
         completion_tokens = int(result.get("completion_tokens", 0) or 0) or estimate_tokens(reply_text)
@@ -640,6 +955,7 @@ class AssistantChatRuntime:
         if len(turns) > 8:
             refreshed_summary = deterministic_checkpoint(session_summary, turns[:-6])
             turns = turns[-6:]
+        exchange_count = int(space_state.get("exchange_count", 0) or 0) + 1
         self._persist_turns(
             state=state,
             space_key=space_key,
@@ -648,6 +964,7 @@ class AssistantChatRuntime:
             lane=str(plan["lane"]),
             provider=str(plan["provider"]),
             model=str(plan["model"]),
+            exchange_count=exchange_count,
         )
         self._log_call(
             lane=str(plan["lane"]),
@@ -662,6 +979,7 @@ class AssistantChatRuntime:
         )
         return {
             "reply_text": reply_text,
+            "agent_id": self.agent_id,
             "space_key": space_key,
             "situation": situation,
             "lane": str(plan["lane"]),
@@ -672,14 +990,19 @@ class AssistantChatRuntime:
             "latency_ms": latency_ms,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "memory_context_used": bool(memory_context.strip()),
         }
+
+
+AssistantChatRuntime = AgentChatRuntime
 
 
 def build_runtime(
     *,
     root: Path = ROOT,
     env_file: Path | None = None,
-) -> AssistantChatRuntime:
+    agent_id: str = "assistant",
+) -> AgentChatRuntime:
     env_values = load_env_file(env_file, strict=True) if env_file else {}
     backend = DashboardBackend(root=root)
-    return AssistantChatRuntime(root=root, backend=backend, env_values=env_values)
+    return AgentChatRuntime(root=root, backend=backend, env_values=env_values, agent_id=agent_id)

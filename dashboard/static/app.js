@@ -510,7 +510,7 @@ function renderAgentRuntime(snapshot) {
       appendCells(tr, [
         row.label || row.id || "-",
         row.default_space || "-",
-        row.default_lane || "-",
+        `${row.default_lane || "-"}${row.interaction_mode ? ` | ${row.interaction_mode}` : ""}`,
         (row.owned_spaces || []).join(", ") || "-",
         (row.responsibilities || []).slice(0, 3).join(", ") || "-",
       ]);
@@ -571,23 +571,44 @@ function renderAgentRuntime(snapshot) {
       "none"
   );
 
-  const assistantChat = snapshot.assistant_chat || {};
-  if (!assistantChat.available) {
-    setText("assistant-chat-meta", "No assistant chat state yet.");
-    return;
+  const agentChats = snapshot.agent_chats || {};
+  const chatAgents = agentChats.agents || [];
+  if (!agentChats.available) {
+    setText("agent-chat-meta", "No conversational agent state yet.");
+  } else {
+    setText(
+      "agent-chat-meta",
+      chatAgents
+        .filter((row) => row.available)
+        .map((row) => {
+          const first = (row.spaces || [])[0] || {};
+          return `${row.agent_id || "-"}:${(row.spaces || []).length} spaces${
+            first.last_lane ? ` | ${first.last_lane}` : ""
+          }${first.last_provider ? ` | ${first.last_provider}` : ""}`;
+        })
+        .join(" | ") || "No conversational agent sessions yet."
+    );
   }
-  setText(
-    "assistant-chat-meta",
-    (assistantChat.spaces || [])
-      .map(
-        (row) =>
-          `${row.space_key || "-"}:${row.turn_count || 0}t${
-            row.last_lane ? ` | ${row.last_lane}` : ""
-          }${row.last_provider ? ` | ${row.last_provider}` : ""}`
-      )
-      .slice(0, 4)
-      .join(" | ") || "No assistant chat sessions yet."
-  );
+
+  const opsReview = snapshot.continuous_improvement_status || {};
+  if (!opsReview.available) {
+    setText("ops-review-meta", "No ops_guard review yet.");
+  } else {
+    setText(
+      "ops-review-meta",
+      `${opsReview.mode || "-"} | findings=${opsReview.findings_count || 0} | ${opsReview.generated_at || "-"}`
+    );
+  }
+
+  const memorySync = snapshot.memory_sync_status || {};
+  if (!memorySync.available) {
+    setText("memory-sync-meta", "No memory sync snapshot yet.");
+  } else {
+    setText(
+      "memory-sync-meta",
+      `${memorySync.ok ? "ok" : "error"} | profile=${memorySync.profile || "-"} | files=${memorySync.files_scanned || 0} | embeds=${memorySync.embeddings_created || 0}`
+    );
+  }
 }
 
 function renderReminders(snapshot) {

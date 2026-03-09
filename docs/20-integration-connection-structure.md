@@ -17,12 +17,13 @@ Define one stable integration map so onboarding is simple, services are optional
 
 ## Profiles
 
-1. `bootstrap_core`: default first live profile. One human channel, dashboard, reminders, optional browsing.
+1. `bootstrap_core`: emergency minimum live profile. One human channel, dashboard, reminders, and optional browsing only.
 2. `bootstrap_minimal`: first upgrade profile. Adds Google Calendar once OAuth is ready.
-3. `stage_2_comms_google`: adds Gmail scheduled inbox processing and the shared-root Google Drive workspace.
-4. `lean_manual`: prewired manual-approval profile with major integrations ready but not required for MVP.
-5. `standard_productive`: higher-convenience profile with Gmail, Drive, calendar, tasks, and GitHub active.
-6. `full_auto_candidate`: includes LinkedIn and broader automation. Keep off until compliance and observability are stable.
+3. `bootstrap_command_center`: current recommended live profile. Keeps the core Telegram/dashboard slice and adds calendar plus personal tasks.
+4. `stage_2_comms_google`: adds Gmail scheduled inbox processing and the shared-root Google Drive workspace.
+5. `lean_manual`: prewired manual-approval profile with major integrations ready but not required for MVP.
+6. `standard_productive`: higher-convenience profile with Gmail, Drive, calendar, tasks, and GitHub active.
+7. `full_auto_candidate`: includes LinkedIn and broader automation. Keep off until compliance and observability are stable.
 
 ## Integration Modules
 

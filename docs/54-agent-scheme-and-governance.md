@@ -264,4 +264,4 @@ Blocked without approval:
 1. add an agent registry to the dashboard
 2. expose current active agent and space in state
 3. add explicit routing commands for specialist agents
-4. add a bounded review report output for `ops_guard`
+4. add a bounded review report output for `ops_guard` (implemented)

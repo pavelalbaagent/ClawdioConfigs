@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenClaw Memory Sync
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/openclaw/openclaw.env
+ConditionPathExists=/opt/clawdio/scripts/memory_sync_runner.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/clawdio
+EnvironmentFile=/etc/openclaw/openclaw.env
+ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/memory_sync_runner.py --root /opt/clawdio --config /opt/clawdio/config/memory.yaml --status-file /opt/clawdio/data/memory-sync-status.json --env-file /etc/openclaw/openclaw.env

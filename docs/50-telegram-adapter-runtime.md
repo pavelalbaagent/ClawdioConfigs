@@ -31,7 +31,9 @@ Current responsibilities:
 7. create simple personal tasks
 8. read calendar today / next
 9. convert `[project:slug] ...` text into local project tasks
-10. route specialist-prefixed requests into agent-owned spaces and capture them as local tasks
+10. route specialist-prefixed requests into agent-owned spaces
+11. hand `assistant`, `researcher`, and `builder` requests to conversational runtimes
+12. fall back to structured capture for non-conversational specialists
 
 ## Supported Commands
 
@@ -67,8 +69,9 @@ Current runtime contract:
 Current behavior:
 
 1. supported deterministic commands still execute directly
-2. explicit specialist requests that are not yet implemented as live chat become routed local tasks
-3. project hints still work and can be combined with specialist prefixes, for example:
+2. `assistant`, `researcher`, and `builder` prefixes open bounded conversational runtimes
+3. `fitness` and `ops` remain structured routes for now
+4. project hints still work and can be combined with specialist prefixes, for example:
    - `coding: [project:calendar-cleanup] tighten dashboard route view`
 
 ## State Files
@@ -82,6 +85,9 @@ Current behavior:
 3. Agent runtime activity:
    - local default: `data/agent-runtime-state.json`
    - VPS target: `/var/lib/openclaw/agent-runtime-state.json`
+4. Agent conversational state:
+   - local defaults: `data/assistant-chat-state.json`, `data/researcher-chat-state.json`, `data/builder-chat-state.json`
+   - VPS target directory: `/var/lib/openclaw/`
 
 The adapter keeps a small mapping from outgoing reminder message ids to reminder ids so Telegram replies can resolve the correct reminder without forcing manual ids.
 
@@ -119,6 +125,7 @@ systemctl --user status openclaw-telegram-adapter.service --no-pager
 4. if Calendar or personal-task providers are not configured yet, the adapter returns a clear unavailable message instead of failing
 5. personal-task support is simple create/list, not the full dashboard surface
 6. reminder/task/calendar linkage is still separate work
+7. `fitness_coach` and `ops_guard` are not conversational yet
 
 ## Why this shape
 

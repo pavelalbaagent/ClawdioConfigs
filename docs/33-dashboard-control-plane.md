@@ -80,6 +80,9 @@ The VPS deployment uses loopback port `18890` by default so it can coexist with 
 7. Projects/tasks updates `data/dashboard-workspace.json`.
 8. Provider smoke checks write `data/provider-smoke-status.json`.
 9. Agent runtime visibility reads `data/agent-runtime-state.json`.
+10. Agent chat visibility reads `data/*-chat-state.json`.
+11. Ops-guard status reads `data/continuous-improvement-status.json`.
+12. Memory sync status reads `data/memory-sync-status.json`.
 
 ## Preset Packs
 
@@ -167,6 +170,9 @@ Dashboard now shows:
 3. the last routed interaction (`agent + space + route mode + source`)
 4. recent route counts by agent/space
 5. continuous-improvement governance settings
+6. per-agent chat availability, session age, checkpoint state, and last model lane
+7. latest ops-guard review snapshot
+8. latest memory-sync snapshot
 
 This is the current visibility layer for:
 

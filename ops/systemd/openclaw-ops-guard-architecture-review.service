@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenClaw Ops Guard Weekly Architecture Review
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/clawdio/scripts/ops_guard_review.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/clawdio
+ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/ops_guard_review.py --root /opt/clawdio --mode weekly_architecture_review --status-file /opt/clawdio/data/continuous-improvement-status.json --review-dir /opt/clawdio/docs/reviews

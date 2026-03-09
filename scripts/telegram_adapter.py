@@ -61,13 +61,15 @@ HELP_TEXT = "\n".join(
         "- assistant: <text>",
         "- any other plain text -> assistant general chat",
         "- reminders: <text>",
-        "- research: <text>",
+        "- research: <text>   -> Researcher chat",
         "- fitness: <text>",
-        "- coding: <text>",
+        "- coding: <text>     -> Builder chat",
         "- ops: <text>",
         "- [project:slug] <text>  -> capture as project task",
     ]
 )
+
+CONVERSATIONAL_SPECIALISTS = {"assistant", "researcher", "builder"}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -264,11 +266,16 @@ class TelegramAdapter:
         self.state_path = state_path
         self.reminder_state_path = reminder_state_path
         self.default_timezone = default_timezone
-        self.assistant_chat = assistant_chat_runtime.AssistantChatRuntime(
-            root=root,
-            backend=backend,
-            env_values=env_values,
-        )
+        self.agent_chats = {
+            agent_id: assistant_chat_runtime.AgentChatRuntime(
+                root=root,
+                backend=backend,
+                env_values=env_values,
+                agent_id=agent_id,
+            )
+            for agent_id in sorted(CONVERSATIONAL_SPECIALISTS)
+        }
+        self.assistant_chat = self.agent_chats["assistant"]
 
     def load_adapter_state(self) -> dict[str, Any]:
         data = read_json(self.state_path)
@@ -598,6 +605,7 @@ class TelegramAdapter:
         action: str,
         text: str | None = None,
         route_mode: str = "default_front_door",
+        lane: str | None = None,
     ) -> None:
         self.backend.record_agent_activity(
             agent_id=agent_id,
@@ -606,6 +614,7 @@ class TelegramAdapter:
             action=action,
             text=text,
             route_mode=route_mode,
+            lane=lane,
         )
 
     def _handle_specialist_capture(self, text: str, route: dict[str, Any]) -> str:
@@ -638,20 +647,24 @@ class TelegramAdapter:
             return f"Project space not found: {requested}. Closest matches: {suggestion_text}"
         return f"Project space not found: {requested}. Create the project first or use an existing [project:slug]."
 
-    def _handle_assistant_chat(self, *, text: str, route: dict[str, Any]) -> str:
+    def _handle_agent_chat(self, *, agent_id: str, text: str, route: dict[str, Any]) -> str:
+        runtime = self.agent_chats.get(agent_id)
+        if runtime is None:
+            return f"{agent_id} chat is not enabled."
         try:
-            result = self.assistant_chat.reply(text=text, route=route)
+            result = runtime.reply(text=text, route=route)
         except Exception as exc:  # noqa: BLE001
-            return f"Assistant chat is not ready for that request: {exc}"
+            return f"{agent_id} chat is not ready for that request: {exc}"
         lane = str(result.get("lane") or "").strip() or None
         provider = str(result.get("provider") or "").strip() or None
         model = str(result.get("model") or "").strip() or None
         self._record_agent_activity(
-            agent_id="assistant",
+            agent_id=agent_id,
             space_key=str(result.get("space_key") or route.get("space_key") or "general"),
-            action="assistant_chat",
+            action="agent_chat",
             text=text,
             route_mode=str(route.get("route_mode") or "default_front_door"),
+            lane=lane,
         )
         runtime_state = self.backend._load_agent_runtime_state()
         last_route = ensure_dict(runtime_state.get("last_route"))
@@ -684,6 +697,7 @@ class TelegramAdapter:
         routed_text = str(route.get("stripped_text") or "").strip() or text.strip()
         explicit_specialist = bool(route.get("explicit_agent")) and str(route.get("agent_id")) != "assistant"
         explicit_assistant_space = bool(route.get("explicit_space")) and str(route.get("agent_id")) == "assistant"
+        agent_id = str(route.get("agent_id") or "assistant").strip() or "assistant"
 
         command_name, body = parse_command_text(routed_text)
         reply_to_message_id = message.get("reply_to_message", {}).get("message_id") if isinstance(message.get("reply_to_message"), dict) else None
@@ -701,6 +715,10 @@ class TelegramAdapter:
             return [self._handle_status()]
 
         if explicit_specialist:
+            if route.get("kind") == "project" and not route.get("resolved"):
+                return [self._format_unknown_project_route(route)]
+            if agent_id in CONVERSATIONAL_SPECIALISTS:
+                return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
             return [self._handle_specialist_capture(text, route)]
 
         if command_name == "calendar":
@@ -819,7 +837,7 @@ class TelegramAdapter:
             return [self._handle_project_capture(text)]
 
         if explicit_assistant_space or str(route.get("agent_id") or "assistant") == "assistant":
-            return [self._handle_assistant_chat(text=routed_text, route=route)]
+            return [self._handle_agent_chat(agent_id="assistant", text=routed_text, route=route)]
 
         return ["I did not match that to a supported command.\n" + HELP_TEXT]
 

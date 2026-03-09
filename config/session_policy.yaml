@@ -125,6 +125,7 @@ continuous_improvement_policy:
     - reminder_failures
     - session_checkpoint_drift
     - task_queue_backlog
+    - memory_sync_status
   weekly_review_inputs:
     - routing_cost_mix
     - stale_project_spaces
