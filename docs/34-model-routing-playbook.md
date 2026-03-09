@@ -1,6 +1,6 @@
 # Model Routing Playbook (Agent + Task + Fallback)
 
-Last updated: 2026-03-03
+Last updated: 2026-03-09
 
 ## Why this exists
 
@@ -27,10 +27,12 @@ Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.
 
 ## Provider Preference by Lane
 
-1. `L1_low_cost`: Google free first.
-2. `L1_openrouter_free_fallback`: OpenRouter free overflow.
-3. `L2_balanced`: background-safe API providers only.
-4. `L3_heavy`: approval-gated heavy reasoning, with local CLIs treated as manual tool fallbacks rather than unattended providers.
+1. `L1_low_cost`: `google_ai_studio_free` -> `gemini-2.5-flash-lite`
+2. `L1_openrouter_free_fallback`: `openrouter_free_overflow` -> `openrouter/free`
+3. `L2_balanced`: `google_ai_studio_free` -> `gemini-2.5-flash`, then `openai_subscription_session` -> `openai-session-premium`, then `openrouter_free_overflow` -> `openrouter/free`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`
+4. `L3_heavy`: `openai_subscription_session` -> `openai-session-premium`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`, fallback `google_ai_studio_free` -> `gemini-2.5-pro`
+5. `codex` and `gemini` CLIs remain supervised tool fallbacks only, not unattended providers.
+6. `openai_subscription_session` is an interactive premium lane, not a background-safe automation provider.
 
 ## Fallback Rules
 
@@ -63,5 +65,29 @@ If you want the simplest stable setup:
 1. Keep `balanced_default`.
 2. Use Google free + OpenRouter free for `L1`.
 3. Keep unattended/background work on API-safe lanes only.
-4. Use Codex CLI or Gemini CLI only as explicit local tools for supervised coding/repo tasks.
-5. Enable Anthropic only when explicitly needed.
+4. Use the OpenAI subscription/session lane only for operator-triggered hard work with bigger limits.
+5. Use Codex CLI or Gemini CLI only as explicit local tools for supervised coding/repo tasks.
+6. Enable Anthropic only when explicitly needed.
+
+## Interactive Premium Lane
+
+The `openai_subscription_session` provider is intentionally modeled separately from API-key providers.
+
+1. It is for premium interactive work where you want bigger limits and stronger quality than the free lane.
+2. It should be used for operator-triggered hard tasks, not cron, reminder delivery, or unattended workflows.
+3. Its readiness depends on the authenticated local `codex` session, so it is suitable for local supervised work and only conditionally suitable on a VPS.
+
+## Inspect The Real Wiring
+
+Use:
+
+1. [provider_smoke_check.py](/Users/palba/Projects/Clawdio/scripts/provider_smoke_check.py)
+2. [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Clawdio/docs/51-provider-smoke-checks.md)
+3. [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py)
+
+Examples:
+
+```bash
+python3 scripts/model_route_decider.py --situation quick_read_write --json
+python3 scripts/provider_smoke_check.py --env-file secrets/openclaw.env --json
+```

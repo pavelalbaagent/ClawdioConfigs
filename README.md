@@ -52,6 +52,10 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 46. Telegram long-polling adapter runtime in [docs/50-telegram-adapter-runtime.md](/Users/palba/Projects/Clawdio/docs/50-telegram-adapter-runtime.md), [telegram_adapter.py](/Users/palba/Projects/Clawdio/scripts/telegram_adapter.py), and [openclaw-telegram-adapter.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-telegram-adapter.service).
 47. Gateway and dashboard VPS service templates in [openclaw-gateway.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-gateway.service), [openclaw-dashboard.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-dashboard.service), and tunnel defaults in [openclaw-dashboard-tunnel.sh](/Users/palba/Projects/Clawdio/ops/scripts/openclaw-dashboard-tunnel.sh).
 48. Pre-calendar live profile in [integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml) (`bootstrap_core`) and low-cost memory default in [memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml) (`md_only`) so Telegram + dashboard + reminders can ship before Google OAuth and embeddings are ready.
+49. Provider wiring and live smoke-check tooling in [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Clawdio/docs/51-provider-smoke-checks.md) and [provider_smoke_check.py](/Users/palba/Projects/Clawdio/scripts/provider_smoke_check.py).
+50. Development thread/workstream policy in [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md) with kickoff template [feature-thread-kickoff.md](/Users/palba/Projects/Clawdio/docs/templates/feature-thread-kickoff.md) and quick starters [thread-starters.md](/Users/palba/Projects/Clawdio/docs/templates/thread-starters.md).
+51. Agent scheme and governance in [docs/54-agent-scheme-and-governance.md](/Users/palba/Projects/Clawdio/docs/54-agent-scheme-and-governance.md).
+52. Agent realization master plan in [docs/55-agent-realization-master-plan.md](/Users/palba/Projects/Clawdio/docs/55-agent-realization-master-plan.md).
 
 ## Suggested starting sequence
 
@@ -73,9 +77,10 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 16. Set dashboard auth token before starting the dashboard: `export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'`
 17. Start the local dashboard control plane (optional): `python3 dashboard/server.py --host 127.0.0.1 --port 18789`
 18. Smoke-test the Telegram adapter locally: `python3 scripts/telegram_adapter.py --env-file secrets/openclaw.env --once --json`
-19. For the first VPS cutover, keep profiles at `bootstrap_core + md_only`; switch to `bootstrap_minimal` only after Google Calendar OAuth is ready.
-20. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
-21. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
+19. Check which providers are really wired: `python3 scripts/provider_smoke_check.py --env-file secrets/openclaw.env --json`
+20. For the first VPS cutover, keep profiles at `bootstrap_core + md_only`; switch to `bootstrap_minimal` only after Google Calendar OAuth is ready.
+21. Execute the phase checklist in [docs/02-implementation-plan.md](/Users/palba/Projects/Clawdio/docs/02-implementation-plan.md).
+22. Use [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md) and [docs/41-operationalization-priorities.md](/Users/palba/Projects/Clawdio/docs/41-operationalization-priorities.md) before adding new modules.
 
 ## Important constraint
 

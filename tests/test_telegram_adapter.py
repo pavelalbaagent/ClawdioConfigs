@@ -116,6 +116,62 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(created[0]["title"], "review recurring conflicts")
         self.assertIn("Project task captured", str(self.client.sent_messages[-1]["text"]))
 
+    def test_specialist_prefix_creates_task_for_specialist_agent(self):
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates(
+            [self._update(21, "research: compare gemini and openrouter for low-cost fallback")],
+            state=state,
+        )
+
+        workspace = self.backend.load_workspace_data()
+        created = [row for row in workspace["tasks"] if row["source"] == "telegram" and row["assignees"] == ["researcher"]]
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0]["project_id"], None)
+        self.assertIn("Routed to Researcher in research", str(self.client.sent_messages[-1]["text"]))
+
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "researcher")
+        self.assertEqual(last_route["space_key"], "research")
+
+    def test_unknown_project_hint_returns_suggestions(self):
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates(
+            [self._update(22, "coding: [project:clawdio] add a runtime status badge")],
+            state=state,
+        )
+
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Project space not found", response)
+        self.assertIn("OpenClaw V2 Rebuild", response)
+
+    def test_unmatched_text_uses_assistant_general_chat(self):
+        with mock.patch.object(
+            self.adapter.assistant_chat,
+            "reply",
+            return_value={
+                "reply_text": "Use Gemini free for lightweight work and OpenRouter as overflow.",
+                "space_key": "general",
+                "lane": "L2_balanced",
+                "provider": "google_ai_studio_free",
+                "model": "gemini-2.5-flash",
+            },
+        ) as reply:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(23, "what model setup should I prefer for light daily usage?")],
+                state=state,
+            )
+
+        reply.assert_called_once()
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Gemini free", response)
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["action"], "assistant_chat")
+        self.assertEqual(last_route["lane"], "L2_balanced")
+        self.assertEqual(last_route["provider"], "google_ai_studio_free")
+
     def test_due_reminder_dispatch_and_reply_done(self):
         _, confirmation = self.adapter._create_reminder_from_text("remind me stretch in 1 hour")
         self.assertIn("Reminder created", confirmation)
@@ -167,6 +223,16 @@ class TelegramAdapterTests(unittest.TestCase):
 
         handler.assert_called_once()
         self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar today\n- none")
+
+    def test_assistant_space_prefix_still_runs_supported_command(self):
+        with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(51, "calendar: today")], state=state)
+
+        handler.assert_called_once()
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["space_key"], "calendar")
 
     def test_calendar_request_gracefully_handles_missing_provider(self):
         with mock.patch.object(self.adapter, "_calendar_client", side_effect=RuntimeError("missing calendar")):

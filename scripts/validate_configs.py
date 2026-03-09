@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -31,10 +32,13 @@ EXPECTED_CONFIGS = {
     "reminders": CONFIG_DIR / "reminders.yaml",
     "session_policy": CONFIG_DIR / "session_policy.yaml",
     "dashboard": CONFIG_DIR / "dashboard.yaml",
+    "job_search": CONFIG_DIR / "job_search.yaml",
 }
 
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
 PRIORITY_LEVELS = {"low", "medium", "high", "urgent"}
+JOB_RECOMMENDATIONS = {"apply", "manual_review", "stretch_apply", "pass"}
+JOB_ELIGIBILITY = {"direct_yes", "possible_manual_check", "unclear", "likely_no"}
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -181,6 +185,7 @@ def validate_models(data: dict[str, Any], errors: list[str], warnings: list[str]
     routing = require_dict(data.get("routing"), errors, "models.routing")
     lanes = require_dict(routing.get("lanes"), errors, "models.routing.lanes")
     fallback = routing.get("fallback_order")
+    provider_inventory = require_dict(data.get("provider_inventory"), errors, "models.provider_inventory")
 
     if not lanes:
         add_error(errors, "REQ", "models.routing.lanes must not be empty")
@@ -201,6 +206,81 @@ def validate_models(data: dict[str, Any], errors: list[str], warnings: list[str]
                 value = lane_data.get(token_key)
                 if not isinstance(value, int) or value <= 0:
                     add_error(errors, "RANGE", f"{lane_name}.{token_key} must be integer > 0")
+
+        provider_priority = validate_string_list(
+            lane_data.get("provider_priority", []),
+            f"{lane_name}.provider_priority",
+            errors,
+            allow_empty=True,
+        )
+        provider_models = ensure_dict(lane_data.get("provider_models"))
+
+        for provider_name in provider_priority:
+            if provider_name not in provider_inventory:
+                add_error(errors, "PROVIDER", f"{lane_name}.provider_priority references unknown provider: {provider_name}")
+
+        for provider_name, model_name in provider_models.items():
+            if provider_name not in provider_inventory:
+                add_error(errors, "PROVIDER", f"{lane_name}.provider_models references unknown provider: {provider_name}")
+                continue
+            if not is_non_empty_str(model_name):
+                add_error(errors, "MODEL", f"{lane_name}.provider_models.{provider_name} must be a non-empty string")
+
+        for provider_name in provider_priority:
+            if provider_name not in provider_models:
+                provider_cfg = ensure_dict(provider_inventory.get(provider_name))
+                if not is_non_empty_str(provider_cfg.get("default_model")) and not is_non_empty_str(
+                    provider_cfg.get("model_env_override")
+                ):
+                    add_error(
+                        errors,
+                        "MODEL",
+                        f"{lane_name} has no model mapping for provider {provider_name} and provider_inventory lacks defaults",
+                    )
+
+    for provider_name, provider_data in provider_inventory.items():
+        provider_cfg = require_dict(provider_data, errors, f"models.provider_inventory.{provider_name}")
+        required_env = validate_string_list(
+            provider_cfg.get("required_env", []),
+            f"models.provider_inventory.{provider_name}.required_env",
+            errors,
+            allow_empty=True,
+        )
+        required_command = provider_cfg.get("required_command")
+        if required_command is not None and not is_non_empty_str(required_command):
+            add_error(
+                errors,
+                "TYPE",
+                f"models.provider_inventory.{provider_name}.required_command must be a non-empty string when present",
+            )
+        if not required_env and required_command is None:
+            add_warning(
+                warnings,
+                "PROVIDER",
+                f"models.provider_inventory.{provider_name} has no required_env or required_command gating",
+            )
+        if provider_cfg.get("default_model") is not None and not is_non_empty_str(provider_cfg.get("default_model")):
+            add_error(
+                errors,
+                "MODEL",
+                f"models.provider_inventory.{provider_name}.default_model must be a non-empty string when present",
+            )
+        if provider_cfg.get("healthcheck_model") is not None and not is_non_empty_str(
+            provider_cfg.get("healthcheck_model")
+        ):
+            add_error(
+                errors,
+                "MODEL",
+                f"models.provider_inventory.{provider_name}.healthcheck_model must be a non-empty string when present",
+            )
+        if provider_cfg.get("model_env_override") is not None and not is_non_empty_str(
+            provider_cfg.get("model_env_override")
+        ):
+            add_error(
+                errors,
+                "MODEL",
+                f"models.provider_inventory.{provider_name}.model_env_override must be a non-empty string when present",
+            )
 
     distribution = require_dict(data.get("budget_distribution_target"), errors, "models.budget_distribution_target")
     keys = ["L1_low_cost_pct", "L2_balanced_pct", "L3_heavy_pct"]
@@ -539,6 +619,187 @@ def validate_tasks(data: dict[str, Any], errors: list[str], warnings: list[str])
         missing = sorted(required - set(statuses))
         if missing:
             add_warning(warnings, "TASK", f"agent statuses missing common states: {missing}")
+
+
+def validate_job_search(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
+    job_search = require_dict(data.get("job_search"), errors, "job_search.job_search")
+
+    enabled = job_search.get("enabled")
+    if not isinstance(enabled, bool):
+        add_error(errors, "TYPE", "job_search.job_search.enabled must be boolean")
+
+    mode = job_search.get("mode")
+    if not is_non_empty_str(mode):
+        add_error(errors, "REQ", "job_search.job_search.mode is required")
+    elif mode != "manual_review_only":
+        add_warning(warnings, "JOBS", "job_search mode is not manual_review_only")
+
+    blocked_actions = validate_string_list(
+        job_search.get("blocked_actions"),
+        "job_search.job_search.blocked_actions",
+        errors,
+        allow_empty=False,
+    )
+    if "auto_apply" not in blocked_actions:
+        add_warning(warnings, "JOBS", "job_search blocked_actions should include auto_apply")
+
+    validate_string_list(
+        job_search.get("allowed_sources"),
+        "job_search.job_search.allowed_sources",
+        errors,
+        allow_empty=False,
+    )
+
+    outputs = require_dict(job_search.get("outputs"), errors, "job_search.job_search.outputs")
+    for field_name in ("triage_dir", "daily_summary_dir", "latest_status_file"):
+        if not is_non_empty_str(outputs.get(field_name)):
+            add_error(errors, "REQ", f"job_search.job_search.outputs.{field_name} is required")
+
+    inputs = require_dict(job_search.get("inputs"), errors, "job_search.job_search.inputs")
+    if not is_non_empty_str(inputs.get("saved_postings_dir")):
+        add_error(errors, "REQ", "job_search.job_search.inputs.saved_postings_dir is required")
+
+    schedule = require_dict(job_search.get("schedule"), errors, "job_search.job_search.schedule")
+    if not isinstance(schedule.get("enabled"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.schedule.enabled must be boolean")
+    if not is_non_empty_str(schedule.get("timezone")):
+        add_error(errors, "REQ", "job_search.job_search.schedule.timezone is required")
+    delivery_time = schedule.get("delivery_time_local")
+    if not is_non_empty_str(delivery_time):
+        add_error(errors, "REQ", "job_search.job_search.schedule.delivery_time_local is required")
+    elif not re.match(r"^\d{2}:\d{2}$", str(delivery_time)):
+        add_error(errors, "TYPE", "job_search.job_search.schedule.delivery_time_local must be HH:MM")
+    if not isinstance(schedule.get("allow_empty_report"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.schedule.allow_empty_report must be boolean")
+
+    delivery = require_dict(job_search.get("delivery"), errors, "job_search.job_search.delivery")
+    channel = delivery.get("channel")
+    if not is_non_empty_str(channel):
+        add_error(errors, "REQ", "job_search.job_search.delivery.channel is required")
+    elif channel != "telegram":
+        add_warning(warnings, "JOBS", "job_search delivery.channel is not telegram")
+    for field_name in ("send_when_empty", "include_pass_section"):
+        if not isinstance(delivery.get(field_name), bool):
+            add_error(errors, "TYPE", f"job_search.job_search.delivery.{field_name} must be boolean")
+    telegram = require_dict(delivery.get("telegram"), errors, "job_search.job_search.delivery.telegram")
+    if not isinstance(telegram.get("enabled"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.delivery.telegram.enabled must be boolean")
+    max_entries = telegram.get("max_entries_per_section")
+    if not isinstance(max_entries, int) or max_entries <= 0:
+        add_error(errors, "RANGE", "job_search.job_search.delivery.telegram.max_entries_per_section must be integer > 0")
+    if not isinstance(telegram.get("include_output_paths"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.delivery.telegram.include_output_paths must be boolean")
+    max_message_chars = telegram.get("max_message_chars")
+    if not isinstance(max_message_chars, int) or max_message_chars < 200:
+        add_error(errors, "RANGE", "job_search.job_search.delivery.telegram.max_message_chars must be integer >= 200")
+
+    candidate_profile = require_dict(job_search.get("candidate_profile"), errors, "job_search.job_search.candidate_profile")
+    for field_name in ("name", "base_location", "primary_market"):
+        if not is_non_empty_str(candidate_profile.get(field_name)):
+            add_error(errors, "REQ", f"job_search.job_search.candidate_profile.{field_name} is required")
+    validate_string_list(
+        candidate_profile.get("preferred_employment_types"),
+        "job_search.job_search.candidate_profile.preferred_employment_types",
+        errors,
+        allow_empty=False,
+    )
+    validate_string_list(
+        candidate_profile.get("required_overlap_notes"),
+        "job_search.job_search.candidate_profile.required_overlap_notes",
+        errors,
+        allow_empty=False,
+    )
+
+    search_strategy = require_dict(job_search.get("search_strategy"), errors, "job_search.job_search.search_strategy")
+    validate_string_list(
+        search_strategy.get("core_boolean_queries"),
+        "job_search.job_search.search_strategy.core_boolean_queries",
+        errors,
+        allow_empty=False,
+    )
+    validate_string_list(
+        search_strategy.get("filter_notes"),
+        "job_search.job_search.search_strategy.filter_notes",
+        errors,
+        allow_empty=False,
+    )
+
+    eligibility_rules = require_dict(job_search.get("eligibility_rules"), errors, "job_search.job_search.eligibility_rules")
+    for field_name in ("allow_patterns", "possible_patterns", "deny_patterns"):
+        validate_string_list(
+            eligibility_rules.get(field_name),
+            f"job_search.job_search.eligibility_rules.{field_name}",
+            errors,
+            allow_empty=False,
+        )
+
+    fit_rules = require_dict(job_search.get("fit_rules"), errors, "job_search.job_search.fit_rules")
+    for field_name in ("strong_positive_keywords", "positive_keywords", "stretch_keywords", "negative_keywords"):
+        validate_string_list(
+            fit_rules.get(field_name),
+            f"job_search.job_search.fit_rules.{field_name}",
+            errors,
+            allow_empty=False,
+        )
+    seniority_penalties = require_dict(
+        fit_rules.get("seniority_penalties"),
+        errors,
+        "job_search.job_search.fit_rules.seniority_penalties",
+    )
+    if not seniority_penalties:
+        add_error(errors, "REQ", "job_search.job_search.fit_rules.seniority_penalties must not be empty")
+    for key, value in seniority_penalties.items():
+        if not is_non_empty_str(key):
+            add_error(errors, "TYPE", "job_search.job_search.fit_rules.seniority_penalties keys must be non-empty strings")
+        if not isinstance(value, int) or value < 0:
+            add_error(errors, "RANGE", f"job_search.job_search.fit_rules.seniority_penalties.{key} must be integer >= 0")
+
+    summary = require_dict(job_search.get("daily_summary"), errors, "job_search.job_search.daily_summary")
+    recommendation_priority = validate_string_list(
+        summary.get("recommendation_priority"),
+        "job_search.job_search.daily_summary.recommendation_priority",
+        errors,
+        allow_empty=False,
+    )
+    unknown_recommendations = sorted(set(recommendation_priority) - JOB_RECOMMENDATIONS)
+    if unknown_recommendations:
+        add_error(
+            errors,
+            "TYPE",
+            f"job_search.job_search.daily_summary.recommendation_priority references unknown values: {unknown_recommendations}",
+        )
+
+    eligibility_priority = validate_string_list(
+        summary.get("eligibility_priority"),
+        "job_search.job_search.daily_summary.eligibility_priority",
+        errors,
+        allow_empty=False,
+    )
+    unknown_eligibility = sorted(set(eligibility_priority) - JOB_ELIGIBILITY)
+    if unknown_eligibility:
+        add_error(
+            errors,
+            "TYPE",
+            f"job_search.job_search.daily_summary.eligibility_priority references unknown values: {unknown_eligibility}",
+        )
+
+    include_sections = validate_string_list(
+        summary.get("include_sections"),
+        "job_search.job_search.daily_summary.include_sections",
+        errors,
+        allow_empty=False,
+    )
+    unknown_sections = sorted(set(include_sections) - JOB_RECOMMENDATIONS)
+    if unknown_sections:
+        add_error(
+            errors,
+            "TYPE",
+            f"job_search.job_search.daily_summary.include_sections references unknown values: {unknown_sections}",
+        )
+
+    max_roles = summary.get("max_roles_per_section")
+    if not isinstance(max_roles, int) or max_roles <= 0:
+        add_error(errors, "RANGE", "job_search.job_search.daily_summary.max_roles_per_section must be integer > 0")
 
 
 def validate_security(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
@@ -982,6 +1243,8 @@ def main() -> int:
         validate_reminders(require_dict(loaded["reminders"], errors, "reminders"), errors, warnings)
     if "session_policy" in loaded:
         validate_session_policy(require_dict(loaded["session_policy"], errors, "session_policy"), errors, warnings)
+    if "job_search" in loaded:
+        validate_job_search(require_dict(loaded["job_search"], errors, "job_search"), errors, warnings)
 
     if "agents" in loaded and "session_policy" in loaded:
         validate_spawn_alignment(

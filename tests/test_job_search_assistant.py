@@ -1,0 +1,171 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts" / "job_search_assistant.py"
+CONFIG = ROOT / "config" / "job_search.yaml"
+
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import job_search_assistant as jobs  # noqa: E402
+
+
+class JobSearchAssistantTests(unittest.TestCase):
+    def test_triage_posting_recommends_apply_for_strong_latam_fit(self):
+        config = jobs.load_config(CONFIG)
+        posting = """
+        AI Enablement Consultant
+
+        Global remote across LATAM including Ecuador. We need AI adoption, workflow automation,
+        stakeholder alignment, cross-functional execution, process improvement, and Python.
+        """
+
+        result = jobs.triage_posting(posting, "inline-text", config)
+
+        self.assertEqual(result.recommendation, "apply")
+        self.assertEqual(result.eligibility, "direct_yes")
+        self.assertGreaterEqual(result.fit_score, 70)
+        self.assertIn("Apply now.", result.next_step)
+
+    def test_daily_summary_cli_ranks_saved_postings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "postings"
+            triage_dir = tmp_path / "triage"
+            summary_dir = tmp_path / "daily"
+            latest_status = tmp_path / "job-search-status.json"
+            config_path = tmp_path / "job_search.yaml"
+
+            input_dir.mkdir()
+            (input_dir / "latam_apply.txt").write_text(
+                """
+                AI Adoption Lead
+
+                Global remote role across LATAM including Ecuador. Looking for AI adoption,
+                workflow automation, stakeholder alignment, process improvement, and Python.
+                """,
+                encoding="utf-8",
+            )
+            (input_dir / "manual_review.txt").write_text(
+                """
+                Solutions Consultant
+
+                Remote-first role with U.S. time zone overlap. You will lead implementation,
+                technical enablement, client-facing automation, and cross-functional delivery.
+                """,
+                encoding="utf-8",
+            )
+            (input_dir / "pass.txt").write_text(
+                """
+                Principal ML Engineer
+
+                Remote in the United States only. Must be based in the U.S. We need a machine learning
+                engineer focused on research scientist work, computer vision, and pure research.
+                """,
+                encoding="utf-8",
+            )
+
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("triage_dir: output/jobs/triage", f"triage_dir: {triage_dir}", 1)
+            config_text = config_text.replace("daily_summary_dir: output/jobs/daily", f"daily_summary_dir: {summary_dir}", 1)
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-daily-summary.json",
+                f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_path.write_text(config_text, encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "daily-summary",
+                    "--config",
+                    str(config_path),
+                    "--input-dir",
+                    str(input_dir),
+                    "--day-label",
+                    "2026-03-09",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            cli_payload = json.loads(proc.stdout)
+            self.assertEqual(cli_payload["processed_count"], 3)
+
+            summary_json = Path(cli_payload["summary_json"])
+            self.assertTrue(summary_json.exists())
+            self.assertTrue(Path(cli_payload["summary_markdown"]).exists())
+            self.assertTrue(Path(cli_payload["latest_status"]).exists())
+
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary"]["apply_count"], 1)
+            self.assertEqual(payload["summary"]["manual_review_count"], 1)
+            self.assertEqual(payload["summary"]["pass_count"], 1)
+            self.assertEqual(payload["recommendations"][0]["title"], "AI Adoption Lead")
+            self.assertEqual(payload["sections"]["apply"][0]["title"], "AI Adoption Lead")
+            self.assertEqual(payload["sections"]["manual_review"][0]["title"], "Solutions Consultant")
+            self.assertEqual(payload["sections"]["pass"][0]["title"], "Principal ML Engineer")
+
+    def test_publish_report_preview_returns_telegram_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "postings"
+            triage_dir = tmp_path / "triage"
+            summary_dir = tmp_path / "daily"
+            latest_status = tmp_path / "job-search-status.json"
+            config_path = tmp_path / "job_search.yaml"
+
+            input_dir.mkdir()
+            (input_dir / "apply.txt").write_text(
+                """
+                AI Enablement Consultant
+
+                Global remote across LATAM including Ecuador. Looking for AI adoption,
+                workflow automation, stakeholder alignment, and Python.
+                """,
+                encoding="utf-8",
+            )
+
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("saved_postings_dir: data/job-search/inbox", f"saved_postings_dir: {input_dir}", 1)
+            config_text = config_text.replace("triage_dir: output/jobs/triage", f"triage_dir: {triage_dir}", 1)
+            config_text = config_text.replace("daily_summary_dir: output/jobs/daily", f"daily_summary_dir: {summary_dir}", 1)
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-daily-summary.json",
+                f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_path.write_text(config_text, encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "publish-report",
+                    "--config",
+                    str(config_path),
+                    "--day-label",
+                    "2026-03-09",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertFalse(payload["delivery"]["sent"])
+            self.assertEqual(payload["delivery"]["channel"], "telegram")
+            self.assertIn("Apply Today", payload["delivery"]["preview"])
+            self.assertIn("AI Enablement Consultant", payload["delivery"]["preview"])
+
+
+if __name__ == "__main__":
+    unittest.main()

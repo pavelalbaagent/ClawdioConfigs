@@ -116,6 +116,147 @@
       </section>
 
       <section class="grid">
+        <article class="card col-12">
+          <h2>Provider Wiring + Routing</h2>
+          <p class="footnote" id="provider-health-summary">No provider health snapshot yet.</p>
+          <div class="controls" style="margin-bottom: 12px">
+            <button id="provider-smoke-local-button" class="secondary">Run Local Check</button>
+            <button id="provider-smoke-live-button" class="secondary">Run Live Probe</button>
+          </div>
+          <div class="list" style="margin-bottom: 12px">
+            <div class="list-item">
+              <div>
+                <strong>Profiles</strong>
+                <div class="meta" id="provider-health-profiles-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Last Live Probe</strong>
+                <div class="meta" id="provider-health-last-probe-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Env File</strong>
+                <div class="meta" id="provider-health-env-meta">-</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-bottom: 12px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Default Model</th>
+                  <th>Local Status</th>
+                  <th>Live Probe</th>
+                  <th>Used By</th>
+                </tr>
+              </thead>
+              <tbody id="provider-health-body"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Situation</th>
+                  <th>Lane</th>
+                  <th>Provider Candidates</th>
+                  <th>Approval</th>
+                </tr>
+              </thead>
+              <tbody id="provider-routing-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-7">
+          <h2>Agent Runtime</h2>
+          <p class="footnote" id="agent-runtime-summary">No agent runtime snapshot yet.</p>
+          <div class="list" style="margin-bottom: 12px">
+            <div class="list-item">
+              <div>
+                <strong>Default Front Door</strong>
+                <div class="meta" id="agent-default-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Space Grammar</strong>
+                <div class="meta" id="agent-space-grammar-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Recent Route Counts</strong>
+                <div class="meta" id="agent-route-counts-meta">-</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Default Space</th>
+                  <th>Lane</th>
+                  <th>Owned Spaces</th>
+                  <th>Responsibilities</th>
+                </tr>
+              </thead>
+              <tbody id="agent-registry-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card alt col-5">
+          <h2>Active Context + Governance</h2>
+          <div class="list">
+            <div class="list-item">
+              <div>
+                <strong>Last Routed Interaction</strong>
+                <div class="meta" id="agent-last-route-meta">No routed interactions yet.</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Internal Roles</strong>
+                <div class="meta" id="agent-internal-roles-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Continuous Improvement</strong>
+                <div class="meta" id="agent-improvement-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Blocked Auto Actions</strong>
+                <div class="meta" id="agent-blocked-actions-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Recent Routes</strong>
+                <div class="meta" id="agent-recent-routes-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Assistant Chat Memory</strong>
+                <div class="meta" id="assistant-chat-meta">-</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
         <article class="card col-6">
           <h2>Integrations</h2>
           <div class="list" id="integrations-list"></div>

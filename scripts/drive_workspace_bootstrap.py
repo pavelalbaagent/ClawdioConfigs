@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from env_file_utils import load_env_file
 from google_workspace_common import (  # type: ignore
     GoogleApiClient,
     GoogleOAuthClient,
@@ -97,21 +98,6 @@ class FixtureDriveClient:
         self.created.append(item)
         self.children.append(item)
         return item
-
-
-def load_env_file(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip("\"'")
-    return values
 
 
 def env_get(name: str, env_file_values: dict[str, str]) -> str:

@@ -31,6 +31,7 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(data["preferred_lane"], "L2_balanced")
         self.assertIn("google_ai_studio_free", data["provider_preference"])
         self.assertNotIn("codex_subscription_cli", data["provider_preference"])
+        self.assertEqual(data["provider_candidates"][0]["model"], "gemini-2.5-flash")
 
     def test_strict_cost_limits_fallback_to_l2(self):
         proc = self.run_script(
@@ -47,6 +48,7 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(data["situation"], "architecture_or_high_ambiguity")
         self.assertEqual(data["preferred_lane"], "L3_heavy")
         self.assertTrue(data["approval_required"])
+        self.assertEqual(data["provider_candidates"][0]["model"], "openai-session-premium")
 
 
 if __name__ == "__main__":

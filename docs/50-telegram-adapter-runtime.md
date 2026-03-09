@@ -31,6 +31,7 @@ Current responsibilities:
 7. create simple personal tasks
 8. read calendar today / next
 9. convert `[project:slug] ...` text into local project tasks
+10. route specialist-prefixed requests into agent-owned spaces and capture them as local tasks
 
 ## Supported Commands
 
@@ -45,6 +46,30 @@ Current responsibilities:
 9. `calendar next`
 10. `status`
 11. `[project:slug] <text>`
+12. `assistant: <text>`
+13. `reminders: <text>`
+14. `research: <text>`
+15. `fitness: <text>`
+16. `coding: <text>`
+17. `ops: <text>`
+
+## Specialist Routing
+
+Current runtime contract:
+
+1. no prefix -> default `assistant` front door
+2. `research: ...` -> `researcher` in `research`
+3. `fitness: ...` -> `fitness_coach` in `fitness`
+4. `coding: ...` -> `builder` in `coding`
+5. `ops: ...` -> `ops_guard` in `ops`
+6. `reminders: ...`, `calendar: ...`, `tasks: ...`, `braindump: ...` stay under `assistant` but route into narrower spaces
+
+Current behavior:
+
+1. supported deterministic commands still execute directly
+2. explicit specialist requests that are not yet implemented as live chat become routed local tasks
+3. project hints still work and can be combined with specialist prefixes, for example:
+   - `coding: [project:calendar-cleanup] tighten dashboard route view`
 
 ## State Files
 
@@ -54,6 +79,9 @@ Current responsibilities:
 2. Reminder state:
    - config-driven via [reminders.yaml](/Users/palba/Projects/Clawdio/config/reminders.yaml)
    - VPS target: `/var/lib/openclaw/reminders-state.json`
+3. Agent runtime activity:
+   - local default: `data/agent-runtime-state.json`
+   - VPS target: `/var/lib/openclaw/agent-runtime-state.json`
 
 The adapter keeps a small mapping from outgoing reminder message ids to reminder ids so Telegram replies can resolve the correct reminder without forcing manual ids.
 

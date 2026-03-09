@@ -18,6 +18,8 @@ session_lifecycle:
     - open_tasks
     - integration_state
     - budget_state
+    - active_agent
+    - active_space
 
 spawn_controls:
   max_parallel_subagents: 2
@@ -56,3 +58,88 @@ project_spaces:
     - persistent_narrow_domain_context
     - background_monitoring_or_retries
     - isolated_toolchain_boundary
+
+space_registry:
+  core_spaces:
+    - general
+    - reminders
+    - calendar
+    - tasks
+    - braindump
+    - research
+    - job-search
+    - fitness
+    - coding
+    - ops
+  dynamic_space_prefixes:
+    - project:
+  default_space: general
+  route_rules:
+    assistant:
+      default_space: general
+      allowed_spaces:
+        - general
+        - reminders
+        - calendar
+        - tasks
+        - braindump
+        - project:*
+    researcher:
+      default_space: research
+      allowed_spaces:
+        - research
+        - job-search
+        - project:*
+    fitness_coach:
+      default_space: fitness
+      allowed_spaces:
+        - fitness
+    builder:
+      default_space: coding
+      allowed_spaces:
+        - coding
+        - project:*
+    ops_guard:
+      default_space: ops
+      allowed_spaces:
+        - ops
+    coordinator:
+      default_space: general
+      allowed_spaces:
+        - general
+        - project:*
+    knowledge_librarian:
+      default_space: general
+      allowed_spaces:
+        - general
+        - research
+        - fitness
+        - coding
+        - ops
+        - project:*
+
+continuous_improvement_policy:
+  agent_mode: governed_process_not_always_on_agent
+  daily_review_inputs:
+    - provider_health_snapshot
+    - reminder_failures
+    - session_checkpoint_drift
+    - task_queue_backlog
+  weekly_review_inputs:
+    - routing_cost_mix
+    - stale_project_spaces
+    - repeated_manual_work_patterns
+    - underused_or_broken_integrations
+  output_sections:
+    - observations
+    - recommended_changes
+    - approval_required_changes
+    - archive_candidates
+  max_auto_actions:
+    - refresh_summaries_only
+    - mark_review_candidates_only
+  blocked_auto_actions:
+    - changing_credentials
+    - changing_provider_priorities
+    - enabling_integrations
+    - creating_persistent_agents

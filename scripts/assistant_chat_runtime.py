@@ -1,0 +1,685 @@
+#!/usr/bin/env python3
+"""Bounded assistant chat runtime for Telegram and dashboard-driven interactions."""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import model_route_decider
+from env_file_utils import load_env_file
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "dashboard") not in sys.path:
+    sys.path.insert(0, str(ROOT / "dashboard"))
+
+from backend import DashboardBackend, ensure_dict, ensure_string_list  # type: ignore  # noqa: E402
+
+DEFAULT_STATE_PATH = ROOT / "data" / "assistant-chat-state.json"
+DEFAULT_TELEMETRY_PATH = ROOT / "telemetry" / "model-calls.ndjson"
+
+SUPPORTED_CHAT_TRANSPORTS = {
+    "google_generative_language",
+    "openrouter_chat_completions",
+    "anthropic_messages",
+}
+
+SPACE_CONTEXT_ITEM_LIMITS = {
+    "general": 4,
+    "calendar": 6,
+    "tasks": 8,
+    "reminders": 8,
+    "braindump": 8,
+}
+
+
+def iso_now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def append_ndjson(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row) + "\n")
+
+
+def env_get(name: str, env_values: dict[str, str]) -> str:
+    return str(env_values.get(name, os.environ.get(name, ""))).strip()
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+def truncate(text: str, *, limit: int = 220) -> str:
+    clean = " ".join((text or "").split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: limit - 1].rstrip() + "…"
+
+
+def choose_situation(*, text: str, space_key: str) -> str:
+    lowered = text.strip().lower()
+    heavy_keywords = (
+        "architecture",
+        "tradeoff",
+        "roadmap",
+        "redesign",
+        "system design",
+        "rebuild plan",
+        "major refactor",
+        "long-term strategy",
+    )
+    synthesis_keywords = (
+        "compare",
+        "recommend",
+        "explain",
+        "why",
+        "how should",
+        "help me plan",
+        "help me organize",
+        "summarize",
+        "think through",
+        "evaluate",
+        "pros and cons",
+        "what should",
+        "what do you think",
+        "move things around",
+        "reschedule",
+        "prioritize",
+    )
+    if any(keyword in lowered for keyword in heavy_keywords):
+        return "architecture_or_high_ambiguity"
+    if space_key in {"calendar", "tasks", "reminders", "braindump"} and len(lowered) <= 120:
+        return "quick_read_write"
+    if len(lowered) > 180 or any(keyword in lowered for keyword in synthesis_keywords):
+        return "research_synthesis"
+    return "quick_read_write"
+
+
+def local_provider_ready(
+    *,
+    provider_name: str,
+    provider_cfg: dict[str, Any],
+    env_values: dict[str, str],
+) -> bool:
+    transport = str(provider_cfg.get("transport", "")).strip()
+    if transport not in SUPPORTED_CHAT_TRANSPORTS:
+        return False
+    required_env = ensure_string_list(provider_cfg.get("required_env"))
+    if any(not env_get(var, env_values) for var in required_env):
+        return False
+    required_command = str(provider_cfg.get("required_command", "")).strip()
+    if required_command and not shutil.which(required_command):
+        return False
+    return True
+
+
+def resolve_chat_route(
+    *,
+    situation: str,
+    models_path: Path,
+    agents_path: Path,
+    env_values: dict[str, str],
+) -> dict[str, Any]:
+    models_data = ensure_dict(model_route_decider.load_yaml(models_path))
+    routing = ensure_dict(models_data.get("routing"))
+    lanes = ensure_dict(routing.get("lanes"))
+    usage_modes = ensure_dict(routing.get("usage_modes"))
+    decision_matrix = ensure_dict(routing.get("decision_matrix"))
+    fallback_order = ensure_string_list(routing.get("fallback_order"))
+    provider_inventory = ensure_dict(models_data.get("provider_inventory"))
+
+    agents_data = ensure_dict(model_route_decider.load_yaml(agents_path))
+    mode_name = str(ensure_dict(agents_data.get("routing_overrides")).get("active_mode", "")).strip() or "balanced_default"
+    mode_cfg = ensure_dict(usage_modes.get(mode_name))
+    situation_cfg = ensure_dict(decision_matrix.get(situation))
+    preferred_lane = str(situation_cfg.get("preferred_lane", "")).strip() or str(mode_cfg.get("default_lane", "")).strip()
+    if not preferred_lane:
+        preferred_lane = fallback_order[0]
+
+    requested_lane = preferred_lane
+    requested_lane_cfg = ensure_dict(lanes.get(requested_lane))
+    requested_approval = bool(requested_lane_cfg.get("approval_required") is True or situation_cfg.get("approval_required") is True)
+
+    fallback_lanes = ensure_string_list(situation_cfg.get("fallback_lanes"))
+    if not fallback_lanes:
+        fallback_lanes = [lane for lane in fallback_order if lane != requested_lane]
+
+    lane_sequence = [requested_lane, *fallback_lanes]
+    downgraded_from: str | None = None
+    if requested_approval:
+        lane_sequence = fallback_lanes or [requested_lane]
+        downgraded_from = requested_lane
+
+    route_attempts: list[dict[str, Any]] = []
+    for lane_name in lane_sequence:
+        lane_cfg = ensure_dict(lanes.get(lane_name))
+        if not lane_cfg:
+            continue
+        provider_preference = ensure_string_list(situation_cfg.get("provider_preference"))
+        if lane_name != requested_lane or not provider_preference:
+            provider_preference = ensure_string_list(lane_cfg.get("provider_priority"))
+        candidates = model_route_decider.resolve_provider_candidates(
+            provider_preference=provider_preference,
+            lane_cfg=lane_cfg,
+            provider_inventory=provider_inventory,
+        )
+        for candidate in candidates:
+            provider_name = str(candidate.get("provider") or "").strip()
+            provider_cfg = ensure_dict(provider_inventory.get(provider_name))
+            model = str(candidate.get("model") or "").strip() or None
+            if local_provider_ready(provider_name=provider_name, provider_cfg=provider_cfg, env_values=env_values):
+                return {
+                    "situation": situation,
+                    "mode": mode_name,
+                    "lane": lane_name,
+                    "requested_lane": requested_lane,
+                    "downgraded_from_lane": downgraded_from,
+                    "provider": provider_name,
+                    "provider_cfg": provider_cfg,
+                    "model": model or str(provider_cfg.get("default_model", "")).strip() or None,
+                    "approval_required": requested_approval,
+                    "route_attempts": route_attempts,
+                }
+            route_attempts.append(
+                {
+                    "lane": lane_name,
+                    "provider": provider_name,
+                    "transport": str(provider_cfg.get("transport", "")).strip() or None,
+                    "missing_env": [var for var in ensure_string_list(provider_cfg.get("required_env")) if not env_get(var, env_values)],
+                    "required_command": str(provider_cfg.get("required_command", "")).strip() or None,
+                }
+            )
+    raise RuntimeError(f"no supported assistant-chat provider is ready for situation={situation}")
+
+
+def request_json(
+    url: str,
+    *,
+    method: str = "POST",
+    headers: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    req_headers = dict(headers or {})
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        req_headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, method=method.upper(), data=body, headers=req_headers)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+            raw = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"http {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"request failed: {exc.reason}") from exc
+    data = json.loads(raw or "{}")
+    return ensure_dict(data)
+
+
+def call_google(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+    contents = []
+    for row in messages:
+        role = "model" if row["role"] == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": row["content"]}]})
+    started = time.perf_counter()
+    data = request_json(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+        payload={
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+            "generationConfig": {"temperature": 0.35, "maxOutputTokens": 900},
+        },
+    )
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    candidates = data.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise RuntimeError("google response missing candidates")
+    content = ensure_dict(ensure_dict(candidates[0]).get("content"))
+    parts = content.get("parts")
+    if not isinstance(parts, list):
+        raise RuntimeError("google response missing content parts")
+    reply = "\n".join(str(ensure_dict(part).get("text") or "").strip() for part in parts).strip()
+    if not reply:
+        raise RuntimeError("google response missing text")
+    usage = ensure_dict(data.get("usageMetadata"))
+    return {
+        "text": reply,
+        "latency_ms": latency_ms,
+        "prompt_tokens": int(usage.get("promptTokenCount", 0) or 0),
+        "completion_tokens": int(usage.get("candidatesTokenCount", 0) or 0),
+    }
+
+
+def call_openrouter(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+    chat_messages = [{"role": "system", "content": system_prompt}, *messages]
+    started = time.perf_counter()
+    data = request_json(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}"},
+        payload={
+            "model": model,
+            "messages": chat_messages,
+            "temperature": 0.35,
+            "max_tokens": 900,
+        },
+    )
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("openrouter response missing choices")
+    message = ensure_dict(ensure_dict(choices[0]).get("message"))
+    reply = str(message.get("content") or "").strip()
+    if not reply:
+        raise RuntimeError("openrouter response missing content")
+    usage = ensure_dict(data.get("usage"))
+    return {
+        "text": reply,
+        "latency_ms": latency_ms,
+        "prompt_tokens": int(usage.get("prompt_tokens", 0) or 0),
+        "completion_tokens": int(usage.get("completion_tokens", 0) or 0),
+    }
+
+
+def call_anthropic(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+    started = time.perf_counter()
+    data = request_json(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        payload={
+            "model": model,
+            "system": system_prompt,
+            "messages": messages,
+            "temperature": 0.35,
+            "max_tokens": 900,
+        },
+    )
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    content = data.get("content")
+    if not isinstance(content, list) or not content:
+        raise RuntimeError("anthropic response missing content")
+    reply = "\n".join(str(ensure_dict(part).get("text") or "").strip() for part in content).strip()
+    if not reply:
+        raise RuntimeError("anthropic response missing text")
+    usage = ensure_dict(data.get("usage"))
+    return {
+        "text": reply,
+        "latency_ms": latency_ms,
+        "prompt_tokens": int(usage.get("input_tokens", 0) or 0),
+        "completion_tokens": int(usage.get("output_tokens", 0) or 0),
+    }
+
+
+def invoke_chat_provider(
+    *,
+    provider_name: str,
+    provider_cfg: dict[str, Any],
+    model: str,
+    env_values: dict[str, str],
+    system_prompt: str,
+    messages: list[dict[str, str]],
+) -> dict[str, Any]:
+    transport = str(provider_cfg.get("transport", "")).strip()
+    if transport == "google_generative_language":
+        return call_google(
+            api_key=env_get("GEMINI_API_KEY", env_values),
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+        )
+    if transport == "openrouter_chat_completions":
+        return call_openrouter(
+            api_key=env_get("OPENROUTER_API_KEY", env_values),
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+        )
+    if transport == "anthropic_messages":
+        return call_anthropic(
+            api_key=env_get("ANTHROPIC_API_KEY", env_values),
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+        )
+    raise RuntimeError(f"unsupported assistant-chat transport: {transport or provider_name}")
+
+
+def deterministic_checkpoint(summary: str, turns: list[dict[str, str]]) -> str:
+    items = []
+    for row in turns[:6]:
+        role = row.get("role", "user")
+        content = truncate(str(row.get("content") or ""), limit=120)
+        if content:
+            items.append(f"- {role}: {content}")
+    parts = [part.strip() for part in [summary.strip(), *items] if part and part.strip()]
+    if not parts:
+        return ""
+    joined = "\n".join(parts)
+    return joined[-1400:]
+
+
+def normalize_turns(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
+    if not isinstance(turns, list):
+        return []
+    out: list[dict[str, str]] = []
+    for row in turns:
+        role = str(row.get("role") or "").strip().lower()
+        content = str(row.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        out.append({"role": role, "content": content})
+    return out[-12:]
+
+
+def build_space_snapshot(backend: DashboardBackend, *, space_key: str) -> str:
+    snapshot = backend.build_state()
+    reminders = ensure_dict(snapshot.get("reminders"))
+    calendar = ensure_dict(snapshot.get("calendar_runtime"))
+    personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
+    braindump = ensure_dict(snapshot.get("braindump"))
+    workspace = ensure_dict(snapshot.get("workspace"))
+    pending_reminders = reminders.get("pending_items", [])
+    reminder_lines = [
+        f"- {truncate(str(item.get('message') or ''), limit=80)} @ {str(item.get('remind_at') or '-')}"
+        for item in pending_reminders[: SPACE_CONTEXT_ITEM_LIMITS.get("reminders", 4)]
+        if isinstance(item, dict)
+    ]
+    upcoming = ensure_dict(calendar.get("upcoming_events"))
+    event_lines = []
+    for item in calendar.get("upcoming_events", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("calendar", 4)]:
+        row = ensure_dict(item)
+        event_lines.append(f"- {str(row.get('start_value') or '-')} | {truncate(str(row.get('summary') or '(untitled)'), limit=80)}")
+    task_lines = []
+    for item in personal_tasks.get("tasks", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("tasks", 6)]:
+        row = ensure_dict(item)
+        task_lines.append(f"- {truncate(str(row.get('title') or ''), limit=90)} | due={str(row.get('due_value') or '-')}")
+    due_braindump = []
+    for item in braindump.get("due_items", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("braindump", 6)]:
+        row = ensure_dict(item)
+        due_braindump.append(f"- [{str(row.get('category') or '-')}] {truncate(str(row.get('short_text') or ''), limit=90)}")
+    active_projects = [
+        f"- {truncate(str(item.get('name') or ''), limit=60)}"
+        for item in workspace.get("projects", [])
+        if isinstance(item, dict) and str(item.get("status") or "") == "active"
+    ][:4]
+
+    sections = [
+        f"Space: {space_key}",
+        "System state:",
+        f"- reminders_pending={ensure_dict(reminders.get('counts')).get('pending', 0)}",
+        f"- reminders_awaiting_reply={ensure_dict(reminders.get('counts')).get('awaiting_reply', 0)}",
+        f"- calendar_upcoming={ensure_dict(calendar.get('summary')).get('upcoming_count', 0)}",
+        f"- personal_tasks_open={ensure_dict(personal_tasks.get('summary')).get('open_count', 0)}",
+        f"- braindump_due={braindump.get('due_count', 0)}",
+        f"- active_projects={ensure_dict(workspace.get('project_counts')).get('active', 0)}",
+    ]
+
+    if space_key in {"general", "reminders"} and reminder_lines:
+        sections.extend(["Open reminders:", *reminder_lines])
+    if space_key in {"general", "calendar"} and event_lines:
+        sections.extend(["Upcoming calendar:", *event_lines])
+    if space_key in {"general", "tasks"} and task_lines:
+        sections.extend(["Open tasks:", *task_lines])
+    if space_key in {"general", "braindump"} and due_braindump:
+        sections.extend(["Braindump due for review:", *due_braindump])
+    if space_key == "general" and active_projects:
+        sections.extend(["Active projects:", *active_projects])
+    return "\n".join(sections)
+
+
+def build_system_prompt(*, space_key: str, route: dict[str, Any], backend: DashboardBackend, session_summary: str) -> str:
+    route_mode = str(route.get("route_mode") or "default_front_door")
+    now_local = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    instructions = [
+        "You are Assistant Agent for Pavel.",
+        "You are the front door for reminders, tasks, calendar, braindump, and project coordination.",
+        "Be concise, operational, and accurate.",
+        "Use the provided system state as ground truth where possible.",
+        "Do not claim an action was executed unless the deterministic tool path already executed it.",
+        "If the user is asking for an action you cannot execute from chat, say what is missing and propose the next concrete step.",
+        "Prefer short answers with bullet points when that improves clarity.",
+        f"Current route mode: {route_mode}.",
+        f"Current local time: {now_local}.",
+        build_space_snapshot(backend, space_key=space_key),
+    ]
+    if session_summary.strip():
+        instructions.extend(["Session summary:", session_summary.strip()])
+    return "\n\n".join(part for part in instructions if part and part.strip())
+
+
+class AssistantChatRuntime:
+    def __init__(
+        self,
+        *,
+        root: Path,
+        backend: DashboardBackend,
+        env_values: dict[str, str],
+        state_path: Path | None = None,
+        telemetry_path: Path | None = None,
+    ) -> None:
+        self.root = root
+        self.backend = backend
+        self.env_values = env_values
+        self.models_path = self.root / "config" / "models.yaml"
+        self.agents_path = self.root / "config" / "agents.yaml"
+        self.state_path = state_path or DEFAULT_STATE_PATH
+        self.telemetry_path = telemetry_path or DEFAULT_TELEMETRY_PATH
+
+    def _load_state(self) -> dict[str, Any]:
+        raw = read_json(self.state_path)
+        spaces = ensure_dict(raw.get("spaces"))
+        normalized_spaces: dict[str, dict[str, Any]] = {}
+        for key, row in spaces.items():
+            clean_key = str(key).strip() or "general"
+            item = ensure_dict(row)
+            normalized_spaces[clean_key] = {
+                "summary": str(item.get("summary") or "").strip(),
+                "turns": normalize_turns(item.get("turns", [])),
+                "updated_at": str(item.get("updated_at") or "").strip() or None,
+                "last_lane": str(item.get("last_lane") or "").strip() or None,
+                "last_provider": str(item.get("last_provider") or "").strip() or None,
+                "last_model": str(item.get("last_model") or "").strip() or None,
+            }
+        return {"spaces": normalized_spaces}
+
+    def _save_state(self, state: dict[str, Any]) -> None:
+        payload = {"updated_at": iso_now_utc(), "spaces": ensure_dict(state.get("spaces"))}
+        write_json(self.state_path, payload)
+
+    def _space_state(self, state: dict[str, Any], space_key: str) -> dict[str, Any]:
+        spaces = ensure_dict(state.setdefault("spaces", {}))
+        return ensure_dict(
+            spaces.setdefault(
+                space_key,
+                {"summary": "", "turns": [], "updated_at": None, "last_lane": None, "last_provider": None, "last_model": None},
+            )
+        )
+
+    def _prepare_history(self, *, space_state: dict[str, Any], user_text: str) -> tuple[str, list[dict[str, str]]]:
+        summary = str(space_state.get("summary") or "").strip()
+        turns = normalize_turns(space_state.get("turns", []))
+        if len(turns) > 8:
+            summary = deterministic_checkpoint(summary, turns[:-6])
+            turns = turns[-6:]
+        turns.append({"role": "user", "content": user_text.strip()})
+        return summary, turns[-8:]
+
+    def _persist_turns(
+        self,
+        *,
+        state: dict[str, Any],
+        space_key: str,
+        summary: str,
+        turns: list[dict[str, str]],
+        lane: str,
+        provider: str,
+        model: str,
+    ) -> None:
+        assistant_space = self._space_state(state, space_key)
+        assistant_space["summary"] = summary[-1400:] if summary else ""
+        assistant_space["turns"] = turns[-10:]
+        assistant_space["updated_at"] = iso_now_utc()
+        assistant_space["last_lane"] = lane
+        assistant_space["last_provider"] = provider
+        assistant_space["last_model"] = model
+        self._save_state(state)
+
+    def _log_call(
+        self,
+        *,
+        lane: str,
+        provider: str,
+        model: str,
+        space_key: str,
+        situation: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        latency_ms: int,
+        status: str,
+    ) -> None:
+        append_ndjson(
+            self.telemetry_path,
+            {
+                "ts": iso_now_utc(),
+                "task_id": f"assistant-chat-{space_key}",
+                "lane": lane,
+                "provider": provider,
+                "model": model,
+                "status": status,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "latency_ms": latency_ms,
+                "estimated_cost_usd": 0.0,
+                "situation": situation,
+                "space_key": space_key,
+            },
+        )
+
+    def reply(self, *, text: str, route: dict[str, Any]) -> dict[str, Any]:
+        space_key = str(route.get("space_key") or "general").strip() or "general"
+        situation = choose_situation(text=text, space_key=space_key)
+        plan = resolve_chat_route(
+            situation=situation,
+            models_path=self.models_path,
+            agents_path=self.agents_path,
+            env_values=self.env_values,
+        )
+
+        state = self._load_state()
+        space_state = self._space_state(state, space_key)
+        session_summary, turns = self._prepare_history(space_state=space_state, user_text=text)
+        system_prompt = build_system_prompt(
+            space_key=space_key,
+            route=route,
+            backend=self.backend,
+            session_summary=session_summary,
+        )
+        messages = [{"role": row["role"], "content": row["content"]} for row in turns]
+        try:
+            result = invoke_chat_provider(
+                provider_name=str(plan["provider"]),
+                provider_cfg=ensure_dict(plan["provider_cfg"]),
+                model=str(plan["model"]),
+                env_values=self.env_values,
+                system_prompt=system_prompt,
+                messages=messages,
+            )
+        except Exception:
+            self._log_call(
+                lane=str(plan["lane"]),
+                provider=str(plan["provider"]),
+                model=str(plan["model"]),
+                space_key=space_key,
+                situation=situation,
+                prompt_tokens=estimate_tokens(system_prompt + "\n" + "\n".join(row["content"] for row in messages)),
+                completion_tokens=0,
+                latency_ms=0,
+                status="error",
+            )
+            raise
+        reply_text = str(result.get("text") or "").strip()
+        if not reply_text:
+            raise RuntimeError("assistant chat provider returned an empty response")
+
+        prompt_tokens = int(result.get("prompt_tokens", 0) or 0) or estimate_tokens(system_prompt + "\n" + "\n".join(row["content"] for row in messages))
+        completion_tokens = int(result.get("completion_tokens", 0) or 0) or estimate_tokens(reply_text)
+        latency_ms = int(result.get("latency_ms", 0) or 0)
+
+        turns.append({"role": "assistant", "content": reply_text})
+        turns = turns[-10:]
+        refreshed_summary = session_summary
+        if len(turns) > 8:
+            refreshed_summary = deterministic_checkpoint(session_summary, turns[:-6])
+            turns = turns[-6:]
+        self._persist_turns(
+            state=state,
+            space_key=space_key,
+            summary=refreshed_summary,
+            turns=turns,
+            lane=str(plan["lane"]),
+            provider=str(plan["provider"]),
+            model=str(plan["model"]),
+        )
+        self._log_call(
+            lane=str(plan["lane"]),
+            provider=str(plan["provider"]),
+            model=str(plan["model"]),
+            space_key=space_key,
+            situation=situation,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            latency_ms=latency_ms,
+            status="success",
+        )
+        return {
+            "reply_text": reply_text,
+            "space_key": space_key,
+            "situation": situation,
+            "lane": str(plan["lane"]),
+            "requested_lane": str(plan["requested_lane"]),
+            "downgraded_from_lane": plan.get("downgraded_from_lane"),
+            "provider": str(plan["provider"]),
+            "model": str(plan["model"]),
+            "latency_ms": latency_ms,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        }
+
+
+def build_runtime(
+    *,
+    root: Path = ROOT,
+    env_file: Path | None = None,
+) -> AssistantChatRuntime:
+    env_values = load_env_file(env_file, strict=True) if env_file else {}
+    backend = DashboardBackend(root=root)
+    return AssistantChatRuntime(root=root, backend=backend, env_values=env_values)

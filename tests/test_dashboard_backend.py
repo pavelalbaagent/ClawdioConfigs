@@ -61,10 +61,13 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("braindump", state)
         self.assertIn("calendar_runtime", state)
         self.assertIn("personal_tasks", state)
+        self.assertIn("provider_health", state)
+        self.assertIn("agent_runtime", state)
 
         self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_core")
         self.assertEqual(state["profiles"]["memory"]["active"], "md_only")
         self.assertEqual(state["routing"]["active_mode"], "balanced_default")
+        self.assertEqual(state["agent_runtime"]["default_user_facing_agent"], "assistant")
 
     def test_set_integration_enabled_updates_yaml(self):
         path = self.tmp_path / "config" / "integrations.yaml"
@@ -127,6 +130,13 @@ class DashboardBackendTests(unittest.TestCase):
         self.backend.set_dashboard_flags(auth_allow_generated_token=True)
         cfg = self.backend.read_dashboard_config()
         self.assertTrue(cfg["dashboard"]["auth"]["allow_generated_token"])
+
+    def test_run_provider_smoke_check_writes_snapshot(self):
+        result = self.backend.run_provider_smoke_check(live=False)
+        self.assertIn("providers", result)
+        self.assertTrue((self.tmp_path / "data" / "provider-smoke-status.json").exists())
+        google = next(row for row in result["providers"] if row["provider"] == "google_ai_studio_free")
+        self.assertEqual(google["local_status"], "missing_env")
 
     def test_apply_preset_updates_profiles_and_toggles(self):
         result = self.backend.apply_preset("manual_min_cost")
@@ -217,6 +227,43 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertEqual(route["space_key"], "projects/calendar-conflict-review")
         self.assertEqual(route["stripped_text"], "remind me to review the calendar queue")
         self.assertEqual(route["space"]["entry_command_hint"], "[project:calendar-conflict-review]")
+
+    def test_route_text_to_space_suggests_close_project_matches(self):
+        route = self.backend.route_text_to_space(text="[project:clawdio] add a runtime status badge")
+
+        self.assertTrue(route["matched"])
+        self.assertFalse(route["resolved"])
+        suggestions = route["suggested_projects"]
+        self.assertTrue(suggestions)
+        self.assertEqual(suggestions[0]["space_key"], "projects/openclaw-v2-rebuild")
+
+    def test_route_text_to_space_resolves_specialist_core_space(self):
+        route = self.backend.route_text_to_space(
+            text="research: compare openrouter and gemini for fallback routing"
+        )
+
+        self.assertTrue(route["matched"])
+        self.assertTrue(route["resolved"])
+        self.assertEqual(route["agent_id"], "researcher")
+        self.assertEqual(route["space_key"], "research")
+        self.assertEqual(route["kind"], "core")
+        self.assertEqual(route["space"]["entry_command_hint"], "research: <text>")
+
+    def test_create_agent_routed_task_keeps_non_project_request_outside_default_project(self):
+        result = self.backend.create_agent_routed_task(
+            text="coding: tighten provider routing panel",
+            source="telegram",
+        )
+
+        task = result["task"]
+        self.assertEqual(task["assignees"], ["builder"])
+        self.assertEqual(task["project_id"], None)
+        self.assertEqual(result["route"]["space_key"], "coding")
+
+        state = self.backend.build_state()
+        last_route = state["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "builder")
+        self.assertEqual(last_route["space_key"], "coding")
 
     def test_assign_task_to_project_space_moves_existing_task(self):
         source = self.backend.create_project(name="Inbox Ops", owner="pavel")

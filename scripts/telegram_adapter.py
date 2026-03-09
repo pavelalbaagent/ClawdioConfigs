@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "ops" / "scripts"))
 
 from backend import DashboardBackend, ensure_dict  # type: ignore  # noqa: E402
+import assistant_chat_runtime  # type: ignore  # noqa: E402
 import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
 from check_env_requirements import load_env_file  # type: ignore  # noqa: E402
 import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
@@ -57,6 +58,13 @@ HELP_TEXT = "\n".join(
         "- calendar today",
         "- calendar next",
         "- status",
+        "- assistant: <text>",
+        "- any other plain text -> assistant general chat",
+        "- reminders: <text>",
+        "- research: <text>",
+        "- fitness: <text>",
+        "- coding: <text>",
+        "- ops: <text>",
         "- [project:slug] <text>  -> capture as project task",
     ]
 )
@@ -256,6 +264,11 @@ class TelegramAdapter:
         self.state_path = state_path
         self.reminder_state_path = reminder_state_path
         self.default_timezone = default_timezone
+        self.assistant_chat = assistant_chat_runtime.AssistantChatRuntime(
+            root=root,
+            backend=backend,
+            env_values=env_values,
+        )
 
     def load_adapter_state(self) -> dict[str, Any]:
         data = read_json(self.state_path)
@@ -546,6 +559,9 @@ class TelegramAdapter:
 
     def _handle_status(self) -> str:
         snapshot = self.backend.build_state()
+        agent_runtime = ensure_dict(snapshot.get("agent_runtime"))
+        activity = ensure_dict(agent_runtime.get("activity"))
+        last_route = ensure_dict(activity.get("last_route"))
         reminders = ensure_dict(snapshot.get("reminders"))
         calendar_runtime_state = ensure_dict(snapshot.get("calendar_runtime"))
         personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
@@ -559,26 +575,100 @@ class TelegramAdapter:
             f"- Personal tasks open: {ensure_dict(personal_tasks.get('summary')).get('open_count', 0)}",
             f"- Braindump due: {ensure_dict(braindump.get('counts')).get('due_for_review', 0)}",
             f"- Active projects: {ensure_dict(workspace.get('project_counts')).get('active', 0)}",
+            f"- Front door agent: {agent_runtime.get('default_user_facing_agent') or 'assistant'}",
         ]
+        if last_route:
+            lines.append(
+                f"- Last route: {last_route.get('agent_id')} -> {last_route.get('space_key')} ({last_route.get('route_mode')})"
+            )
         return "\n".join(lines)
 
     def _handle_project_capture(self, text: str) -> str:
-        route = self.backend.route_text_to_space(text=text)
-        if route.get("kind") != "project":
-            raise ValueError("not a project-targeted message")
-        if route.get("matched") and not route.get("resolved"):
-            raise ValueError(f"project space not found: {route.get('space_key')}")
-        stripped = str(route.get("stripped_text") or "").strip()
-        if not stripped:
-            raise ValueError("project task text is required")
-        task = self.backend.create_task(
-            title=stripped,
-            assignees=["pavel"],
-            project_id=str(route.get("project_id") or "").strip() or None,
-            notes=f"Captured from Telegram project space {route.get('space_key')}",
+        result = self.backend.create_agent_routed_task(text=text, source="telegram")
+        route = ensure_dict(result.get("route"))
+        task = ensure_dict(result.get("task"))
+        agent_label = str(ensure_dict(route.get("agent")).get("label", route.get("agent_id", "assistant"))).strip()
+        return f"Project task captured for {agent_label}: {task.get('title')}"
+
+    def _record_agent_activity(
+        self,
+        *,
+        agent_id: str,
+        space_key: str,
+        action: str,
+        text: str | None = None,
+        route_mode: str = "default_front_door",
+    ) -> None:
+        self.backend.record_agent_activity(
+            agent_id=agent_id,
+            space_key=space_key,
             source="telegram",
+            action=action,
+            text=text,
+            route_mode=route_mode,
         )
-        return f"Project task captured: {task['title']}"
+
+    def _handle_specialist_capture(self, text: str, route: dict[str, Any]) -> str:
+        try:
+            result = self.backend.create_agent_routed_task(text=text, source="telegram")
+        except ValueError as exc:
+            if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
+                return self._format_unknown_project_route(route)
+            raise exc
+        task = ensure_dict(result.get("task"))
+        resolved_route = ensure_dict(result.get("route"))
+        agent = ensure_dict(resolved_route.get("agent"))
+        label = str(agent.get("label", resolved_route.get("agent_id", "assistant"))).strip() or "assistant"
+        space_key = str(resolved_route.get("space_key") or "general").strip()
+        project_note = (
+            f" in project {resolved_route.get('project_name')}"
+            if str(resolved_route.get("project_name") or "").strip()
+            else ""
+        )
+        return f"Routed to {label} in {space_key}{project_note}. Task created: {task.get('title')}"
+
+    def _format_unknown_project_route(self, route: dict[str, Any]) -> str:
+        requested = str(route.get("space_key") or "project").strip()
+        suggestions = [ensure_dict(item) for item in route.get("suggested_projects", []) if isinstance(item, dict)]
+        if suggestions:
+            suggestion_text = " | ".join(
+                f"{row.get('name')} -> {row.get('entry_command_hint') or row.get('space_key')}"
+                for row in suggestions[:3]
+            )
+            return f"Project space not found: {requested}. Closest matches: {suggestion_text}"
+        return f"Project space not found: {requested}. Create the project first or use an existing [project:slug]."
+
+    def _handle_assistant_chat(self, *, text: str, route: dict[str, Any]) -> str:
+        try:
+            result = self.assistant_chat.reply(text=text, route=route)
+        except Exception as exc:  # noqa: BLE001
+            return f"Assistant chat is not ready for that request: {exc}"
+        lane = str(result.get("lane") or "").strip() or None
+        provider = str(result.get("provider") or "").strip() or None
+        model = str(result.get("model") or "").strip() or None
+        self._record_agent_activity(
+            agent_id="assistant",
+            space_key=str(result.get("space_key") or route.get("space_key") or "general"),
+            action="assistant_chat",
+            text=text,
+            route_mode=str(route.get("route_mode") or "default_front_door"),
+        )
+        runtime_state = self.backend._load_agent_runtime_state()
+        last_route = ensure_dict(runtime_state.get("last_route"))
+        if last_route:
+            if lane:
+                last_route["lane"] = lane
+            if provider:
+                last_route["provider"] = provider
+            if model:
+                last_route["model"] = model
+            recent = [ensure_dict(item) for item in runtime_state.get("recent_routes", [])]
+            if recent:
+                recent[-1] = last_route
+                runtime_state["recent_routes"] = recent
+            runtime_state["last_route"] = last_route
+            self.backend._save_agent_runtime_state(runtime_state)
+        return str(result.get("reply_text") or "").strip()
 
     def handle_message(self, message: dict[str, Any], *, state: dict[str, Any]) -> list[str]:
         event = normalize_telegram({"message": message})
@@ -590,64 +680,146 @@ class TelegramAdapter:
         if not text:
             return []
 
-        command_name, body = parse_command_text(text)
+        route = self.backend.route_text_to_space(text=text)
+        routed_text = str(route.get("stripped_text") or "").strip() or text.strip()
+        explicit_specialist = bool(route.get("explicit_agent")) and str(route.get("agent_id")) != "assistant"
+        explicit_assistant_space = bool(route.get("explicit_space")) and str(route.get("agent_id")) == "assistant"
+
+        command_name, body = parse_command_text(routed_text)
         reply_to_message_id = message.get("reply_to_message", {}).get("message_id") if isinstance(message.get("reply_to_message"), dict) else None
 
-        if command_name in {"start", "help"} or text.strip().lower() == "help":
+        if command_name in {"start", "help"} or routed_text.strip().lower() == "help":
             return [HELP_TEXT]
 
-        if command_name == "status" or text.strip().lower() == "status":
+        if command_name == "status" or routed_text.strip().lower() == "status":
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="general",
+                action="status",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [self._handle_status()]
+
+        if explicit_specialist:
+            return [self._handle_specialist_capture(text, route)]
 
         if command_name == "calendar":
             if body.lower() in {"", "today"}:
+                self._record_agent_activity(
+                    agent_id="assistant",
+                    space_key="calendar",
+                    action="calendar_today",
+                    route_mode=str(route.get("route_mode") or "default_front_door"),
+                )
                 return [self._handle_calendar_today()]
             if body.lower() in {"next", "upcoming"}:
+                self._record_agent_activity(
+                    agent_id="assistant",
+                    space_key="calendar",
+                    action="calendar_next",
+                    route_mode=str(route.get("route_mode") or "default_front_door"),
+                )
                 return [self._handle_calendar_next()]
 
-        if is_calendar_today_request(text):
+        if is_calendar_today_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="calendar",
+                action="calendar_today",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [self._handle_calendar_today()]
-        if is_calendar_next_request(text):
+        if is_calendar_next_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="calendar",
+                action="calendar_next",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [self._handle_calendar_next()]
 
-        if command_name == "tasks" or is_task_list_request(text):
+        if command_name == "tasks" or is_task_list_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="tasks",
+                action="tasks_list",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [self._handle_tasks_list()]
 
         if command_name in {"task", "add-task"}:
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="tasks",
+                action="task_create",
+                text=body,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [self._handle_task_create(f"task {body}")]
 
-        if parse_task_create_text(text):
-            return [self._handle_task_create(text)]
+        if parse_task_create_text(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="tasks",
+                action="task_create",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_task_create(routed_text)]
 
-        route = self.backend.route_text_to_space(text=text)
-        routed_text = (
-            str(route.get("stripped_text") or "").strip()
-            if route.get("kind") == "project" and route.get("resolved")
-            else text.strip()
-        )
         try:
             braindump_runtime.parse_capture_text(routed_text)
             result = self.backend.capture_braindump_text(text=text, source="telegram")
             item = ensure_dict(result.get("item"))
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="braindump",
+                action="braindump_capture",
+                text=str(item.get("short_text") or routed_text),
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [f"Braindump captured: [{item.get('category')}] {item.get('short_text')}"]
-        except ValueError:
+        except ValueError as exc:
+            if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
+                return [self._format_unknown_project_route(route)]
+            if str(exc).startswith("project space not found:"):
+                return [self._format_unknown_project_route(route)]
             pass
 
-        reply_candidate = reminder_sm.parse_reply_text(text)
+        reply_candidate = reminder_sm.parse_reply_text(routed_text)
         if reply_candidate[0] != "ignore":
             reminder_id = self._reply_linked_reminder_id(
                 state,
                 chat_id=chat_id,
                 reply_to_message_id=int(reply_to_message_id) if reply_to_message_id is not None else None,
             )
-            return [self._handle_reminder_reply(text, reminder_id=reminder_id)]
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="reminders",
+                action="reminder_reply",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_reminder_reply(routed_text, reminder_id=reminder_id)]
 
-        if reminder_sm.parse_create_text(text):
-            _, confirmation = self._create_reminder_from_text(text)
+        if reminder_sm.parse_create_text(routed_text):
+            _, confirmation = self._create_reminder_from_text(routed_text)
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="reminders",
+                action="reminder_create",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
             return [confirmation]
 
         if route.get("kind") == "project":
+            if not route.get("resolved"):
+                return [self._format_unknown_project_route(route)]
             return [self._handle_project_capture(text)]
+
+        if explicit_assistant_space or str(route.get("agent_id") or "assistant") == "assistant":
+            return [self._handle_assistant_chat(text=routed_text, route=route)]
 
         return ["I did not match that to a supported command.\n" + HELP_TEXT]
 

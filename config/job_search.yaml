@@ -1,0 +1,163 @@
+job_search:
+  enabled: true
+  mode: manual_review_only
+  allowed_sources:
+    - pasted_text
+    - saved_text
+    - public_url_best_effort
+  blocked_actions:
+    - auto_apply
+    - browser_login
+    - form_submission
+    - linkedin_session_automation
+
+  outputs:
+    triage_dir: output/jobs/triage
+    daily_summary_dir: output/jobs/daily
+    latest_status_file: data/job-search-daily-summary.json
+
+  inputs:
+    saved_postings_dir: data/job-search/inbox
+
+  schedule:
+    enabled: true
+    timezone: America/Guayaquil
+    delivery_time_local: "18:30"
+    allow_empty_report: true
+
+  delivery:
+    channel: telegram
+    send_when_empty: true
+    include_pass_section: false
+    telegram:
+      enabled: true
+      max_entries_per_section: 3
+      include_output_paths: true
+      max_message_chars: 3200
+
+  candidate_profile:
+    name: Pavel Alba
+    base_location: Ecuador
+    primary_market: international_remote
+    preferred_employment_types:
+      - full-time
+      - contract-to-full-time
+    required_overlap_notes:
+      - u.s. time zones
+      - us time zones
+      - north america overlap
+
+  search_strategy:
+    core_boolean_queries:
+      - ("ai enablement" OR "ai adoption" OR "workflow automation")
+      - ("business process automation" OR "process improvement" OR "digital transformation")
+      - ("solutions consultant" OR "implementation consultant" OR "solutions engineer") AND (ai OR automation)
+      - ("internal tools" OR "ai operations" OR "technical enablement") AND (automation OR ai)
+    filter_notes:
+      - Use Workplace type = Remote.
+      - Use Location = Ecuador first to find jobs explicitly open to candidates working from Ecuador.
+      - Also run Remote searches in United States, Canada, and LATAM because many international employers post remote roles under their home market only.
+      - Manually inspect descriptions for location and authorization restrictions.
+
+  eligibility_rules:
+    allow_patterns:
+      - ecuador
+      - latin america
+      - latam
+      - south america
+      - worldwide
+      - global remote
+      - work from anywhere
+      - international candidates
+      - contractor outside the u.s.
+    possible_patterns:
+      - remote
+      - fully remote
+      - remote-first
+      - u.s. time zones
+      - us time zones
+      - overlap with u.s. time zones
+      - north america hours
+    deny_patterns:
+      - must be based in the u.s.
+      - must be located in the u.s.
+      - u.s. work authorization
+      - authorized to work in the united states
+      - must reside in the united states
+      - canada only
+      - u.k. only
+      - uk only
+      - europe only
+      - eu only
+      - must be based in canada
+      - must be located in canada
+
+  fit_rules:
+    strong_positive_keywords:
+      - ai enablement
+      - ai adoption
+      - workflow automation
+      - agentic workflows
+      - business process automation
+      - digital transformation
+      - technical enablement
+      - solutions consultant
+      - implementation consultant
+      - cross-functional
+      - stakeholder
+      - user adoption
+      - process improvement
+    positive_keywords:
+      - internal tools
+      - ai operations
+      - generative ai
+      - llm
+      - agents
+      - product thinking
+      - client-facing
+      - automation
+      - operational workflows
+      - python
+    stretch_keywords:
+      - solutions engineer
+      - agentic software engineer
+      - llm frameworks
+      - vector databases
+      - evaluation pipelines
+      - production ai
+    negative_keywords:
+      - research scientist
+      - data scientist
+      - ml engineer
+      - machine learning engineer
+      - quantitative researcher
+      - computer vision
+      - nlp researcher
+      - pure research
+      - phd
+    seniority_penalties:
+      principal: 18
+      staff: 14
+      director: 12
+      head of: 16
+      vice president: 20
+      vp: 20
+      chief: 20
+
+  daily_summary:
+    recommendation_priority:
+      - apply
+      - manual_review
+      - stretch_apply
+      - pass
+    eligibility_priority:
+      - direct_yes
+      - possible_manual_check
+      - unclear
+      - likely_no
+    include_sections:
+      - apply
+      - manual_review
+      - stretch_apply
+      - pass
+    max_roles_per_section: 10

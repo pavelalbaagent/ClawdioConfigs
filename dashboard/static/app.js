@@ -379,6 +379,217 @@ function renderIntegrationLists(snapshot) {
   }
 }
 
+function renderProviderHealth(snapshot) {
+  const providerBody = byId("provider-health-body");
+  const routingBody = byId("provider-routing-body");
+  providerBody.innerHTML = "";
+  routingBody.innerHTML = "";
+
+  const health = snapshot.provider_health || {};
+  const summary = health.summary || {};
+  const profiles = health.active_profiles || {};
+  const providers = health.providers || [];
+  const situations = health.situations || [];
+
+  setText(
+    "provider-health-summary",
+    `${summary.configured_count || 0}/${summary.total_providers || 0} configured | ${summary.locally_usable_count || 0} locally usable | ${summary.live_ok_count || 0} live ok`
+  );
+  setText(
+    "provider-health-profiles-meta",
+    `integrations=${profiles.integrations || "-"} | memory=${profiles.memory || "-"} | routing=${profiles.routing_mode || "-"}`
+  );
+  setText("provider-health-last-probe-meta", health.last_snapshot_generated_at || "not run");
+  setText("provider-health-env-meta", health.env_file || "not found");
+
+  if (!providers.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["none", "-", "-", "-", "-"]);
+    providerBody.appendChild(tr);
+  } else {
+    for (const row of providers) {
+      const tr = document.createElement("tr");
+      const localStatus = row.local_status === "ready"
+        ? "ready"
+        : row.local_status === "missing_env"
+          ? `missing env: ${(row.missing_env || []).join(", ")}`
+          : row.local_status === "missing_command"
+            ? `missing command: ${row.required_command || "-"}`
+            : row.local_status || "-";
+      const probe = row.live_probe || {};
+      let liveStatus = "-";
+      if (probe.attempted) {
+        liveStatus = probe.ok ? `ok (${probe.latency_ms || 0}ms)` : `error: ${probe.error || "failed"}`;
+      } else if (row.configured) {
+        liveStatus = "not run";
+      }
+      const usedBy = [];
+      if ((row.referenced_by_lanes || []).length) {
+        usedBy.push((row.referenced_by_lanes || []).join(", "));
+      }
+      if (row.enabled_in_active_memory) {
+        usedBy.push("memory");
+      }
+      appendCells(tr, [
+        row.provider || "-",
+        row.resolved_default_model || row.default_model || "-",
+        localStatus,
+        liveStatus,
+        usedBy.join(" | ") || "-",
+      ]);
+      providerBody.appendChild(tr);
+    }
+  }
+
+  if (!situations.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["none", "-", "-", "-"]);
+    routingBody.appendChild(tr);
+    return;
+  }
+
+  for (const row of situations) {
+    const tr = document.createElement("tr");
+    const candidates = (row.provider_candidates || [])
+      .map((candidate) => `${candidate.provider}[${candidate.model || "-"}]`)
+      .join(", ");
+    appendCells(tr, [
+      row.name || "-",
+      row.preferred_lane || "-",
+      candidates || "-",
+      row.approval_required ? "yes" : "no",
+    ]);
+    routingBody.appendChild(tr);
+  }
+}
+
+function renderAgentRuntime(snapshot) {
+  const runtime = snapshot.agent_runtime || {};
+  const registryBody = byId("agent-registry-body");
+  registryBody.innerHTML = "";
+
+  const visibleAgents = runtime.visible_agents || [];
+  const internalRoles = runtime.internal_roles || [];
+  const activity = runtime.activity || {};
+  const improvement = runtime.continuous_improvement || {};
+  const sessionPolicy = runtime.session_policy || {};
+  const spaceRegistry = runtime.space_registry || {};
+  const lastRoute = activity.last_route || null;
+  const routeCounts = activity.counts_by_agent || {};
+  const routeSpaceCounts = activity.counts_by_space || {};
+
+  setText(
+    "agent-runtime-summary",
+    `${visibleAgents.length} visible agents | ${internalRoles.length} internal roles | routing=${runtime.active_routing_mode || "-"}`
+  );
+  setText(
+    "agent-default-meta",
+    `${runtime.default_user_facing_agent || "assistant"} | summarize>${sessionPolicy.summarize_when_context_tokens_over || "-"} | idle reset=${sessionPolicy.idle_reset_minutes || "-"}m`
+  );
+  setText(
+    "agent-space-grammar-meta",
+    (spaceRegistry.catalog || [])
+      .map((row) => row.entry_command_hint || row.key)
+      .slice(0, 8)
+      .join(" | ") || "-"
+  );
+  setText(
+    "agent-route-counts-meta",
+    Object.entries(routeCounts)
+      .map(([agent, count]) => `${agent}=${count}`)
+      .join(" | ") || "no routed activity yet"
+  );
+
+  if (!visibleAgents.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["none", "-", "-", "-", "-"]);
+    registryBody.appendChild(tr);
+  } else {
+    for (const row of visibleAgents) {
+      const tr = document.createElement("tr");
+      appendCells(tr, [
+        row.label || row.id || "-",
+        row.default_space || "-",
+        row.default_lane || "-",
+        (row.owned_spaces || []).join(", ") || "-",
+        (row.responsibilities || []).slice(0, 3).join(", ") || "-",
+      ]);
+      registryBody.appendChild(tr);
+    }
+  }
+
+  if (!lastRoute) {
+    setText("agent-last-route-meta", "No routed interactions yet.");
+  } else {
+    const parts = [
+      `${lastRoute.agent_label || lastRoute.agent_id || "-"}`,
+      `space=${lastRoute.space_key || "-"}`,
+      `mode=${lastRoute.route_mode || "-"}`,
+      `source=${lastRoute.source || "-"}`,
+    ];
+    if (lastRoute.project_name) {
+      parts.push(`project=${lastRoute.project_name}`);
+    }
+    if (lastRoute.action) {
+      parts.push(`action=${lastRoute.action}`);
+    }
+    if (lastRoute.excerpt) {
+      parts.push(`text=${lastRoute.excerpt}`);
+    }
+    setText("agent-last-route-meta", parts.join(" | "));
+  }
+
+  setText(
+    "agent-internal-roles-meta",
+    internalRoles.map((row) => `${row.label || row.id}(${row.default_lane || "-"})`).join(" | ") || "-"
+  );
+
+  const cadence = improvement.cadence || {};
+  setText(
+    "agent-improvement-meta",
+    improvement.enabled
+      ? `${improvement.owner_role || "ops_guard"} | daily=${cadence.daily_ops_review ? "on" : "off"} | weekly=${
+          cadence.weekly_architecture_review ? "on" : "off"
+        }`
+      : "disabled"
+  );
+  setText(
+    "agent-blocked-actions-meta",
+    (improvement.blocked_auto_actions || []).join(", ") || "none"
+  );
+  setText(
+    "agent-recent-routes-meta",
+    (activity.recent_routes || [])
+      .slice()
+      .reverse()
+      .map((row) => `${row.agent_id || "-"}:${row.space_key || "-"}${row.task_id ? ` -> ${row.task_id}` : ""}`)
+      .slice(0, 6)
+      .join(" | ") ||
+      Object.entries(routeSpaceCounts)
+        .map(([space, count]) => `${space}=${count}`)
+        .join(" | ") ||
+      "none"
+  );
+
+  const assistantChat = snapshot.assistant_chat || {};
+  if (!assistantChat.available) {
+    setText("assistant-chat-meta", "No assistant chat state yet.");
+    return;
+  }
+  setText(
+    "assistant-chat-meta",
+    (assistantChat.spaces || [])
+      .map(
+        (row) =>
+          `${row.space_key || "-"}:${row.turn_count || 0}t${
+            row.last_lane ? ` | ${row.last_lane}` : ""
+          }${row.last_provider ? ` | ${row.last_provider}` : ""}`
+      )
+      .slice(0, 4)
+      .join(" | ") || "No assistant chat sessions yet."
+  );
+}
+
 function renderReminders(snapshot) {
   const body = byId("reminders-body");
   body.innerHTML = "";
@@ -1766,6 +1977,20 @@ async function saveDashboardSettings() {
   await loadState();
 }
 
+async function runProviderSmoke(live) {
+  const endpoint = "/api/provider_smoke/run";
+  const result = await api(endpoint, {
+    method: "POST",
+    body: { live },
+  });
+  const summary = ((result || {}).result || {}).summary || {};
+  setText(
+    "provider-health-summary",
+    `${summary.configured_count || 0}/${summary.total_providers || 0} configured | ${summary.locally_usable_count || 0} locally usable | ${summary.live_ok_count || 0} live ok`
+  );
+  await loadState();
+}
+
 function selectedAssigneesForCreate() {
   const container = byId("task-assignee-checkboxes");
   const checks = Array.from(container.querySelectorAll("input[type='checkbox']"));
@@ -2070,6 +2295,8 @@ async function loadState() {
     renderAdapters(snapshot);
     renderMetrics(snapshot);
     renderIntegrationLists(snapshot);
+    renderProviderHealth(snapshot);
+    renderAgentRuntime(snapshot);
     renderReminders(snapshot);
     renderTodoQueue(snapshot);
     renderGmailInbox(snapshot);
@@ -2112,6 +2339,22 @@ function bindEvents() {
   byId("save-dashboard-settings").addEventListener("click", async () => {
     try {
       await saveDashboardSettings();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("provider-smoke-local-button").addEventListener("click", async () => {
+    try {
+      await runProviderSmoke(false);
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("provider-smoke-live-button").addEventListener("click", async () => {
+    try {
+      await runProviderSmoke(true);
     } catch (error) {
       showError(error.message);
     }

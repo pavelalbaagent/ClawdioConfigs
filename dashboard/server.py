@@ -288,6 +288,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "POST /api/memory/toggle",
                         "POST /api/n8n/toggle",
                         "POST /api/dashboard/settings",
+                        "POST /api/provider_smoke/run",
                         "POST /api/projects/create",
                         "POST /api/projects/update",
                         "POST /api/projects/promote_task",
@@ -427,6 +428,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     routing_mode=self._optional_str(payload, "routing_mode"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "config": cfg})
+                return
+
+            if path == "/api/provider_smoke/run":
+                result = self.backend.run_provider_smoke_check(
+                    live=self._optional_bool(payload, "live") or False,
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return
 
             if path == "/api/projects/create":

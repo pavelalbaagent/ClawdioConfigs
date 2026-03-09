@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import difflib
 import io
 import json
 import os
@@ -27,6 +28,7 @@ from validate_configs import load_yaml  # type: ignore  # noqa: E402
 import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
 import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
 import personal_task_runtime as personal_task_runtime  # type: ignore  # noqa: E402
+import provider_smoke_check as provider_smoke_runtime  # type: ignore  # noqa: E402
 from space_router import route_text as route_space_text  # type: ignore  # noqa: E402
 
 
@@ -68,6 +70,13 @@ def ensure_string_list(value: Any) -> list[str]:
 
 def dedupe_string_list(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
+
+
+def optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def read_json(path: Path) -> Any:
@@ -271,8 +280,11 @@ class DashboardBackend:
         self.channels_path = self.config_dir / "channels.yaml"
         self.reminders_path = self.config_dir / "reminders.yaml"
         self.agents_path = self.config_dir / "agents.yaml"
+        self.session_policy_path = self.config_dir / "session_policy.yaml"
         self.dashboard_path = self.config_dir / "dashboard.yaml"
         self.workspace_path = self.root / "data" / "dashboard-workspace.json"
+        self.agent_runtime_state_path = self.root / "data" / "agent-runtime-state.json"
+        self.assistant_chat_state_path = self.root / "data" / "assistant-chat-state.json"
         self.todo_sources = [
             self.root / "TODO.md",
             self.root / "baselines" / "agent_md" / "TODO.md",
@@ -288,6 +300,7 @@ class DashboardBackend:
         self.personal_task_status_path = self.root / "data" / "personal-task-runtime-status.json"
         self.drive_workspace_status_path = self.root / "data" / "drive-workspace-status.json"
         self.braindump_snapshot_path = self.root / "data" / "braindump-snapshot.json"
+        self.provider_smoke_status_path = self.root / "data" / "provider-smoke-status.json"
         self.gmail_db_path = self.root / ".memory" / "inbox_processing.db"
         self.braindump_db_path = self.root / ".memory" / "braindump.db"
         self.braindump_schema_path = self.root / "contracts" / "braindump" / "sqlite_schema.sql"
@@ -325,6 +338,241 @@ class DashboardBackend:
 
     def load_yaml_dict(self, path: Path) -> dict[str, Any]:
         return ensure_dict(load_yaml(path)) if path.exists() else {}
+
+    @staticmethod
+    def _display_label(value: str) -> str:
+        clean = value.strip().replace("_", " ").replace("-", " ")
+        return clean.title() if clean else "Unknown"
+
+    @staticmethod
+    def _space_entry_command_hint(space_key: str) -> str:
+        key = space_key.strip().lower()
+        if key == "general":
+            return "assistant: <text>"
+        if key == "reminders":
+            return "reminders: <text>"
+        if key == "calendar":
+            return "calendar: <text>"
+        if key == "tasks":
+            return "tasks: <text>"
+        if key == "braindump":
+            return "braindump: <text>"
+        if key == "research":
+            return "research: <text>"
+        if key == "job-search":
+            return "job: <text>"
+        if key == "fitness":
+            return "fitness: <text>"
+        if key == "coding":
+            return "coding: <text>"
+        if key == "ops":
+            return "ops: <text>"
+        return f"[{key}] <text>"
+
+    def _load_agent_runtime_state(self) -> dict[str, Any]:
+        raw = read_json(self.agent_runtime_state_path)
+        if not isinstance(raw, dict):
+            return {"last_route": None, "recent_routes": []}
+
+        recent_rows = []
+        for item in raw.get("recent_routes", []):
+            row = ensure_dict(item)
+            if not row:
+                continue
+            recent_rows.append(row)
+
+        last_route = ensure_dict(raw.get("last_route"))
+        return {
+            "last_route": last_route or None,
+            "recent_routes": recent_rows[-40:],
+        }
+
+    def _save_agent_runtime_state(self, state: dict[str, Any]) -> None:
+        payload = {
+            "updated_at": iso_now_utc(),
+            "last_route": ensure_dict(state.get("last_route")) or None,
+            "recent_routes": [ensure_dict(item) for item in state.get("recent_routes", [])][-40:],
+        }
+        write_json(self.agent_runtime_state_path, payload)
+
+    def _agent_runtime_snapshot(self) -> dict[str, Any]:
+        agents_data = self.load_yaml_dict(self.agents_path)
+        session_data = self.load_yaml_dict(self.session_policy_path)
+
+        agents_cfg = ensure_dict(agents_data.get("agents"))
+        internal_cfg = ensure_dict(agents_data.get("internal_roles"))
+        surfaces = ensure_dict(agents_data.get("surfaces"))
+        routing = ensure_dict(agents_data.get("routing_overrides"))
+        improvement = ensure_dict(agents_data.get("continuous_improvement"))
+
+        space_registry = ensure_dict(session_data.get("space_registry"))
+        route_rules = ensure_dict(space_registry.get("route_rules"))
+        lifecycle = ensure_dict(session_data.get("session_lifecycle"))
+        improvement_policy = ensure_dict(session_data.get("continuous_improvement_policy"))
+
+        def build_role(name: str, row: dict[str, Any], *, kind: str) -> dict[str, Any]:
+            rule = ensure_dict(route_rules.get(name))
+            allowed_spaces = ensure_string_list(rule.get("allowed_spaces", []))
+            owned_spaces = ensure_string_list(row.get("owned_spaces", [])) or allowed_spaces
+            responsibilities = ensure_string_list(
+                row.get("primary_responsibilities", row.get("responsibilities", []))
+            )
+            tools = ensure_string_list(row.get("allowed_tools", []))
+            return {
+                "id": name,
+                "label": self._display_label(name),
+                "kind": kind,
+                "enabled": bool(row.get("enabled") is True),
+                "default_lane": str(row.get("default_lane", "")).strip() or None,
+                "default_space": str(rule.get("default_space", "")).strip() or None,
+                "owned_spaces": owned_spaces,
+                "allowed_spaces": allowed_spaces,
+                "responsibilities": responsibilities,
+                "allowed_tools": tools,
+                "can_spawn_subagents": bool(row.get("can_spawn_subagents") is True),
+            }
+
+        visible_order = ensure_string_list(surfaces.get("visible_agents", []))
+        hidden_order = ensure_string_list(surfaces.get("hidden_internal_roles", []))
+        default_user_facing_agent = str(surfaces.get("default_user_facing_agent", "assistant")).strip() or "assistant"
+
+        visible_agents: list[dict[str, Any]] = []
+        for name in visible_order:
+            row = ensure_dict(agents_cfg.get(name))
+            if row:
+                visible_agents.append(build_role(name, row, kind="visible_agent"))
+        for name, row in sorted(agents_cfg.items(), key=lambda kv: kv[0]):
+            if name in visible_order:
+                continue
+            visible_agents.append(build_role(str(name), ensure_dict(row), kind="visible_agent"))
+
+        internal_roles: list[dict[str, Any]] = []
+        for name in hidden_order:
+            row = ensure_dict(internal_cfg.get(name))
+            if row:
+                internal_roles.append(build_role(name, row, kind="internal_role"))
+        for name, row in sorted(internal_cfg.items(), key=lambda kv: kv[0]):
+            if name in hidden_order:
+                continue
+            internal_roles.append(build_role(str(name), ensure_dict(row), kind="internal_role"))
+
+        space_defaults: dict[str, str | None] = {}
+        for role_name, rule in route_rules.items():
+            rule_row = ensure_dict(rule)
+            for allowed in ensure_string_list(rule_row.get("allowed_spaces", [])):
+                if "*" in allowed:
+                    continue
+                space_defaults.setdefault(allowed, str(role_name))
+
+        core_spaces = ensure_string_list(space_registry.get("core_spaces", []))
+        space_catalog = [
+            {
+                "key": key,
+                "name": self._display_label(key),
+                "kind": "core",
+                "default_agent": space_defaults.get(key),
+                "entry_command_hint": self._space_entry_command_hint(key),
+                "session_strategy": "shared_session",
+                "agent_strategy": "coordinator_only" if space_defaults.get(key) == "assistant" else "spawn_on_demand",
+            }
+            for key in core_spaces
+        ]
+
+        runtime_state = self._load_agent_runtime_state()
+        recent_routes = [ensure_dict(item) for item in runtime_state.get("recent_routes", [])]
+        counts_by_agent: dict[str, int] = defaultdict(int)
+        counts_by_space: dict[str, int] = defaultdict(int)
+        for row in recent_routes:
+            agent_id = str(row.get("agent_id", "")).strip()
+            space_key = str(row.get("space_key", "")).strip()
+            if agent_id:
+                counts_by_agent[agent_id] += 1
+            if space_key:
+                counts_by_space[space_key] += 1
+
+        return {
+            "default_user_facing_agent": default_user_facing_agent,
+            "visible_agents": visible_agents,
+            "internal_roles": internal_roles,
+            "active_routing_mode": str(routing.get("active_mode", "")).strip() or None,
+            "space_registry": {
+                "default_space": str(space_registry.get("default_space", "general")).strip() or "general",
+                "core_spaces": core_spaces,
+                "dynamic_space_prefixes": ensure_string_list(space_registry.get("dynamic_space_prefixes", [])),
+                "catalog": space_catalog,
+            },
+            "session_policy": {
+                "default_context_window_tokens": lifecycle.get("default_context_window_tokens"),
+                "summarize_when_context_tokens_over": lifecycle.get("summarize_when_context_tokens_over"),
+                "checkpoint_every_turns": lifecycle.get("checkpoint_every_turns"),
+                "checkpoint_every_minutes": lifecycle.get("checkpoint_every_minutes"),
+                "idle_reset_minutes": lifecycle.get("idle_reset_minutes"),
+                "preserve_on_restart": ensure_string_list(lifecycle.get("preserve_on_restart", [])),
+            },
+            "continuous_improvement": {
+                "enabled": bool(improvement.get("enabled") is True),
+                "mode": str(improvement.get("mode", "")).strip() or None,
+                "owner_role": str(improvement.get("owner_role", "")).strip() or None,
+                "reviewer_roles": ensure_string_list(improvement.get("reviewer_roles", [])),
+                "cadence": ensure_dict(improvement.get("cadence")),
+                "daily_review_inputs": ensure_string_list(improvement_policy.get("daily_review_inputs", [])),
+                "weekly_review_inputs": ensure_string_list(improvement_policy.get("weekly_review_inputs", [])),
+                "output_sections": ensure_string_list(improvement_policy.get("output_sections", [])),
+                "blocked_auto_actions": ensure_string_list(improvement_policy.get("blocked_auto_actions", [])),
+            },
+            "activity": {
+                "last_route": ensure_dict(runtime_state.get("last_route")) or None,
+                "recent_routes": recent_routes[-12:],
+                "counts_by_agent": dict(sorted(counts_by_agent.items(), key=lambda item: (-item[1], item[0]))),
+                "counts_by_space": dict(sorted(counts_by_space.items(), key=lambda item: (-item[1], item[0]))),
+            },
+        }
+
+    def record_agent_activity(
+        self,
+        *,
+        agent_id: str,
+        space_key: str,
+        source: str,
+        action: str,
+        text: str | None = None,
+        route_mode: str | None = None,
+        space_kind: str = "core",
+        project_id: str | None = None,
+        project_name: str | None = None,
+        lane: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        clean_agent = agent_id.strip().lower() or "assistant"
+        clean_space = space_key.strip().lower() or "general"
+        registry = self._agent_runtime_snapshot()
+        agent_lookup = {
+            row["id"]: row for row in registry.get("visible_agents", []) + registry.get("internal_roles", [])
+        }
+        role = ensure_dict(agent_lookup.get(clean_agent))
+        entry = {
+            "ts": iso_now_utc(),
+            "source": source.strip().lower() or "unknown",
+            "action": action.strip().lower() or "route",
+            "agent_id": clean_agent,
+            "agent_label": role.get("label") or self._display_label(clean_agent),
+            "space_key": clean_space,
+            "space_kind": space_kind.strip().lower() or "core",
+            "route_mode": (route_mode or "").strip() or "default",
+            "project_id": (project_id or "").strip() or None,
+            "project_name": (project_name or "").strip() or None,
+            "lane": (lane or role.get("default_lane") or "").strip() or None,
+            "task_id": (task_id or "").strip() or None,
+            "excerpt": (text or "").strip()[:160] or None,
+        }
+
+        state = self._load_agent_runtime_state()
+        recent_routes = [ensure_dict(item) for item in state.get("recent_routes", [])]
+        recent_routes.append(entry)
+        state["recent_routes"] = recent_routes[-40:]
+        state["last_route"] = entry
+        self._save_agent_runtime_state(state)
+        return entry
 
     def _default_dashboard_config(self) -> dict[str, Any]:
         return {
@@ -516,7 +764,7 @@ class DashboardBackend:
         if kind not in SPACE_KINDS:
             kind = "project"
 
-        project_id = str(row.get("project_id", "")).strip() or None
+        project_id = optional_str(row.get("project_id"))
         space_id = str(row.get("id", "")).strip() or f"space-{slugify(name)}-{uuid.uuid4().hex[:6]}"
         key = str(row.get("key", "")).strip() or f"{kind}/{slugify(name)}"
 
@@ -547,8 +795,8 @@ class DashboardBackend:
             "compaction_strategy": str(row.get("compaction_strategy", "milestone_summary")).strip()
             or "milestone_summary",
             "template_version": str(row.get("template_version", "project_space_v1")).strip() or "project_space_v1",
-            "source_task_id": str(row.get("source_task_id", "")).strip() or None,
-            "last_checkpoint_at": str(row.get("last_checkpoint_at", "")).strip() or None,
+            "source_task_id": optional_str(row.get("source_task_id")),
+            "last_checkpoint_at": optional_str(row.get("last_checkpoint_at")),
             "created_at": str(row.get("created_at", "")).strip() or iso_now_utc(),
             "updated_at": str(row.get("updated_at", "")).strip() or iso_now_utc(),
         }
@@ -648,10 +896,10 @@ class DashboardBackend:
             "id": task_id,
             "title": title,
             "status": status,
-            "project_id": str(row.get("project_id", "")).strip() or None,
+            "project_id": optional_str(row.get("project_id")),
             "assignees": assignees,
             "priority": priority,
-            "due_at": str(row.get("due_at", "")).strip() or None,
+            "due_at": optional_str(row.get("due_at")),
             "notes": str(row.get("notes", "")).strip(),
             "source": str(row.get("source", "dashboard")).strip() or "dashboard",
             "progress_pct": progress_pct,
@@ -801,7 +1049,12 @@ class DashboardBackend:
 
         workspace = self.load_workspace_data()
         spaces = [self._normalize_space(ensure_dict(item)) for item in workspace.get("spaces", [])]
-        route = route_space_text(clean_text, spaces)
+        registry = self._agent_runtime_snapshot()
+        route = route_space_text(
+            clean_text,
+            spaces,
+            default_agent=str(registry.get("default_user_facing_agent", "assistant")).strip() or "assistant",
+        )
 
         matched_space = next((row for row in spaces if str(row.get("id")) == str(route.get("space_id") or "")), None)
         if matched_space is not None:
@@ -816,8 +1069,160 @@ class DashboardBackend:
                 "entry_command_hint": matched_space.get("entry_command_hint"),
             }
         else:
-            route["space"] = None
+            if route.get("kind") == "project":
+                route["space"] = None
+            else:
+                space_key = str(route.get("space_key", "")).strip() or "general"
+                catalog = {
+                    str(item.get("key")): ensure_dict(item)
+                    for item in ensure_dict(registry.get("space_registry")).get("catalog", [])
+                    if isinstance(item, dict)
+                }
+                catalog_row = ensure_dict(catalog.get(space_key))
+                route["space"] = {
+                    "id": None,
+                    "key": space_key,
+                    "kind": "core",
+                    "project_id": None,
+                    "name": catalog_row.get("name") or self._display_label(space_key),
+                    "session_strategy": catalog_row.get("session_strategy") or "shared_session",
+                    "agent_strategy": catalog_row.get("agent_strategy") or "coordinator_only",
+                    "entry_command_hint": catalog_row.get("entry_command_hint")
+                    or self._space_entry_command_hint(space_key),
+                }
+        route["agent"] = next(
+            (
+                row
+                for row in registry.get("visible_agents", []) + registry.get("internal_roles", [])
+                if str(row.get("id")) == str(route.get("agent_id"))
+            ),
+            None,
+        )
+        if route.get("explicit_agent"):
+            route["route_mode"] = "explicit_agent_prefix"
+        elif route.get("kind") == "project" and route.get("matched"):
+            route["route_mode"] = "project_hint"
+        elif route.get("explicit_space"):
+            route["route_mode"] = "explicit_space"
+        else:
+            route["route_mode"] = "default_front_door"
+        if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
+            route["suggested_projects"] = self._suggest_project_spaces(
+                requested_space_key=str(route.get("space_key") or ""),
+                spaces=spaces,
+            )
+        else:
+            route["suggested_projects"] = []
         return route
+
+    def _suggest_project_spaces(self, *, requested_space_key: str, spaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        requested = requested_space_key.strip().lower()
+        if not requested:
+            return []
+
+        project_spaces = [
+            self._normalize_space(ensure_dict(row))
+            for row in spaces
+            if str(ensure_dict(row).get("kind") or "").strip().lower() == "project"
+        ]
+        if not project_spaces:
+            return []
+
+        project_by_key = {str(row.get("key") or "").strip(): row for row in project_spaces}
+        key_matches = difflib.get_close_matches(requested, list(project_by_key.keys()), n=3, cutoff=0.35)
+        if not key_matches:
+            requested_slug = requested.split("/", 1)[-1]
+            slug_matches = difflib.get_close_matches(
+                requested_slug,
+                [str(row.get("key") or "").strip().split("/", 1)[-1] for row in project_spaces],
+                n=3,
+                cutoff=0.35,
+            )
+            for slug in slug_matches:
+                key = f"projects/{slug}"
+                if key in project_by_key and key not in key_matches:
+                    key_matches.append(key)
+        if not key_matches:
+            scored = []
+            requested_slug = requested.split("/", 1)[-1]
+            for row in project_spaces:
+                key = str(row.get("key") or "").strip()
+                name = str(row.get("name") or "").strip().lower()
+                slug = key.split("/", 1)[-1] if "/" in key else key
+                score = max(
+                    difflib.SequenceMatcher(a=requested, b=key.lower()).ratio(),
+                    difflib.SequenceMatcher(a=requested_slug, b=slug.lower()).ratio(),
+                    difflib.SequenceMatcher(a=requested_slug, b=name).ratio(),
+                )
+                if score >= 0.2:
+                    scored.append((score, key))
+            scored.sort(key=lambda item: (-item[0], item[1]))
+            key_matches = [key for _, key in scored[:3]]
+
+        out: list[dict[str, Any]] = []
+        for key in key_matches[:3]:
+            row = ensure_dict(project_by_key.get(key))
+            if not row:
+                continue
+            out.append(
+                {
+                    "project_id": row.get("project_id"),
+                    "space_key": row.get("key"),
+                    "name": row.get("name"),
+                    "entry_command_hint": row.get("entry_command_hint"),
+                }
+            )
+        return out
+
+    def create_agent_routed_task(
+        self,
+        *,
+        text: str,
+        source: str = "telegram",
+    ) -> dict[str, Any]:
+        route = self.route_text_to_space(text=text)
+        if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
+            raise ValueError(f"project space not found: {route.get('space_key')}")
+
+        stripped = str(route.get("stripped_text") or "").strip()
+        if not stripped:
+            raise ValueError("routed task text is required")
+
+        agent_id = str(route.get("agent_id") or "assistant").strip().lower() or "assistant"
+        notes_parts = [
+            f"Captured from {source}",
+            f"agent={agent_id}",
+            f"space={route.get('space_key')}",
+        ]
+        if route.get("project_name"):
+            notes_parts.append(f"project={route.get('project_name')}")
+
+        task = self.create_task(
+            title=stripped,
+            assignees=[agent_id],
+            project_id=str(route.get("project_id") or "").strip() or None,
+            notes=" | ".join(notes_parts),
+            source=source,
+            assign_default_project=False,
+        )
+        activity = self.record_agent_activity(
+            agent_id=agent_id,
+            space_key=str(route.get("space_key") or "general"),
+            space_kind=str(route.get("kind") or "core"),
+            source=source,
+            action="captured_request",
+            text=stripped,
+            route_mode=str(route.get("route_mode") or "default_front_door"),
+            project_id=str(route.get("project_id") or "").strip() or None,
+            project_name=str(route.get("project_name") or "").strip() or None,
+            lane=str(ensure_dict(route.get("agent")).get("default_lane", "")).strip() or None,
+            task_id=str(task.get("id") or "").strip() or None,
+        )
+        return {
+            "route": route,
+            "task": task,
+            "activity": activity,
+        }
 
     def create_braindump_item(
         self,
@@ -1464,6 +1869,94 @@ class DashboardBackend:
             "missing": missing,
             "ok": len(missing) == 0,
         }
+
+    def _provider_health_status(self) -> dict[str, Any]:
+        env_path = self._integration_env_file_path()
+        status = provider_smoke_runtime.collect_status(
+            models_path=self.models_path,
+            memory_path=self.memory_path,
+            integrations_path=self.integrations_path,
+            agents_path=self.agents_path,
+            env_file=env_path,
+            live=False,
+        )
+        status["path"] = str(self.provider_smoke_status_path)
+
+        snapshot = read_json(self.provider_smoke_status_path)
+        if not isinstance(snapshot, dict):
+            status["last_snapshot_generated_at"] = None
+            return status
+
+        snapshot_providers = {
+            str(row.get("provider", "")).strip(): ensure_dict(row)
+            for row in snapshot.get("providers", [])
+            if isinstance(row, dict) and str(row.get("provider", "")).strip()
+        }
+        for row in status.get("providers", []):
+            if not isinstance(row, dict):
+                continue
+            provider_name = str(row.get("provider", "")).strip()
+            snap_row = snapshot_providers.get(provider_name)
+            if not snap_row:
+                continue
+            live_probe = ensure_dict(snap_row.get("live_probe"))
+            if live_probe:
+                row["live_probe"] = live_probe
+
+        status["last_snapshot_generated_at"] = str(snapshot.get("generated_at", "")).strip() or None
+        summary = ensure_dict(status.get("summary"))
+        summary["live_ok_count"] = sum(
+            1 for row in status.get("providers", []) if ensure_dict(ensure_dict(row).get("live_probe")).get("ok") is True
+        )
+        status["summary"] = summary
+        return status
+
+    def _assistant_chat_status(self) -> dict[str, Any]:
+        raw = read_json(self.assistant_chat_state_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.assistant_chat_state_path),
+                "updated_at": None,
+                "spaces": [],
+            }
+
+        rows: list[dict[str, Any]] = []
+        spaces = ensure_dict(raw.get("spaces"))
+        for space_key, item in sorted(spaces.items(), key=lambda kv: kv[0]):
+            row = ensure_dict(item)
+            turns = [ensure_dict(turn) for turn in row.get("turns", []) if isinstance(turn, dict)]
+            rows.append(
+                {
+                    "space_key": space_key,
+                    "turn_count": len(turns),
+                    "summary_present": bool(str(row.get("summary") or "").strip()),
+                    "last_lane": str(row.get("last_lane") or "").strip() or None,
+                    "last_provider": str(row.get("last_provider") or "").strip() or None,
+                    "last_model": str(row.get("last_model") or "").strip() or None,
+                    "updated_at": str(row.get("updated_at") or "").strip() or None,
+                }
+            )
+        rows.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        return {
+            "available": True,
+            "path": str(self.assistant_chat_state_path),
+            "updated_at": str(raw.get("updated_at") or "").strip() or None,
+            "spaces": rows[:12],
+        }
+
+    def run_provider_smoke_check(self, *, live: bool = False) -> dict[str, Any]:
+        env_path = self._integration_env_file_path()
+        payload = provider_smoke_runtime.collect_status(
+            models_path=self.models_path,
+            memory_path=self.memory_path,
+            integrations_path=self.integrations_path,
+            agents_path=self.agents_path,
+            env_file=env_path,
+            live=live,
+        )
+        write_json(self.provider_smoke_status_path, payload)
+        return payload
 
     def _find_section_start(self, lines: list[str], section: str) -> int:
         needle = f"{section}:"
@@ -2114,6 +2607,7 @@ class DashboardBackend:
         source: str = "dashboard",
         side_effects: list[str] | None = None,
         requires_approval: bool = False,
+        assign_default_project: bool = True,
     ) -> dict[str, Any]:
         clean_title = title.strip()
         if not clean_title:
@@ -2141,7 +2635,7 @@ class DashboardBackend:
             selected_project_id = project_id.strip()
             if selected_project_id not in project_lookup:
                 raise ValueError(f"project not found: {selected_project_id}")
-        else:
+        elif assign_default_project:
             active = [row for row in projects if str(row.get("status")) in {"active", "planned"}]
             if active:
                 selected_project_id = str(active[0].get("id"))
@@ -3077,6 +3571,14 @@ class DashboardBackend:
             "active_projects": len([row for row in project_rows if row.get("status") in {"active", "planned", "blocked"}]),
             "project_spaces": len([row for row in spaces if row.get("kind") == "project"]),
         }
+        project_counts = {
+            "active": len([row for row in project_rows if row.get("status") == "active"]),
+            "planned": len([row for row in project_rows if row.get("status") == "planned"]),
+            "paused": len([row for row in project_rows if row.get("status") == "paused"]),
+            "blocked": len([row for row in project_rows if row.get("status") == "blocked"]),
+            "done": len([row for row in project_rows if row.get("status") == "done"]),
+            "archived": len([row for row in project_rows if row.get("status") == "archived"]),
+        }
 
         space_counts: dict[str, int] = defaultdict(int)
         for space in spaces:
@@ -3128,6 +3630,7 @@ class DashboardBackend:
             "projects": project_rows,
             "spaces": spaces,
             "space_counts": dict(space_counts),
+            "project_counts": project_counts,
             "tasks": task_rows,
             "task_counts": task_counts,
             "progress": progress,
@@ -3338,6 +3841,9 @@ class DashboardBackend:
         personal_tasks = self._personal_task_runtime_status()
         drive_workspace = self._drive_workspace_status()
         braindump = self._braindump_status()
+        provider_health = self._provider_health_status()
+        assistant_chat = self._assistant_chat_status()
+        agent_runtime = self._agent_runtime_snapshot()
         workspace = self._workspace_summary()
 
         local_telemetry_enabled = bool(
@@ -3415,6 +3921,9 @@ class DashboardBackend:
             "personal_tasks": personal_tasks,
             "drive_workspace": drive_workspace,
             "braindump": braindump,
+            "provider_health": provider_health,
+            "assistant_chat": assistant_chat,
+            "agent_runtime": agent_runtime,
             "workspace": workspace,
             "env": env,
             "telemetry": {

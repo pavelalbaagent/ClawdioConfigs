@@ -8,10 +8,11 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
 
 ## Core Rules
 
-1. Keep one active coordinator session per main objective.
+1. Keep one active session per main objective and space.
 2. Summarize before context exceeds threshold.
 3. Restart session when auth or tool-state changes make previous context unreliable.
 4. Spawn sub-agents only for scoped specialist work and fold results back into compact summaries.
+5. Treat channels as transport only; context should come from the selected space plus compact summaries.
 
 ## When to Continue the Same Session
 
@@ -56,3 +57,22 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
    - toolchain/integration state changes materially
    - the existing session has been compacted enough that a fresh checkpoint is cheaper than replay
 5. Spawn a dedicated agent from a project space only when the same specialist role is needed across repeated sessions or background loops.
+
+## Agent/Space defaults
+
+1. `assistant` -> `general`
+2. `researcher` -> `research`
+3. `fitness_coach` -> `fitness`
+4. `builder` -> `coding`
+5. `ops_guard` -> `ops`
+
+Project work should usually stay in `project:<slug>` spaces, regardless of which agent is active.
+
+## Continuous-improvement loop
+
+The system should improve through reviews, not through uncontrolled self-rewrite:
+
+1. daily ops review
+2. weekly architecture/process review
+3. summaries and change proposals written as outputs
+4. approval required for structural changes

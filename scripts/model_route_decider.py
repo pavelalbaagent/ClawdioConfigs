@@ -57,6 +57,16 @@ def ensure_string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if isinstance(item, str) and str(item).strip()]
 
 
+def ensure_string_dict(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, item in value.items():
+        if isinstance(key, str) and isinstance(item, str) and key.strip() and item.strip():
+            out[key.strip()] = item.strip()
+    return out
+
+
 def lane_level(lane: str) -> int:
     match = re.match(r"^L(\d+)_", lane)
     if not match:
@@ -72,6 +82,32 @@ def find_situation_by_intent_tag(decision_matrix: dict[str, Any], intent_tag: st
         if intent_tag in tags:
             return situation
     return None
+
+
+def resolve_provider_candidates(
+    *,
+    provider_preference: list[str],
+    lane_cfg: dict[str, Any],
+    provider_inventory: dict[str, Any],
+) -> list[dict[str, str | None]]:
+    lane_provider_models = ensure_string_dict(lane_cfg.get("provider_models"))
+    candidates: list[dict[str, str | None]] = []
+    for provider_name in provider_preference:
+        provider_cfg = ensure_dict(provider_inventory.get(provider_name))
+        model = lane_provider_models.get(provider_name)
+        if not model:
+            override_env = str(provider_cfg.get("model_env_override", "")).strip()
+            if override_env:
+                model = f"env:{override_env}"
+        if not model:
+            model = str(provider_cfg.get("default_model", "")).strip() or None
+        candidates.append(
+            {
+                "provider": provider_name,
+                "model": model,
+            }
+        )
+    return candidates
 
 
 def main() -> int:
@@ -96,6 +132,7 @@ def main() -> int:
     fallback_order = ensure_string_list(routing.get("fallback_order"))
     usage_modes = ensure_dict(routing.get("usage_modes"))
     decision_matrix = ensure_dict(routing.get("decision_matrix"))
+    provider_inventory = ensure_dict(data.get("provider_inventory"))
 
     if args.list_modes:
         for mode in usage_modes.keys():
@@ -174,6 +211,11 @@ def main() -> int:
         "intent_tag": args.intent_tag or None,
         "preferred_lane": preferred_lane,
         "provider_preference": provider_preference,
+        "provider_candidates": resolve_provider_candidates(
+            provider_preference=provider_preference,
+            lane_cfg=lane_cfg,
+            provider_inventory=provider_inventory,
+        ),
         "fallback_lanes": fallback_lanes,
         "approval_required": approval_required,
         "lane_limits": {
@@ -195,6 +237,11 @@ def main() -> int:
         "Provider preference: "
         + (", ".join(resolved["provider_preference"]) if resolved["provider_preference"] else "-")
     )
+    if resolved["provider_candidates"]:
+        rendered = ", ".join(
+            f"{row['provider']}[{row['model'] or '-'}]" for row in resolved["provider_candidates"]  # type: ignore[index]
+        )
+        print(f"Provider candidates: {rendered}")
     print("Fallback lanes: " + (", ".join(resolved["fallback_lanes"]) if resolved["fallback_lanes"] else "-"))
     print(f"Approval required: {'yes' if resolved['approval_required'] else 'no'}")
     print(

@@ -15,6 +15,8 @@ Run a local dashboard that gives you a manual-first control plane for OpenClaw:
 9. Export weekly progress as Markdown and tasks as CSV.
 10. Queue task dispatch runs and track execution lifecycle.
 11. Gate risky actions behind an approval inbox.
+12. Show provider wiring vs actual live model readiness.
+13. Show the active agent registry, runtime route history, and space model.
 
 ## Files
 
@@ -76,6 +78,8 @@ The VPS deployment uses loopback port `18890` by default so it can coexist with 
 5. Routing mode updates `routing_overrides.active_mode` in [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml).
 6. Adapter/auth flags update [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
 7. Projects/tasks updates `data/dashboard-workspace.json`.
+8. Provider smoke checks write `data/provider-smoke-status.json`.
+9. Agent runtime visibility reads `data/agent-runtime-state.json`.
 
 ## Preset Packs
 
@@ -145,6 +149,37 @@ Dashboard reads reminder state from `data/reminders-state.json` and shows:
 
 1. Pending/awaiting reminder count.
 2. Pending reminder list with due time and follow-up timing.
+
+## Provider Visibility
+
+Dashboard now shows a provider wiring/routing panel with:
+
+1. local readiness from config + env + CLI presence
+2. last live probe snapshot
+3. exact provider-model candidates for the configured routing situations
+
+## Agent Runtime Visibility
+
+Dashboard now shows:
+
+1. visible agents and internal roles from [agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml)
+2. default spaces and owned spaces from [session_policy.yaml](/Users/palba/Projects/Clawdio/config/session_policy.yaml)
+3. the last routed interaction (`agent + space + route mode + source`)
+4. recent route counts by agent/space
+5. continuous-improvement governance settings
+
+This is the current visibility layer for:
+
+1. `assistant`
+2. `researcher`
+3. `fitness_coach`
+4. `builder`
+5. `ops_guard`
+
+Live probe API:
+
+1. `POST /api/provider_smoke/run` with `{ "live": false }`
+2. `POST /api/provider_smoke/run` with `{ "live": true }`
 
 ## Telemetry Sources
 

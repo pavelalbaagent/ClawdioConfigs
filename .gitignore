@@ -23,7 +23,10 @@ data/calendar-candidates.json
 data/personal-task-runtime-status.json
 data/drive-workspace-status.json
 data/braindump-snapshot.json
+data/provider-smoke-status.json
 data/telegram-adapter-state.json
+data/job-search-daily-summary.json
+data/job-search/inbox/
 fitness/logs/*.md
 !fitness/logs/README.md
 output/spreadsheet/*

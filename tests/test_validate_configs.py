@@ -21,6 +21,7 @@ CONFIG_FILES = (
     "reminders",
     "session_policy",
     "dashboard",
+    "job_search",
 )
 
 
@@ -132,6 +133,63 @@ class ValidateConfigsTests(unittest.TestCase):
             )
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("inbox_processing.contract_file file not found", proc.stdout)
+
+    def test_unknown_model_provider_reference_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            models_path = tmp_path / "models.yaml"
+            text = models_path.read_text()
+            text = text.replace("google_ai_studio_free: gemini-2.5-flash-lite", "unknown_provider: gemini-2.5-flash-lite", 1)
+            models_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("provider_models references unknown provider", proc.stdout)
+
+    def test_invalid_job_search_daily_summary_limit_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            job_search_path = tmp_path / "job_search.yaml"
+            text = job_search_path.read_text()
+            text = text.replace("max_roles_per_section: 10", "max_roles_per_section: 0", 1)
+            job_search_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("job_search.job_search.daily_summary.max_roles_per_section must be integer > 0", proc.stdout)
+
+    def test_invalid_job_search_delivery_time_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            job_search_path = tmp_path / "job_search.yaml"
+            text = job_search_path.read_text()
+            text = text.replace('delivery_time_local: "18:30"', 'delivery_time_local: "1830"', 1)
+            job_search_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("job_search.job_search.schedule.delivery_time_local must be HH:MM", proc.stdout)
 
 
 if __name__ == "__main__":

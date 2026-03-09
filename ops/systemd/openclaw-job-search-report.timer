@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenClaw job search report every day at 18:30 local time
+
+[Timer]
+OnCalendar=*-*-* 18:30:00
+AccuracySec=5min
+Persistent=true
+Unit=openclaw-job-search-report.service
+
+[Install]
+WantedBy=timers.target

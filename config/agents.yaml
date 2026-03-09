@@ -1,5 +1,5 @@
 agents:
-  coordinator:
+  assistant:
     enabled: true
     default_lane: L1_low_cost
     can_spawn_subagents: true
@@ -7,13 +7,59 @@ agents:
       - task_router
       - model_router
       - integration_router
+      - reminders_service
+      - calendar_runtime
+      - personal_task_runtime
+      - braindump_runtime
+      - gmail_digest_reader
+      - drive_workspace_reader
+    owned_spaces:
+      - general
+      - reminders
+      - calendar
+      - tasks
+      - braindump
+      - project:*
+    primary_responsibilities:
+      - answer_questions_about_personal_system_state
+      - schedule_and_rearrange_items
+      - convert_inputs_into_tasks_reminders_or_calendar_actions
+      - act_as_default_front_door
 
   researcher:
     enabled: true
-    default_lane: L1_low_cost
+    default_lane: L2_balanced
     allowed_tools:
       - web_retrieval
       - summarizer
+      - gmail_digest_reader
+      - drive_workspace_reader
+      - job_search_runtime
+      - watchlists
+    owned_spaces:
+      - research
+      - job-search
+      - project:*
+    primary_responsibilities:
+      - tech_research
+      - tool_evaluation
+      - recommendation_synthesis
+      - job_search_triage
+
+  fitness_coach:
+    enabled: true
+    default_lane: L1_low_cost
+    allowed_tools:
+      - fitness_runtime
+      - personal_task_runtime
+      - calendar_runtime
+    owned_spaces:
+      - fitness
+    primary_responsibilities:
+      - guide_workouts
+      - log_training
+      - review_progress
+      - manage_program_context
 
   builder:
     enabled: true
@@ -22,6 +68,16 @@ agents:
       - codex_cli
       - gemini_cli
       - file_ops
+      - github_runtime
+      - repo_workspace
+      - test_runner
+    owned_spaces:
+      - coding
+      - project:*
+    primary_responsibilities:
+      - implement_features
+      - debug_and_refactor
+      - operate_on_assigned_repos
 
   ops_guard:
     enabled: true
@@ -30,19 +86,73 @@ agents:
       - service_health
       - alerting
       - logs_reader
+      - provider_health
+      - telemetry_reports
+    owned_spaces:
+      - ops
+    primary_responsibilities:
+      - monitor_service_health
+      - summarize_failures
+      - detect_quota_or_runtime_regressions
+
+internal_roles:
+  coordinator:
+    enabled: true
+    visibility: internal_only
+    default_lane: L1_low_cost
+    allowed_tools:
+      - task_router
+      - model_router
+      - integration_router
+      - agent_router
+    responsibilities:
+      - classify_user_requests
+      - select_space_and_specialist
+      - keep_default_agent_surface_simple
+  knowledge_librarian:
+    enabled: true
+    visibility: internal_only
+    default_lane: L1_low_cost
+    allowed_tools:
+      - memory_index
+      - drive_workspace_reader
+      - summary_writer
+    responsibilities:
+      - compress_context
+      - maintain_space_summaries
+      - propose_memory_promotions
+
+surfaces:
+  default_user_facing_agent: assistant
+  visible_agents:
+    - assistant
+    - researcher
+    - fitness_coach
+    - builder
+    - ops_guard
+  hidden_internal_roles:
+    - coordinator
+    - knowledge_librarian
 
 routing_overrides:
   active_mode: balanced_default
   agent_task_matrix:
-    coordinator:
+    assistant:
       quick_triage: L1_low_cost
       routine_planning: L1_low_cost
       ambiguous_planning: L2_balanced
       architecture_decision: L3_heavy
+      schedule_rearrangement: L1_low_cost
+      cross_app_question_answering: L2_balanced
     researcher:
       source_collection: L1_low_cost
       synthesis: L2_balanced
       high_impact_recommendation: L3_heavy
+      job_search_recommendation: L2_balanced
+    fitness_coach:
+      workout_guidance: L1_low_cost
+      progress_review: L2_balanced
+      program_redesign: L2_balanced
     builder:
       quick_patch: L1_low_cost
       standard_feature_build: L2_balanced
@@ -51,6 +161,15 @@ routing_overrides:
       health_checks: L0_no_model
       incident_summary: L1_low_cost
       root_cause_analysis: L2_balanced
+      improvement_audit: L2_balanced
+    coordinator:
+      route_and_assign: L0_no_model
+      ambiguous_reroute: L1_low_cost
+      multi_agent_breakdown: L2_balanced
+    knowledge_librarian:
+      context_compaction: L0_no_model
+      summary_refresh: L1_low_cost
+      memory_promotion_review: L2_balanced
   fallback_paths:
     low_cost_blocked:
       - L1_openrouter_free_fallback
@@ -85,3 +204,36 @@ approval_required:
   - L3_heavy
   - external_account_action
   - data_deletion
+
+continuous_improvement:
+  enabled: true
+  mode: bounded_review_loop
+  owner_role: ops_guard
+  reviewer_roles:
+    - ops_guard
+    - coordinator
+    - knowledge_librarian
+  cadence:
+    daily_ops_review: true
+    weekly_architecture_review: true
+  sources:
+    - telemetry/model-calls.ndjson
+    - telemetry/session-checkpoints.ndjson
+    - data/provider-smoke-status.json
+    - data/dashboard-workspace.json
+    - data/job-search-daily-summary.json
+  outputs:
+    review_dir: docs/reviews
+    latest_status_file: data/continuous-improvement-status.json
+  bounded_rules:
+    - do_not_auto_change_credentials
+    - do_not_auto_change_provider_order_without_approval
+    - do_not_auto_enable_new_integrations
+    - do_not_auto_spawn_new_persistent_agents
+    - all_structural_changes_require_human_approval
+  review_focus:
+    - failing_or_noisy_routes
+    - context_bloat_hotspots
+    - stale_project_spaces
+    - overused_heavy_lane_calls
+    - repeated_manual_work_worth_productizing

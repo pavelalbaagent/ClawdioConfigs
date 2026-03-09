@@ -11,6 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from env_file_utils import load_env_file
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "integrations.yaml"
@@ -60,40 +62,6 @@ def ensure_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str) and item.strip()]
-
-
-def load_env_file(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    if not path.exists():
-        raise FileNotFoundError(f"env file not found: {path}")
-
-    for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        if line.startswith("export "):
-            line = line[len("export ") :].strip()
-
-        if "=" not in line:
-            raise ValueError(f"invalid env line {line_no}: missing '='")
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-            raise ValueError(f"invalid env key on line {line_no}: {key}")
-
-        if (
-            len(value) >= 2
-            and ((value[0] == value[-1] == "\"") or (value[0] == value[-1] == "'"))
-        ):
-            value = value[1:-1]
-
-        values[key] = value
-
-    return values
 
 
 def env_get(var_name: str, env_overrides: dict[str, str]) -> str:
