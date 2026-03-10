@@ -339,9 +339,11 @@ class DashboardBackend:
         return self.root / "data" / "telegram-adapter-state.json"
 
     def _integration_env_file_path(self) -> Path | None:
-        local_env = self.root / "secrets" / "openclaw.env"
-        if local_env.exists():
-            return local_env
+        explicit_env = str(os.environ.get("OPENCLAW_ENV_FILE", "")).strip()
+        if explicit_env:
+            explicit_path = Path(explicit_env).expanduser()
+            if explicit_path.exists():
+                return explicit_path
 
         integrations_data = self.load_yaml_dict(self.integrations_path)
         secrets = ensure_dict(integrations_data.get("secrets"))
@@ -350,6 +352,14 @@ class DashboardBackend:
             configured_path = Path(configured).expanduser()
             if configured_path.exists():
                 return configured_path
+
+        system_env = Path("/etc/openclaw/openclaw.env")
+        if system_env.exists():
+            return system_env
+
+        local_env = self.root / "secrets" / "openclaw.env"
+        if local_env.exists():
+            return local_env
         return None
 
     def load_yaml_dict(self, path: Path) -> dict[str, Any]:

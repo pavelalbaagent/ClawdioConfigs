@@ -74,6 +74,9 @@ class GoogleCalendarRuntimeTests(unittest.TestCase):
 
     def test_create_event_apply_with_fixture_adds_upcoming_event(self):
         fixture = {"events": []}
+        start_dt = datetime.now(timezone.utc) + timedelta(days=1)
+        start_dt = start_dt.replace(minute=0, second=0, microsecond=0)
+        end_dt = start_dt + timedelta(minutes=30)
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -94,9 +97,9 @@ class GoogleCalendarRuntimeTests(unittest.TestCase):
                     "--title",
                     "Doctor appointment",
                     "--start-at",
-                    "2026-03-10T09:00:00-05:00",
+                    start_dt.isoformat(timespec="seconds"),
                     "--end-at",
-                    "2026-03-10T09:30:00-05:00",
+                    end_dt.isoformat(timespec="seconds"),
                     "--apply",
                     "--window-days",
                     "30",
@@ -109,14 +112,16 @@ class GoogleCalendarRuntimeTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["upcoming_count"], 1)
 
     def test_update_event_apply_with_fixture_updates_existing_event(self):
+        base_dt = datetime.now(timezone.utc) + timedelta(days=1)
+        base_dt = base_dt.replace(minute=0, second=0, microsecond=0)
         fixture = {
             "events": [
                 {
                     "id": "evt-1",
                     "status": "confirmed",
                     "summary": "Old title",
-                    "start": {"dateTime": "2026-03-10T15:00:00+00:00"},
-                    "end": {"dateTime": "2026-03-10T16:00:00+00:00"},
+                    "start": {"dateTime": base_dt.isoformat(timespec="seconds")},
+                    "end": {"dateTime": (base_dt + timedelta(hours=1)).isoformat(timespec="seconds")},
                 }
             ]
         }
@@ -154,14 +159,17 @@ class GoogleCalendarRuntimeTests(unittest.TestCase):
 
     def test_apply_candidates_creates_event_and_updates_candidate_file(self):
         fixture = {"events": []}
+        start_dt = datetime.now(timezone.utc) + timedelta(days=2)
+        start_dt = start_dt.replace(minute=0, second=0, microsecond=0)
+        end_dt = start_dt + timedelta(minutes=30)
         candidates = {
             "items": [
                 {
                     "id": "cal-1",
                     "title": "Parent teacher meeting",
                     "status": "approved",
-                    "start_at": "2026-03-11T18:00:00-05:00",
-                    "end_at": "2026-03-11T18:30:00-05:00",
+                    "start_at": start_dt.isoformat(timespec="seconds"),
+                    "end_at": end_dt.isoformat(timespec="seconds"),
                     "timezone": "America/Guayaquil",
                 },
                 {

@@ -111,6 +111,22 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("assistant_main", binding_ids)
         self.assertIn("fitness_coach", binding_ids)
 
+    def test_integration_env_file_prefers_configured_path_over_local_secrets(self):
+        (self.tmp_path / "secrets").mkdir(parents=True, exist_ok=True)
+        local_env = self.tmp_path / "secrets" / "openclaw.env"
+        local_env.write_text("LOCAL_ONLY=1\n", encoding="utf-8")
+
+        configured_env = self.tmp_path / "deployed.env"
+        configured_env.write_text("DEPLOYED_ONLY=1\n", encoding="utf-8")
+
+        integrations_path = self.tmp_path / "config" / "integrations.yaml"
+        text = integrations_path.read_text(encoding="utf-8")
+        text = text.replace("/etc/openclaw/openclaw.env", str(configured_env))
+        integrations_path.write_text(text, encoding="utf-8")
+
+        backend = DashboardBackend(root=self.tmp_path)
+        self.assertEqual(backend._integration_env_file_path(), configured_env)
+
     def test_set_integration_enabled_updates_yaml(self):
         path = self.tmp_path / "config" / "integrations.yaml"
         before = path.read_text(encoding="utf-8")

@@ -1023,6 +1023,19 @@ class TelegramAdapter:
         self.assistant_chat = self.agent_chats["assistant"]
         self.fitness_runtime = fitness_runtime.FitnessRuntime(root=root)
 
+    def _runtime_env_values(self) -> dict[str, str]:
+        merged = dict(self.env_values)
+        env_path = self.backend._integration_env_file_path()
+        if env_path is not None and env_path.exists():
+            try:
+                loaded = load_env_file(env_path)
+            except Exception:
+                loaded = {}
+            for key, value in loaded.items():
+                if key not in merged or not str(merged.get(key) or "").strip():
+                    merged[key] = value
+        return merged
+
     def _send_text(
         self,
         *,
@@ -1323,21 +1336,23 @@ class TelegramAdapter:
 
     def _calendar_client(self) -> tuple[Any, str]:
         calendar_runtime.resolve_calendar_integration(self.root / "config" / "integrations.yaml")
-        default_timezone = calendar_runtime.resolve_default_timezone(self.env_values, self.root)
-        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
-        client = calendar_runtime.build_client(env_file_values=self.env_values, fixtures_file=None)
+        env_values = self._runtime_env_values()
+        default_timezone = calendar_runtime.resolve_default_timezone(env_values, self.root)
+        calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
+        client = calendar_runtime.build_client(env_file_values=env_values, fixtures_file=None)
         return client, default_timezone
 
     def _personal_task_client(self) -> tuple[str, Any]:
         personal_task_runtime.resolve_personal_task_integration(self.root / "config" / "integrations.yaml")
+        env_values = self._runtime_env_values()
         provider = personal_task_runtime.resolve_provider(
-            env_file_values=self.env_values,
+            env_file_values=env_values,
             override=None,
             fixtures_file=None,
         )
         client = personal_task_runtime.build_client(
             provider=provider,
-            env_file_values=self.env_values,
+            env_file_values=env_values,
             fixtures_file=None,
         )
         return provider, client
@@ -1351,7 +1366,8 @@ class TelegramAdapter:
     def _handle_calendar_day(self, *, day_offset: int, heading: str) -> str:
         try:
             client, timezone_name = self._calendar_client()
-            calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+            env_values = self._runtime_env_values()
+            calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
             events = calendar_runtime.list_upcoming(
                 client,
                 calendar_id=calendar_id,
@@ -1368,7 +1384,8 @@ class TelegramAdapter:
     def _handle_calendar_next(self) -> str:
         try:
             client, timezone_name = self._calendar_client()
-            calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+            env_values = self._runtime_env_values()
+            calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
             events = calendar_runtime.list_upcoming(
                 client,
                 calendar_id=calendar_id,
@@ -1449,7 +1466,8 @@ class TelegramAdapter:
         if not parsed:
             raise ValueError("invalid calendar create request")
         client, timezone_name = self._calendar_client()
-        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+        env_values = self._runtime_env_values()
+        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
         when_spec = parse_human_calendar_when(
             str(parsed.get("when_text") or ""),
             timezone_name=timezone_name,
@@ -1510,7 +1528,8 @@ class TelegramAdapter:
         if not parsed:
             raise ValueError("invalid calendar move request")
         client, timezone_name = self._calendar_client()
-        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+        env_values = self._runtime_env_values()
+        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
         events = calendar_runtime.list_upcoming(
             client,
             calendar_id=calendar_id,
