@@ -42,6 +42,19 @@ class ProviderSmokeCheckTests(unittest.TestCase):
         self.assertTrue(google["configured"])
         self.assertEqual(google["resolved_default_model"], "gemini-2.5-flash-lite")
 
+    def test_openai_subscription_session_defaults_to_codex_exec_transport(self):
+        status = smoke.collect_status(
+            models_path=ROOT / "config" / "models.yaml",
+            memory_path=ROOT / "config" / "memory.yaml",
+            integrations_path=ROOT / "config" / "integrations.yaml",
+            agents_path=ROOT / "config" / "agents.yaml",
+            env_file=None,
+            live=False,
+        )
+        openai = next(row for row in status["providers"] if row["provider"] == "openai_subscription_session")
+        self.assertEqual(openai["transport"], "codex_exec_session")
+        self.assertEqual(openai["default_model"], "gpt-5-mini")
+
 
 if __name__ == "__main__":
     unittest.main()

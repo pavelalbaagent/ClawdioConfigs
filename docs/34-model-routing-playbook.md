@@ -29,8 +29,8 @@ Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.
 
 1. `L1_low_cost`: `google_ai_studio_free` -> `gemini-2.5-flash-lite`
 2. `L1_openrouter_free_fallback`: `openrouter_free_overflow` -> `openrouter/free`
-3. `L2_balanced`: `google_ai_studio_free` -> `gemini-2.5-flash`, then `openai_subscription_session` -> `openai-session-premium`, then `openrouter_free_overflow` -> `openrouter/free`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`
-4. `L3_heavy`: `openai_subscription_session` -> `openai-session-premium`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`, fallback `google_ai_studio_free` -> `gemini-2.5-pro`
+3. `L2_balanced`: `openai_subscription_session` -> `gpt-5-mini`, then `google_ai_studio_free` -> `gemini-2.5-flash`, then `openrouter_free_overflow` -> `openrouter/free`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`
+4. `L3_heavy`: `openai_subscription_session` -> `gpt-5.4`, then `anthropic_credit_pool` -> `claude-sonnet-4-20250514`, fallback `google_ai_studio_free` -> `gemini-2.5-pro`
 5. `codex` and `gemini` CLIs remain supervised tool fallbacks only, not unattended providers.
 6. `openai_subscription_session` is an interactive premium lane, not a background-safe automation provider.
 
@@ -46,16 +46,18 @@ Recommended reading of the current policy:
    - may escalate to the OpenAI subscription lane for harder cross-app planning
 2. `researcher`
    - prefers `openai_subscription_session` first on `L2/L3`
+   - pins `gpt-5.1` for synthesis and `gpt-5.4` for the heaviest ambiguity
    - uses Anthropic as a strong second opinion
    - falls back to Google/OpenRouter when premium lanes are unavailable
 3. `builder`
    - prefers `openai_subscription_session` first for coding/integration and hard implementation work
+   - pins `gpt-5.1-codex-mini` for normal build work and `gpt-5.4` for major design/refactor work
    - keeps Anthropic as the first reserve lane
    - uses Google/OpenRouter as cost-aware fallbacks
 4. `fitness_coach`
    - stays deterministic for workout control/logging
    - uses chat lanes only for coaching, progression, substitutions, and planning
-   - prefers `openai_subscription_session` for reflective coaching questions and program changes
+   - prefers `openai_subscription_session` with `gpt-5-mini` for reflective coaching and `gpt-5.1` for program redesign
 5. `ops_guard`
    - stays cheap by default
    - uses higher lanes only for RCA or improvement analysis
@@ -101,8 +103,19 @@ The `openai_subscription_session` provider is intentionally modeled separately f
 
 1. It is for premium interactive work where you want bigger limits and stronger quality than the free lane.
 2. It should be used for operator-triggered hard tasks, not cron, reminder delivery, or unattended workflows.
-3. Its readiness depends on the authenticated local `codex` session, so it is suitable for local supervised work and only conditionally suitable on a VPS.
+3. Its transport is a bounded non-interactive `codex exec` call backed by the logged-in ChatGPT session, so it is suitable for interactive work but not unattended cron.
 4. In the current architecture it is the preferred premium lane for `researcher`, `builder`, and conversational `fitness_coach`, and the secondary premium lane for `assistant`.
+
+## OpenAI model notes
+
+The current OpenAI pins follow supported names surfaced in the official OpenAI docs:
+
+1. `gpt-5-mini` for fast premium conversational work
+2. `gpt-5.1` for stronger research synthesis
+3. `gpt-5.1-codex-mini` for normal coding/build work
+4. `gpt-5.4` for the heaviest reasoning lane
+
+Older OpenClaw backups used names like `gpt-5.3-codex-spark`. Those are treated as legacy naming, not current source-of-truth route targets in this rebuild.
 
 ## Inspect The Real Wiring
 

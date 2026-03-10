@@ -43,15 +43,15 @@ routing:
 
     L2_balanced:
       provider: multi_provider
-      model: gemini-2.5-flash
+      model: gpt-5-mini
       provider_priority:
-        - google_ai_studio_free
         - openai_subscription_session
+        - google_ai_studio_free
         - openrouter_free_overflow
         - anthropic_credit_pool
       provider_models:
+        openai_subscription_session: gpt-5-mini
         google_ai_studio_free: gemini-2.5-flash
-        openai_subscription_session: openai-session-premium
         openrouter_free_overflow: openrouter/free
         anthropic_credit_pool: claude-sonnet-4-20250514
       max_input_tokens: 12000
@@ -63,13 +63,13 @@ routing:
 
     L3_heavy:
       provider: approval_gated_heavy
-      model: openai-session-premium
+      model: gpt-5.4
       provider_priority:
         - openai_subscription_session
         - anthropic_credit_pool
         - google_ai_studio_free
       provider_models:
-        openai_subscription_session: openai-session-premium
+        openai_subscription_session: gpt-5.4
         anthropic_credit_pool: claude-sonnet-4-20250514
         google_ai_studio_free: gemini-2.5-pro
       manual_tool_fallbacks:
@@ -155,9 +155,10 @@ routing:
         - recommendation_draft
       preferred_lane: L2_balanced
       provider_preference:
-        - google_ai_studio_free
         - openai_subscription_session
+        - google_ai_studio_free
         - anthropic_credit_pool
+        - openrouter_free_overflow
       fallback_lanes:
         - L1_low_cost
         - L3_heavy
@@ -169,8 +170,9 @@ routing:
         - integration_fix
       preferred_lane: L2_balanced
       provider_preference:
-        - google_ai_studio_free
         - openai_subscription_session
+        - google_ai_studio_free
+        - openrouter_free_overflow
         - anthropic_credit_pool
       fallback_lanes:
         - L1_low_cost
@@ -259,11 +261,15 @@ provider_inventory:
       - session_and_auth_state_can_be_operator_dependent
   openai_subscription_session:
     required_command: codex
+    transport: codex_exec_session
     budget_type: interactive_subscription_session
-    default_model: openai-session-premium
-    healthcheck_model: openai-session-premium
+    default_model: gpt-5-mini
+    healthcheck_model: gpt-5-mini
     supported_models:
-      - openai-session-premium
+      - gpt-5-mini
+      - gpt-5.1
+      - gpt-5.4
+      - gpt-5.1-codex-mini
     usage_policy: interactive_only_for_hard_work_or_bigger_limits
     strengths:
       - premium_interactive_reasoning

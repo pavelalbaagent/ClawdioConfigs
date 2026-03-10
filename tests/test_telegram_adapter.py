@@ -281,7 +281,7 @@ class TelegramAdapterTests(unittest.TestCase):
                 "space_key": "research",
                 "lane": "L2_balanced",
                 "provider": "openai_subscription_session",
-                "model": "openai-session-premium",
+                "model": "gpt-5.1",
             },
         ) as reply:
             state = bound_adapter.load_adapter_state()
@@ -349,7 +349,7 @@ class TelegramAdapterTests(unittest.TestCase):
                 "space_key": "fitness",
                 "lane": "L2_balanced",
                 "provider": "openai_subscription_session",
-                "model": "openai-session-premium",
+                "model": "gpt-5-mini",
             },
         ) as reply:
             state = bound_adapter.load_adapter_state()

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from env_file_utils import load_env_file
+import openai_session_transport
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -248,6 +249,11 @@ def _probe_provider(provider_name: str, provider_cfg: dict[str, Any], resolved_m
         if not api_key:
             raise RuntimeError("missing OPENAI_API_KEY")
         return _probe_openai_embeddings(api_key, resolved_model or str(provider_cfg.get("healthcheck_model", "")).strip())
+    if provider_name == "openai_subscription_session":
+        return openai_session_transport.probe_codex_session(
+            root=ROOT,
+            model=resolved_model or str(provider_cfg.get("healthcheck_model", "")).strip() or "gpt-5-mini",
+        )
     if provider_name in {"codex_subscription_cli", "openai_subscription_session", "gemini_cli_local"}:
         command = str(provider_cfg.get("required_command", "")).strip()
         if not command:

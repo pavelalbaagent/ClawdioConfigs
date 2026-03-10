@@ -204,8 +204,8 @@ class AgentChatRuntimeTests(unittest.TestCase):
                 "requested_lane": "L2_balanced",
                 "downgraded_from_lane": None,
                 "provider": "openai_subscription_session",
-                "provider_cfg": {"required_command": "codex"},
-                "model": "openai-session-premium",
+                "provider_cfg": {"required_command": "codex", "transport": "codex_exec_session"},
+                "model": "gpt-5-mini",
                 "max_output_tokens": 2000,
             },
         ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(

@@ -19,6 +19,7 @@ from typing import Any
 import model_route_decider
 from env_file_utils import load_env_file
 import fitness_runtime
+import openai_session_transport
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +41,7 @@ SUPPORTED_CHAT_TRANSPORTS = {
     "google_generative_language",
     "openrouter_chat_completions",
     "anthropic_messages",
+    "codex_exec_session",
 }
 
 SPACE_CONTEXT_ITEM_LIMITS = {
@@ -272,6 +274,7 @@ def resolve_chat_route(
     mode_cfg = ensure_dict(usage_modes.get(mode_name))
     situation_cfg = ensure_dict(decision_matrix.get(situation))
     agent_policy = resolve_agent_chat_policy(agents_data=agents_data, agent_id=agent_id, situation=situation)
+    agent_provider_models = ensure_string_dict(agent_policy.get("provider_models"))
     preferred_lane = (
         str(agent_policy.get("preferred_lane", "")).strip()
         or str(situation_cfg.get("preferred_lane", "")).strip()
@@ -315,6 +318,8 @@ def resolve_chat_route(
             provider_name = str(candidate.get("provider") or "").strip()
             provider_cfg = ensure_dict(provider_inventory.get(provider_name))
             model = str(candidate.get("model") or "").strip() or None
+            if agent_provider_models.get(provider_name):
+                model = agent_provider_models[provider_name]
             if local_provider_ready(provider_name=provider_name, provider_cfg=provider_cfg, env_values=env_values):
                 return {
                     "situation": situation,
@@ -333,6 +338,7 @@ def resolve_chat_route(
                 {
                     "lane": lane_name,
                     "provider": provider_name,
+                    "model": model or str(provider_cfg.get("default_model", "")).strip() or None,
                     "transport": str(provider_cfg.get("transport", "")).strip() or None,
                     "missing_env": [var for var in ensure_string_list(provider_cfg.get("required_env")) if not env_get(var, env_values)],
                     "required_command": str(provider_cfg.get("required_command", "")).strip() or None,
@@ -492,6 +498,7 @@ def invoke_chat_provider(
     system_prompt: str,
     messages: list[dict[str, str]],
     max_output_tokens: int,
+    workdir: Path | None = None,
 ) -> dict[str, Any]:
     transport = str(provider_cfg.get("transport", "")).strip()
     if transport == "google_generative_language":
@@ -517,6 +524,15 @@ def invoke_chat_provider(
             system_prompt=system_prompt,
             messages=messages,
             max_output_tokens=max_output_tokens,
+        )
+    if transport == "codex_exec_session":
+        timeout_seconds = 240 if max_output_tokens <= 2500 else 360
+        return openai_session_transport.invoke_codex_session(
+            root=(workdir or ROOT),
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            timeout_seconds=timeout_seconds,
         )
     raise RuntimeError(f"unsupported chat transport: {transport or provider_name}")
 
@@ -1140,6 +1156,7 @@ class AgentChatRuntime:
                 system_prompt=system_prompt,
                 messages=messages,
                 max_output_tokens=int(plan.get("max_output_tokens", 900) or 900),
+                workdir=self.root,
             )
         except Exception:
             self._log_call(

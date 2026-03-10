@@ -29,9 +29,9 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
         self.assertEqual(data["preferred_lane"], "L2_balanced")
-        self.assertIn("google_ai_studio_free", data["provider_preference"])
+        self.assertIn("openai_subscription_session", data["provider_preference"])
         self.assertNotIn("codex_subscription_cli", data["provider_preference"])
-        self.assertEqual(data["provider_candidates"][0]["model"], "gemini-2.5-flash")
+        self.assertEqual(data["provider_candidates"][0]["model"], "gpt-5-mini")
 
     def test_strict_cost_limits_fallback_to_l2(self):
         proc = self.run_script(
@@ -48,7 +48,14 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(data["situation"], "architecture_or_high_ambiguity")
         self.assertEqual(data["preferred_lane"], "L3_heavy")
         self.assertTrue(data["approval_required"])
-        self.assertEqual(data["provider_candidates"][0]["model"], "openai-session-premium")
+        self.assertEqual(data["provider_candidates"][0]["model"], "gpt-5.4")
+
+    def test_builder_agent_gets_codex_specific_openai_model(self):
+        proc = self.run_script(["--agent", "builder", "--situation", "coding_and_integration", "--json"])
+        self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["provider_candidates"][0]["provider"], "openai_subscription_session")
+        self.assertEqual(data["provider_candidates"][0]["model"], "gpt-5.1-codex-mini")
 
 
 if __name__ == "__main__":

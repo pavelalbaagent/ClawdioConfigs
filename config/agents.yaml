@@ -36,16 +36,20 @@ agents:
       research_synthesis:
         preferred_lane: L2_balanced
         provider_preference:
-          - google_ai_studio_free
           - openai_subscription_session
+          - google_ai_studio_free
           - openrouter_free_overflow
           - anthropic_credit_pool
+        provider_models:
+          openai_subscription_session: gpt-5-mini
       architecture_or_high_ambiguity:
         preferred_lane: L2_balanced
         provider_preference:
           - openai_subscription_session
           - google_ai_studio_free
           - anthropic_credit_pool
+        provider_models:
+          openai_subscription_session: gpt-5.4
 
   researcher:
     enabled: true
@@ -81,12 +85,16 @@ agents:
           - anthropic_credit_pool
           - google_ai_studio_free
           - openrouter_free_overflow
+        provider_models:
+          openai_subscription_session: gpt-5.1
       architecture_or_high_ambiguity:
         preferred_lane: L3_heavy
         provider_preference:
           - openai_subscription_session
           - anthropic_credit_pool
           - google_ai_studio_free
+        provider_models:
+          openai_subscription_session: gpt-5.4
 
   fitness_coach:
     enabled: true
@@ -117,12 +125,16 @@ agents:
           - google_ai_studio_free
           - anthropic_credit_pool
           - openrouter_free_overflow
+        provider_models:
+          openai_subscription_session: gpt-5-mini
       architecture_or_high_ambiguity:
         preferred_lane: L2_balanced
         provider_preference:
           - openai_subscription_session
           - anthropic_credit_pool
           - google_ai_studio_free
+        provider_models:
+          openai_subscription_session: gpt-5.1
 
   builder:
     enabled: true
@@ -156,12 +168,16 @@ agents:
           - anthropic_credit_pool
           - google_ai_studio_free
           - openrouter_free_overflow
+        provider_models:
+          openai_subscription_session: gpt-5.1-codex-mini
       architecture_or_high_ambiguity:
         preferred_lane: L3_heavy
         provider_preference:
           - openai_subscription_session
           - anthropic_credit_pool
           - google_ai_studio_free
+        provider_models:
+          openai_subscription_session: gpt-5.4
 
   ops_guard:
     enabled: true

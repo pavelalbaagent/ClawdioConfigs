@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "models.yaml"
+DEFAULT_AGENTS_CONFIG = ROOT / "config" / "agents.yaml"
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -89,12 +90,14 @@ def resolve_provider_candidates(
     provider_preference: list[str],
     lane_cfg: dict[str, Any],
     provider_inventory: dict[str, Any],
+    provider_model_overrides: dict[str, str] | None = None,
 ) -> list[dict[str, str | None]]:
     lane_provider_models = ensure_string_dict(lane_cfg.get("provider_models"))
+    overrides = provider_model_overrides or {}
     candidates: list[dict[str, str | None]] = []
     for provider_name in provider_preference:
         provider_cfg = ensure_dict(provider_inventory.get(provider_name))
-        model = lane_provider_models.get(provider_name)
+        model = overrides.get(provider_name) or lane_provider_models.get(provider_name)
         if not model:
             override_env = str(provider_cfg.get("model_env_override", "")).strip()
             if override_env:
@@ -113,6 +116,8 @@ def resolve_provider_candidates(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Resolve model lane/provider policy for a task situation")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to config/models.yaml")
+    parser.add_argument("--agents-config", default=str(DEFAULT_AGENTS_CONFIG), help="path to config/agents.yaml")
+    parser.add_argument("--agent", help="optional agent id for agent-specific provider ordering/model overrides")
     parser.add_argument("--mode", help="routing mode name from routing.usage_modes")
     parser.add_argument("--situation", help="routing situation from routing.decision_matrix")
     parser.add_argument("--intent-tag", help="intent tag to match a situation (for example: code_generation)")
@@ -133,6 +138,7 @@ def main() -> int:
     usage_modes = ensure_dict(routing.get("usage_modes"))
     decision_matrix = ensure_dict(routing.get("decision_matrix"))
     provider_inventory = ensure_dict(data.get("provider_inventory"))
+    agents_data = ensure_dict(load_yaml(Path(args.agents_config).expanduser().resolve()))
 
     if args.list_modes:
         for mode in usage_modes.keys():
@@ -180,7 +186,17 @@ def main() -> int:
         return 1
 
     lane_cfg = ensure_dict(lanes.get(preferred_lane))
-    provider_preference = ensure_string_list(situation_cfg.get("provider_preference"))
+    provider_preference = []
+    provider_model_overrides: dict[str, str] = {}
+    if args.agent:
+        agents_cfg = ensure_dict(agents_data.get("agents"))
+        internal_cfg = ensure_dict(agents_data.get("internal_roles"))
+        agent_row = ensure_dict(agents_cfg.get(args.agent)) or ensure_dict(internal_cfg.get(args.agent))
+        agent_policy = ensure_dict(ensure_dict(agent_row.get("chat_routing")).get(situation_name or ""))
+        provider_preference = ensure_string_list(agent_policy.get("provider_preference"))
+        provider_model_overrides = ensure_string_dict(agent_policy.get("provider_models"))
+    if not provider_preference:
+        provider_preference = ensure_string_list(situation_cfg.get("provider_preference"))
     if not provider_preference:
         provider_preference = ensure_string_list(lane_cfg.get("provider_priority"))
     if not provider_preference:
@@ -215,6 +231,7 @@ def main() -> int:
             provider_preference=provider_preference,
             lane_cfg=lane_cfg,
             provider_inventory=provider_inventory,
+            provider_model_overrides=provider_model_overrides,
         ),
         "fallback_lanes": fallback_lanes,
         "approval_required": approval_required,
