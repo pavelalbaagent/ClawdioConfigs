@@ -23,6 +23,7 @@ CONFIG_FILES = (
     "dashboard",
     "job_search",
     "knowledge_sources",
+    "research_flow",
 )
 
 

@@ -2,10 +2,12 @@ import json
 import os
 import sqlite3
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from datetime import datetime, timezone
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,6 +41,7 @@ class DashboardBackendTests(unittest.TestCase):
             "dashboard.yaml",
             "agents.yaml",
             "fitness_agent.yaml",
+            "research_flow.yaml",
         ):
             shutil.copy(ROOT / "config" / name, self.tmp_path / "config" / name)
 
@@ -51,6 +54,7 @@ class DashboardBackendTests(unittest.TestCase):
             self.tmp_path / "contracts" / "fitness" / "sqlite_schema.sql",
         )
         shutil.copy(ROOT / "scripts" / "set_active_profiles.py", self.tmp_path / "scripts" / "set_active_profiles.py")
+        shutil.copy(ROOT / "scripts" / "research_flow_runtime.py", self.tmp_path / "scripts" / "research_flow_runtime.py")
         shutil.copy(ROOT / "telemetry" / "model-calls.example.ndjson", self.tmp_path / "telemetry" / "model-calls.example.ndjson")
         for name in ("ATHLETE_PROFILE.md", "PROGRAM.md", "EXERCISE_LIBRARY.md", "RULES.md", "SESSION_QUEUE.md"):
             shutil.copy(ROOT / "fitness" / name, self.tmp_path / "fitness" / name)
@@ -72,6 +76,7 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("calendar_runtime", state)
         self.assertIn("personal_tasks", state)
         self.assertIn("provider_health", state)
+        self.assertIn("research_flow", state)
         self.assertIn("agent_runtime", state)
         self.assertIn("telegram_adapter", state)
         self.assertIn("agent_chats", state)
@@ -936,6 +941,88 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertTrue(state["braindump"]["available"])
         self.assertEqual(state["braindump"]["due_count"], 1)
         self.assertEqual(state["braindump"]["counts_by_status"]["inbox"], 2)
+
+    def test_research_flow_status_is_exposed(self):
+        data_dir = self.tmp_path / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "research-flow-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-10T01:00:00+00:00",
+                    "enabled": True,
+                    "owner_agent": "researcher",
+                    "default_space": "research",
+                    "delivery_chat_env": "TELEGRAM_RESEARCH_CHAT_ID",
+                    "shared_dropzones": ["data/researchflow/inbox", "data/researchflow/notes"],
+                    "workflows": [
+                        {
+                            "name": "ai_tools_watch",
+                            "output_label": "AI tools digest",
+                            "schedule": {
+                                "enabled": True,
+                                "timezone": "America/Guayaquil",
+                                "delivery_time_local": "20:00",
+                            },
+                            "last_status": {
+                                "generated_at": "2026-03-09T20:00:00+00:00",
+                                "item_count": 6,
+                                "delivered": True,
+                            },
+                        },
+                        {
+                            "name": "job_search_digest",
+                            "output_label": "Job search digest",
+                            "schedule": {
+                                "enabled": True,
+                                "timezone": "America/Guayaquil",
+                                "delivery_time_local": "18:30",
+                            },
+                            "last_status": {
+                                "generated_at": "2026-03-09T18:30:00+00:00",
+                                "processed_count": 4,
+                                "delivered": True,
+                            },
+                        },
+                    ],
+                    "last_run": {
+                        "executed_at": "2026-03-10T01:00:00+00:00",
+                        "workflow": "all",
+                        "apply": True,
+                        "results": [{"workflow": "job_search_digest", "ok": True}],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        state = self.backend.build_state()
+        self.assertTrue(state["research_flow"]["available"])
+        self.assertEqual(state["research_flow"]["owner_agent"], "researcher")
+        self.assertEqual(len(state["research_flow"]["workflows"]), 2)
+        self.assertEqual(state["research_flow"]["workflows"][0]["name"], "ai_tools_watch")
+        self.assertEqual(state["research_flow"]["last_run"]["workflow"], "all")
+
+    def test_run_research_flow_runtime_shells_out_and_returns_payload(self):
+        payload = {
+            "generated_at": "2026-03-10T01:00:00+00:00",
+            "workflows": [],
+            "last_run": {"workflow": "job_search_digest", "apply": True, "results": []},
+        }
+
+        with mock.patch("backend.subprocess.run") as mocked_run:
+            mocked_run.return_value = subprocess.CompletedProcess(
+                args=["python3"],
+                returncode=0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+            result = self.backend.run_research_flow_runtime(workflow="job_search_digest", apply=True)
+
+        self.assertEqual(result["status"]["last_run"]["workflow"], "job_search_digest")
+        cmd = mocked_run.call_args.kwargs["args"] if "args" in mocked_run.call_args.kwargs else mocked_run.call_args.args[0]
+        self.assertIn("run", cmd)
+        self.assertIn("job_search_digest", cmd)
+        self.assertIn("--apply", cmd)
 
 
 if __name__ == "__main__":

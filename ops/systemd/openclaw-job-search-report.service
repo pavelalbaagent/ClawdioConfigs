@@ -3,13 +3,13 @@ Description=OpenClaw Job Search Daily Report
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/openclaw/openclaw.env
-ConditionPathExists=/opt/clawdio/scripts/job_search_assistant.py
+ConditionPathExists=/opt/clawdio/scripts/research_flow_runtime.py
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/clawdio
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/job_search_assistant.py publish-report --env-file /etc/openclaw/openclaw.env --apply
+ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/research_flow_runtime.py --env-file /etc/openclaw/openclaw.env run --workflow job_search_digest --apply --json
 
 [Install]
 WantedBy=default.target

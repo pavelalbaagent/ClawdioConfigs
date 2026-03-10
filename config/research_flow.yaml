@@ -1,0 +1,38 @@
+research_flow:
+  enabled: true
+  owner_agent: researcher
+  default_space: research
+  delivery_chat_env: TELEGRAM_RESEARCH_CHAT_ID
+
+  shared_dropzones:
+    - data/researchflow/inbox
+    - data/researchflow/notes
+
+  workflows:
+    job_search_digest:
+      enabled: true
+      kind: scheduled_digest
+      status_file: data/job-search-daily-summary.json
+      output_label: Job search digest
+      schedule:
+        enabled: true
+        timezone: America/Guayaquil
+        delivery_time_local: "18:30"
+      command:
+        script: scripts/job_search_assistant.py
+        args:
+          - publish-report
+
+    ai_tools_watch:
+      enabled: true
+      kind: scheduled_digest
+      status_file: data/ai-tools-digest-status.json
+      output_label: AI tools digest
+      source_hint: AIToolsDB
+      schedule:
+        enabled: true
+        timezone: America/Guayaquil
+        delivery_time_local: "20:00"
+      command:
+        script: scripts/ai_tools_digest.py
+        args: []

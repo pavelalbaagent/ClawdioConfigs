@@ -34,6 +34,7 @@ EXPECTED_CONFIGS = {
     "dashboard": CONFIG_DIR / "dashboard.yaml",
     "job_search": CONFIG_DIR / "job_search.yaml",
     "knowledge_sources": CONFIG_DIR / "knowledge_sources.yaml",
+    "research_flow": CONFIG_DIR / "research_flow.yaml",
 }
 
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
@@ -868,6 +869,58 @@ def validate_knowledge_sources(data: dict[str, Any], errors: list[str], warnings
                 add_error(errors, "TYPE", f"knowledge_sources.knowledge_sources.sources.{source_name}.digest.chat_id_env must be a non-empty string")
 
 
+def validate_research_flow(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
+    flow = require_dict(data.get("research_flow"), errors, "research_flow.research_flow")
+    if flow.get("enabled") is not True and flow.get("enabled") is not False:
+        add_error(errors, "TYPE", "research_flow.research_flow.enabled must be boolean")
+    if not is_non_empty_str(flow.get("owner_agent")):
+        add_error(errors, "REQ", "research_flow.research_flow.owner_agent is required")
+    if not is_non_empty_str(flow.get("default_space")):
+        add_error(errors, "REQ", "research_flow.research_flow.default_space is required")
+    if not is_non_empty_str(flow.get("delivery_chat_env")):
+        add_error(errors, "REQ", "research_flow.research_flow.delivery_chat_env is required")
+    validate_string_list(
+        flow.get("shared_dropzones"),
+        "research_flow.research_flow.shared_dropzones",
+        errors,
+        allow_empty=True,
+    )
+    workflows = require_dict(flow.get("workflows"), errors, "research_flow.research_flow.workflows")
+    if not workflows:
+        add_error(errors, "REQ", "research_flow.research_flow.workflows must not be empty")
+    for workflow_name, workflow_data in workflows.items():
+        row = require_dict(workflow_data, errors, f"research_flow.research_flow.workflows.{workflow_name}")
+        if row.get("enabled") is not True and row.get("enabled") is not False:
+            add_error(errors, "TYPE", f"research_flow.research_flow.workflows.{workflow_name}.enabled must be boolean")
+        if not is_non_empty_str(row.get("kind")):
+            add_error(errors, "REQ", f"research_flow.research_flow.workflows.{workflow_name}.kind is required")
+        if not is_non_empty_str(row.get("status_file")):
+            add_error(errors, "REQ", f"research_flow.research_flow.workflows.{workflow_name}.status_file is required")
+        command = require_dict(row.get("command"), errors, f"research_flow.research_flow.workflows.{workflow_name}.command")
+        validate_existing_repo_file(
+            command.get("script"),
+            f"research_flow.research_flow.workflows.{workflow_name}.command.script",
+            errors,
+            required=True,
+        )
+        validate_string_list(
+            command.get("args"),
+            f"research_flow.research_flow.workflows.{workflow_name}.command.args",
+            errors,
+            allow_empty=True,
+        )
+        schedule = require_dict(row.get("schedule"), errors, f"research_flow.research_flow.workflows.{workflow_name}.schedule")
+        if schedule.get("enabled") is not True and schedule.get("enabled") is not False:
+            add_error(errors, "TYPE", f"research_flow.research_flow.workflows.{workflow_name}.schedule.enabled must be boolean")
+        if not is_non_empty_str(schedule.get("timezone")):
+            add_error(errors, "REQ", f"research_flow.research_flow.workflows.{workflow_name}.schedule.timezone is required")
+        delivery_time = schedule.get("delivery_time_local")
+        if not is_non_empty_str(delivery_time):
+            add_error(errors, "REQ", f"research_flow.research_flow.workflows.{workflow_name}.schedule.delivery_time_local is required")
+        elif not re.fullmatch(r"\d{2}:\d{2}", str(delivery_time)):
+            add_error(errors, "TYPE", f"research_flow.research_flow.workflows.{workflow_name}.schedule.delivery_time_local must be HH:MM")
+
+
 def validate_security(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
     audit = require_dict(data.get("audit"), errors, "security.audit")
     log_file = audit.get("log_file")
@@ -1332,6 +1385,8 @@ def main() -> int:
         validate_job_search(require_dict(loaded["job_search"], errors, "job_search"), errors, warnings)
     if "knowledge_sources" in loaded:
         validate_knowledge_sources(require_dict(loaded["knowledge_sources"], errors, "knowledge_sources"), errors, warnings)
+    if "research_flow" in loaded:
+        validate_research_flow(require_dict(loaded["research_flow"], errors, "research_flow"), errors, warnings)
 
     if "agents" in loaded and "session_policy" in loaded:
         validate_spawn_alignment(

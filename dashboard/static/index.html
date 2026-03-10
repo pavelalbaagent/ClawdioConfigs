@@ -380,6 +380,52 @@
 
       <section class="grid">
         <article class="card col-12">
+          <h2>ResearchFlow</h2>
+          <p class="footnote" id="research-flow-summary">No ResearchFlow snapshot yet.</p>
+          <div class="controls" style="margin-bottom: 12px">
+            <button id="research-flow-refresh-button" class="secondary">Refresh Flow Status</button>
+            <button id="research-flow-job-button" class="secondary">Run Job Search Digest</button>
+            <button id="research-flow-ai-button" class="secondary">Run AI Tools Digest</button>
+            <button id="research-flow-all-button" class="secondary">Run Both</button>
+          </div>
+          <div class="list" style="margin-bottom: 12px">
+            <div class="list-item">
+              <div>
+                <strong>Owner + Space</strong>
+                <div class="meta" id="research-flow-owner-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Last Run</strong>
+                <div class="meta" id="research-flow-last-run-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Shared Dropzones</strong>
+                <div class="meta" id="research-flow-dropzones-meta">-</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Workflow</th>
+                  <th>Schedule</th>
+                  <th>Last Output</th>
+                  <th>Result Snapshot</th>
+                </tr>
+              </thead>
+              <tbody id="research-flow-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-12">
           <h2>Google Calendar</h2>
           <p class="footnote" id="calendar-runtime-summary">No calendar runtime snapshot yet.</p>
           <div class="controls" style="margin-bottom: 12px">

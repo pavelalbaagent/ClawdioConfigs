@@ -739,6 +739,75 @@ function renderDriveWorkspace(snapshot) {
   setText("drive-checked-meta", drive.generated_at || "-");
 }
 
+function renderResearchFlow(snapshot) {
+  const body = byId("research-flow-body");
+  body.innerHTML = "";
+
+  const flow = snapshot.research_flow || {};
+  if (!flow.available) {
+    setText("research-flow-summary", "No ResearchFlow snapshot yet.");
+    setText("research-flow-owner-meta", "-");
+    setText("research-flow-last-run-meta", "-");
+    setText("research-flow-dropzones-meta", "-");
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  const workflows = flow.workflows || [];
+  const lastRun = flow.last_run || {};
+  setText(
+    "research-flow-summary",
+    `${flow.owner_agent || "researcher"} owns ${workflows.length} workflows | generated ${flow.generated_at || "-"}`
+  );
+  setText(
+    "research-flow-owner-meta",
+    `${flow.owner_agent || "-"} | default space=${flow.default_space || "-"} | delivery=${flow.delivery_chat_env || "-"}`
+  );
+  setText(
+    "research-flow-last-run-meta",
+    lastRun.executed_at
+      ? `${lastRun.workflow || "-"} | apply=${lastRun.apply ? "yes" : "no"} | ${lastRun.executed_at}`
+      : "No manual/orchestrated run recorded yet."
+  );
+  setText("research-flow-dropzones-meta", (flow.shared_dropzones || []).join(", ") || "none");
+
+  if (!workflows.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["none", "-", "-", "-"]);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const row of workflows) {
+    const tr = document.createElement("tr");
+    const schedule = row.schedule || {};
+    const lastStatus = row.last_status || {};
+    const summaryBits = [];
+    if (lastStatus.processed_count !== undefined) {
+      summaryBits.push(`processed=${lastStatus.processed_count}`);
+    }
+    if (lastStatus.item_count !== undefined) {
+      summaryBits.push(`items=${lastStatus.item_count}`);
+    }
+    if (lastStatus.delivered !== undefined) {
+      summaryBits.push(`delivered=${lastStatus.delivered ? "yes" : "no"}`);
+    }
+    if (lastStatus.telegram_messages_sent !== undefined) {
+      summaryBits.push(`messages=${lastStatus.telegram_messages_sent}`);
+    }
+
+    appendCells(tr, [
+      row.output_label || row.name || "-",
+      schedule.enabled ? `${schedule.delivery_time_local || "-"} ${schedule.timezone || "-"}` : "disabled",
+      lastStatus.generated_at || lastStatus.analyzed_at || "-",
+      summaryBits.join(" | ") || (lastStatus.ok === false ? "error" : "no result yet"),
+    ]);
+    body.appendChild(tr);
+  }
+}
+
 function renderCalendarRuntime(snapshot) {
   const body = byId("calendar-runtime-body");
   body.innerHTML = "";
@@ -2146,6 +2215,25 @@ async function runProviderSmoke(live) {
   await loadState();
 }
 
+async function runResearchFlow(workflow) {
+  const result = await api("/api/research_flow/run", {
+    method: "POST",
+    body: {
+      workflow,
+      apply: true,
+    },
+  });
+  const status = ((result || {}).result || {}).status || {};
+  const lastRun = status.last_run || {};
+  const results = lastRun.results || [];
+  const okCount = results.filter((row) => row.ok).length;
+  setText(
+    "research-flow-summary",
+    `ResearchFlow run complete: workflow=${lastRun.workflow || workflow} | ok=${okCount}/${results.length || 0} | ${lastRun.executed_at || ""}`.trim()
+  );
+  await loadState();
+}
+
 function selectedAssigneesForCreate() {
   const container = byId("task-assignee-checkboxes");
   const checks = Array.from(container.querySelectorAll("input[type='checkbox']"));
@@ -2455,6 +2543,7 @@ async function loadState() {
     renderReminders(snapshot);
     renderTodoQueue(snapshot);
     renderGmailInbox(snapshot);
+    renderResearchFlow(snapshot);
     renderCalendarRuntime(snapshot);
     renderDriveWorkspace(snapshot);
     renderCalendarCandidates(snapshot);
@@ -2511,6 +2600,38 @@ function bindEvents() {
   byId("provider-smoke-live-button").addEventListener("click", async () => {
     try {
       await runProviderSmoke(true);
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("research-flow-refresh-button").addEventListener("click", async () => {
+    try {
+      await loadState();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("research-flow-job-button").addEventListener("click", async () => {
+    try {
+      await runResearchFlow("job_search_digest");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("research-flow-ai-button").addEventListener("click", async () => {
+    try {
+      await runResearchFlow("ai_tools_watch");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("research-flow-all-button").addEventListener("click", async () => {
+    try {
+      await runResearchFlow("all");
     } catch (error) {
       showError(error.message);
     }

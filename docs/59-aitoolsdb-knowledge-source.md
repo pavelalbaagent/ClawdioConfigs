@@ -30,6 +30,7 @@ Default source:
 
 1. Search helper: [knowledge_source_search.py](/Users/palba/Projects/Clawdio/scripts/knowledge_source_search.py)
 2. Daily digest: [ai_tools_digest.py](/Users/palba/Projects/Clawdio/scripts/ai_tools_digest.py)
+3. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Clawdio/scripts/research_flow_runtime.py)
 
 ## Agent usage
 
@@ -68,6 +69,14 @@ Deliver to the research chat:
 
 ```bash
 python3 scripts/ai_tools_digest.py --env-file /etc/openclaw/openclaw.env --apply --json
+```
+
+Deliver through the researcher-owned ResearchFlow wrapper:
+
+```bash
+python3 scripts/research_flow_runtime.py \
+  --env-file /etc/openclaw/openclaw.env \
+  run --workflow ai_tools_watch --apply --json
 ```
 
 Systemd units:

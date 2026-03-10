@@ -30,6 +30,7 @@ import fitness_runtime as fitness_runtime  # type: ignore  # noqa: E402
 import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
 import personal_task_runtime as personal_task_runtime  # type: ignore  # noqa: E402
 import provider_smoke_check as provider_smoke_runtime  # type: ignore  # noqa: E402
+import research_flow_runtime as research_flow_runtime  # type: ignore  # noqa: E402
 from space_router import route_text as route_space_text  # type: ignore  # noqa: E402
 
 
@@ -304,6 +305,9 @@ class DashboardBackend:
         self.personal_task_status_path = self.root / "data" / "personal-task-runtime-status.json"
         self.fitness_runtime_status_path = self.root / "data" / "fitness-runtime-status.json"
         self.drive_workspace_status_path = self.root / "data" / "drive-workspace-status.json"
+        self.research_flow_config_path = self.config_dir / "research_flow.yaml"
+        self.research_flow_status_path = self.root / "data" / "research-flow-status.json"
+        self.research_flow_script = self.root / "scripts" / "research_flow_runtime.py"
         self.braindump_snapshot_path = self.root / "data" / "braindump-snapshot.json"
         self.provider_smoke_status_path = self.root / "data" / "provider-smoke-status.json"
         self.gmail_db_path = self.root / ".memory" / "inbox_processing.db"
@@ -1845,6 +1849,51 @@ class DashboardBackend:
             "summary": ensure_dict(raw.get("summary")),
         }
 
+    def _research_flow_status(self) -> dict[str, Any]:
+        if not self.research_flow_config_path.exists():
+            return {
+                "available": False,
+                "path": str(self.research_flow_status_path),
+                "config_path": str(self.research_flow_config_path),
+                "owner_agent": None,
+                "default_space": None,
+                "workflows": [],
+                "last_run": None,
+            }
+
+        try:
+            config = research_flow_runtime.load_config(self.research_flow_config_path)
+            payload = read_json(self.research_flow_status_path)
+            if not isinstance(payload, dict):
+                payload = research_flow_runtime.build_status(config)
+        except Exception as exc:
+            return {
+                "available": False,
+                "path": str(self.research_flow_status_path),
+                "config_path": str(self.research_flow_config_path),
+                "error": str(exc),
+                "owner_agent": None,
+                "default_space": None,
+                "workflows": [],
+                "last_run": None,
+            }
+
+        workflows = [ensure_dict(item) for item in payload.get("workflows", []) if isinstance(item, dict)]
+        workflows.sort(key=lambda row: str(row.get("name") or ""))
+        return {
+            "available": True,
+            "path": str(self.research_flow_status_path),
+            "config_path": str(self.research_flow_config_path),
+            "generated_at": str(payload.get("generated_at") or "").strip() or None,
+            "enabled": bool(payload.get("enabled") is True),
+            "owner_agent": str(payload.get("owner_agent") or "").strip() or None,
+            "default_space": str(payload.get("default_space") or "").strip() or None,
+            "delivery_chat_env": str(payload.get("delivery_chat_env") or "").strip() or None,
+            "shared_dropzones": ensure_string_list(payload.get("shared_dropzones", [])),
+            "workflows": workflows[:20],
+            "last_run": ensure_dict(payload.get("last_run")),
+        }
+
     def _braindump_status(self) -> dict[str, Any]:
         catalog = self.braindump_category_catalog()
         raw = read_json(self.braindump_snapshot_path)
@@ -2163,6 +2212,51 @@ class DashboardBackend:
         )
         write_json(self.provider_smoke_status_path, payload)
         return payload
+
+    def run_research_flow_runtime(
+        self,
+        *,
+        workflow: str,
+        apply: bool = True,
+    ) -> dict[str, Any]:
+        clean_workflow = workflow.strip()
+        if clean_workflow not in {"job_search_digest", "ai_tools_watch", "all"}:
+            raise ValueError("workflow must be one of: job_search_digest, ai_tools_watch, all")
+        if not self.research_flow_script.exists():
+            raise ValueError("research_flow_runtime.py is missing")
+        if not self.research_flow_config_path.exists():
+            raise ValueError("research_flow.yaml is missing")
+
+        env_path = self._integration_env_file_path()
+        cmd = [
+            "python3",
+            str(self.research_flow_script),
+            "--config",
+            str(self.research_flow_config_path),
+            "--status-file",
+            str(self.research_flow_status_path),
+        ]
+        if env_path is not None:
+            cmd.extend(["--env-file", str(env_path)])
+        cmd.extend(["run", "--workflow", clean_workflow])
+        if apply:
+            cmd.append("--apply")
+        cmd.append("--json")
+
+        proc = subprocess.run(cmd, cwd=str(self.root), capture_output=True, text=True)
+        stdout = proc.stdout.strip()
+        payload: dict[str, Any] = {}
+        if stdout:
+            try:
+                parsed = json.loads(stdout)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except json.JSONDecodeError:
+                payload = {}
+        if proc.returncode != 0:
+            message = (stdout + "\n" + proc.stderr.strip()).strip()
+            raise ValueError(message or "Failed to run ResearchFlow workflow")
+        return {"status": payload or self._research_flow_status()}
 
     def _find_section_start(self, lines: list[str], section: str) -> int:
         needle = f"{section}:"
@@ -4058,6 +4152,7 @@ class DashboardBackend:
         personal_tasks = self._personal_task_runtime_status()
         fitness_runtime_state = self._fitness_runtime_status()
         drive_workspace = self._drive_workspace_status()
+        research_flow = self._research_flow_status()
         braindump = self._braindump_status()
         provider_health = self._provider_health_status()
         telegram_adapter = self._telegram_adapter_status()
@@ -4143,6 +4238,7 @@ class DashboardBackend:
             "personal_tasks": personal_tasks,
             "fitness_runtime": fitness_runtime_state,
             "drive_workspace": drive_workspace,
+            "research_flow": research_flow,
             "braindump": braindump,
             "provider_health": provider_health,
             "telegram_adapter": telegram_adapter,
