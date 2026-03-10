@@ -83,6 +83,9 @@ The VPS deployment uses loopback port `18890` by default so it can coexist with 
 10. Agent chat visibility reads `data/*-chat-state.json`.
 11. Ops-guard status reads `data/continuous-improvement-status.json`.
 12. Memory sync status reads `data/memory-sync-status.json`.
+13. Knowledge-librarian consolidation status reads `data/knowledge-librarian-status.json`.
+14. Shared directives read [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md).
+15. Shared findings read [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md).
 
 ## Preset Packs
 
@@ -173,6 +176,10 @@ Dashboard now shows:
 6. per-agent chat availability, session age, checkpoint state, and last model lane
 7. latest ops-guard review snapshot
 8. latest memory-sync snapshot
+9. knowledge-librarian consolidation snapshot
+10. shared directives/findings summaries
+11. review token usage by agent, lane, and model
+12. current cleanup candidates from the bounded governance loop
 
 This is the current visibility layer for:
 

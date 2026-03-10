@@ -30,8 +30,12 @@ data/telegram-adapter-state.json
 data/agent-runtime-state.json
 data/*-chat-state.json
 data/continuous-improvement-status.json
+data/continuous-improvement-history/
+data/knowledge-librarian-status.json
 data/memory-sync-status.json
 data/job-search-daily-summary.json
+data/job-search-discovery-status.json
+data/job-search-discovery-state.json
 data/job-search/inbox/
 docs/reviews/*.md
 !docs/reviews/README.md

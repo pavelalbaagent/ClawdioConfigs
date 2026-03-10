@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts"
@@ -31,6 +32,7 @@ import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
 import personal_task_runtime as personal_task_runtime  # type: ignore  # noqa: E402
 import provider_smoke_check as provider_smoke_runtime  # type: ignore  # noqa: E402
 import research_flow_runtime as research_flow_runtime  # type: ignore  # noqa: E402
+from governance_loop import governance_paths  # type: ignore  # noqa: E402
 from space_router import route_text as route_space_text  # type: ignore  # noqa: E402
 
 
@@ -156,6 +158,18 @@ def parse_iso_safe(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def parse_hhmm_safe(value: str | None) -> tuple[int, int] | None:
+    text = str(value or "").strip()
+    match = re.fullmatch(r"(\d{2}):(\d{2})", text)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return hour, minute
+
+
 def minutes_until(ts: str | None) -> int | None:
     dt = parse_iso_safe(ts)
     if dt is None:
@@ -269,6 +283,32 @@ def parse_markdown_todos(path: Path) -> list[dict[str, Any]]:
     return out
 
 
+def extract_markdown_section_bullets(path: Path, heading: str, *, limit: int = 8) -> list[str]:
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(
+        rf"^##\s+{re.escape(heading)}\s*$" + r"(?P<body>.*?)(?=^##\s+|\Z)",
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if not match:
+        return []
+    body = str(match.group("body") or "")
+    rows: list[str] = []
+    for raw in body.splitlines():
+        line = raw.strip().replace("`", "")
+        if not line:
+            continue
+        line = re.sub(r"^\d+\.\s+", "", line)
+        line = re.sub(r"^-\s+", "", line)
+        line = " ".join(line.split())
+        if not line:
+            continue
+        rows.append(line)
+    return rows[:limit]
+
+
 class DashboardBackend:
     """Load dashboard state and apply safe config toggles."""
 
@@ -288,8 +328,13 @@ class DashboardBackend:
         self.agent_runtime_state_path = self.root / "data" / "agent-runtime-state.json"
         self.telegram_adapter_state_path = self._resolve_telegram_adapter_state_path()
         self.assistant_chat_state_path = self.root / "data" / "assistant-chat-state.json"
-        self.continuous_improvement_status_path = self.root / "data" / "continuous-improvement-status.json"
         self.memory_sync_status_path = self.root / "data" / "memory-sync-status.json"
+        governance_cfg = governance_paths(self.root)
+        self.continuous_improvement_status_path = Path(governance_cfg["latest_status_file"])
+        self.continuous_improvement_history_dir = Path(governance_cfg["review_history_dir"])
+        self.shared_directives_path = Path(governance_cfg["shared_directives_file"])
+        self.shared_findings_path = Path(governance_cfg["shared_findings_file"])
+        self.knowledge_librarian_status_path = Path(governance_cfg["consolidation_status_file"])
         self.todo_sources = [
             self.root / "TODO.md",
             self.root / "baselines" / "agent_md" / "TODO.md",
@@ -1793,9 +1838,16 @@ class DashboardBackend:
 
     def _fitness_runtime_status(self) -> dict[str, Any]:
         raw = read_json(self.fitness_runtime_status_path)
-        if not isinstance(raw, dict):
+        runtime = self._fitness_runtime()
+        status_hash = str(ensure_dict(raw.get("canonical_context")).get("hash") or "").strip() if isinstance(raw, dict) else ""
+        current_hash = ""
+        try:
+            current_hash = runtime.current_canonical_hash()
+        except Exception:
+            current_hash = ""
+        if not isinstance(raw, dict) or (current_hash and status_hash != current_hash):
             try:
-                raw = ensure_dict(self._fitness_runtime().snapshot(action="status"))
+                raw = ensure_dict(runtime.snapshot(action="status"))
             except Exception:
                 raw = {}
         if not isinstance(raw, dict) or not raw:
@@ -1803,6 +1855,7 @@ class DashboardBackend:
                 "available": False,
                 "path": str(self.fitness_runtime_status_path),
                 "db_path": str(self.fitness_db_path),
+                "canonical_context": {},
                 "today_plan": {},
                 "active_session": None,
                 "active_session_summary": [],
@@ -1832,6 +1885,7 @@ class DashboardBackend:
             "db_path": str(raw.get("db_path") or self.fitness_db_path),
             "action": str(raw.get("action", "")).strip() or None,
             "timezone": str(raw.get("timezone", "")).strip() or None,
+            "canonical_context": ensure_dict(raw.get("canonical_context")),
             "settings": ensure_dict(raw.get("settings")),
             "today_plan": today_plan,
             "active_session": ensure_dict(raw.get("active_session")) if isinstance(raw.get("active_session"), dict) else None,
@@ -2104,6 +2158,7 @@ class DashboardBackend:
         channels_data = self.load_yaml_dict(self.channels_path)
         telegram_cfg = ensure_dict(ensure_dict(channels_data.get("channels")).get("telegram"))
         bindings_cfg = ensure_dict(telegram_cfg.get("chat_bindings"))
+        briefing_cfg = ensure_dict(telegram_cfg.get("assistant_morning_briefing"))
         env_values: dict[str, str] = {}
         env_path = self._integration_env_file_path()
         if env_path and env_path.exists():
@@ -2132,11 +2187,49 @@ class DashboardBackend:
                 }
             )
 
+        morning_binding_id = str(briefing_cfg.get("binding_id") or telegram_cfg.get("default_binding") or "assistant_main").strip() or "assistant_main"
+        morning_binding = next((row for row in bindings if str(row.get("binding_id") or "") == morning_binding_id), None)
+        morning_timezone = str(briefing_cfg.get("timezone") or "America/Guayaquil").strip() or "America/Guayaquil"
+        morning_time = str(briefing_cfg.get("delivery_time_local") or "07:00").strip() or "07:00"
+        morning_state = ensure_dict(ensure_dict(raw).get("morning_briefing")) if isinstance(raw, dict) else {}
+        next_due_at = None
+        schedule_clock = parse_hhmm_safe(morning_time)
+        if bool(briefing_cfg.get("enabled") is True) and schedule_clock is not None:
+            try:
+                zone = ZoneInfo(morning_timezone)
+                now_local = datetime.now(timezone.utc).astimezone(zone)
+                next_local = datetime.combine(now_local.date(), datetime.min.time(), tzinfo=zone).replace(
+                    hour=schedule_clock[0],
+                    minute=schedule_clock[1],
+                )
+                if str(morning_state.get("last_sent_local_date") or "").strip() == now_local.date().isoformat() or next_local <= now_local:
+                    next_local = next_local + timedelta(days=1)
+                next_due_at = next_local.astimezone(timezone.utc).isoformat(timespec="seconds")
+            except Exception:
+                next_due_at = None
+
+        morning_briefing = {
+            "enabled": bool(briefing_cfg.get("enabled") is True),
+            "binding_id": morning_binding_id,
+            "binding_label": str(ensure_dict(morning_binding).get("label") or morning_binding_id).strip() or morning_binding_id,
+            "delivery_time_local": morning_time,
+            "timezone": morning_timezone,
+            "next_due_at": next_due_at,
+            "last_sent_at": str(morning_state.get("last_sent_at") or "").strip() or None,
+            "last_sent_local_date": str(morning_state.get("last_sent_local_date") or "").strip() or None,
+            "last_delivery_kind": str(morning_state.get("last_delivery_kind") or "").strip() or None,
+            "last_status": str(morning_state.get("last_status") or "").strip() or None,
+            "last_message_preview": str(morning_state.get("last_message_preview") or "").strip() or None,
+            "last_summary": ensure_dict(morning_state.get("last_summary")),
+            "max_schedule_suggestions": briefing_cfg.get("max_schedule_suggestions"),
+        }
+
         if not isinstance(raw, dict) or not raw:
             return {
                 "available": False,
                 "path": str(self.telegram_adapter_state_path),
                 "bindings": bindings,
+                "morning_briefing": morning_briefing,
                 "default_binding_id": str(telegram_cfg.get("default_binding") or "assistant_main").strip() or "assistant_main",
                 "reminder_binding_id": str(telegram_cfg.get("reminder_binding") or "assistant_main").strip() or "assistant_main",
                 "focus": None,
@@ -2150,6 +2243,7 @@ class DashboardBackend:
             "available": True,
             "path": str(self.telegram_adapter_state_path),
             "bindings": bindings,
+            "morning_briefing": morning_briefing,
             "default_binding_id": str(telegram_cfg.get("default_binding") or "assistant_main").strip() or "assistant_main",
             "reminder_binding_id": str(telegram_cfg.get("reminder_binding") or "assistant_main").strip() or "assistant_main",
             "focus": {
@@ -2170,19 +2264,86 @@ class DashboardBackend:
                 "mode": None,
                 "generated_at": None,
                 "report_path": None,
+                "history_path": None,
                 "findings_count": 0,
                 "recommended_changes": [],
+                "approval_required_changes": [],
+                "directive_candidates": [],
+                "cleanup_candidates": [],
+                "usage": {
+                    "window_hours": 0,
+                    "overall": asdict_totals(Totals()),
+                    "by_agent": [],
+                    "by_lane": [],
+                    "by_model": [],
+                },
             }
+        usage = ensure_dict(raw.get("usage"))
         return {
             "available": True,
             "path": str(self.continuous_improvement_status_path),
             "mode": str(raw.get("mode") or "").strip() or None,
             "generated_at": str(raw.get("generated_at") or "").strip() or None,
             "report_path": str(raw.get("report_path") or "").strip() or None,
+            "history_path": str(raw.get("history_path") or "").strip() or None,
             "findings_count": int(raw.get("findings_count", 0) or 0),
             "recommended_changes": ensure_string_list(raw.get("recommended_changes", [])),
             "approval_required_changes": ensure_string_list(raw.get("approval_required_changes", [])),
             "archive_candidates": ensure_string_list(raw.get("archive_candidates", [])),
+            "directive_candidates": [ensure_dict(row) for row in raw.get("directive_candidates", []) if isinstance(row, dict)][:8],
+            "cleanup_candidates": [ensure_dict(row) for row in raw.get("cleanup_candidates", []) if isinstance(row, dict)][:10],
+            "usage": {
+                "window_hours": int(usage.get("window_hours", 0) or 0),
+                "overall": ensure_dict(usage.get("overall")) or asdict_totals(Totals()),
+                "by_agent": [ensure_dict(row) for row in usage.get("by_agent", []) if isinstance(row, dict)][:6],
+                "by_lane": [ensure_dict(row) for row in usage.get("by_lane", []) if isinstance(row, dict)][:6],
+                "by_model": [ensure_dict(row) for row in usage.get("by_model", []) if isinstance(row, dict)][:6],
+            },
+        }
+
+    def _knowledge_librarian_status(self) -> dict[str, Any]:
+        raw = read_json(self.knowledge_librarian_status_path)
+        if not isinstance(raw, dict):
+            return {
+                "available": False,
+                "path": str(self.knowledge_librarian_status_path),
+                "generated_at": None,
+                "owner_role": "knowledge_librarian",
+                "shared_directives_path": str(self.shared_directives_path),
+                "shared_findings_path": str(self.shared_findings_path),
+                "promoted_directives": [],
+                "pending_directive_candidates": [],
+                "recent_findings": [],
+                "cleanup_candidates": [],
+            }
+        return {
+            "available": True,
+            "path": str(self.knowledge_librarian_status_path),
+            "generated_at": str(raw.get("generated_at") or "").strip() or None,
+            "owner_role": str(raw.get("owner_role") or "knowledge_librarian").strip() or "knowledge_librarian",
+            "shared_directives_path": str(raw.get("shared_directives_path") or self.shared_directives_path),
+            "shared_findings_path": str(raw.get("shared_findings_path") or self.shared_findings_path),
+            "source_review_path": str(raw.get("source_review_path") or "").strip() or None,
+            "promoted_directives": [ensure_dict(row) for row in raw.get("promoted_directives", []) if isinstance(row, dict)][:8],
+            "pending_directive_candidates": [
+                ensure_dict(row) for row in raw.get("pending_directive_candidates", []) if isinstance(row, dict)
+            ][:8],
+            "recent_findings": [ensure_dict(row) for row in raw.get("recent_findings", []) if isinstance(row, dict)][:8],
+            "cleanup_candidates": [ensure_dict(row) for row in raw.get("cleanup_candidates", []) if isinstance(row, dict)][:8],
+            "changed_files": ensure_string_list(raw.get("changed_files", [])),
+        }
+
+    def _shared_governance_memory(self) -> dict[str, Any]:
+        return {
+            "directives_path": str(self.shared_directives_path),
+            "findings_path": str(self.shared_findings_path),
+            "directives_available": self.shared_directives_path.exists(),
+            "findings_available": self.shared_findings_path.exists(),
+            "active_directives": extract_markdown_section_bullets(self.shared_directives_path, "Active Directives", limit=8),
+            "approval_boundaries": extract_markdown_section_bullets(self.shared_directives_path, "Approval Boundaries", limit=8),
+            "recent_findings": extract_markdown_section_bullets(self.shared_findings_path, "Recent Findings", limit=8),
+            "directive_candidates": extract_markdown_section_bullets(self.shared_findings_path, "Directive Candidates", limit=8),
+            "cleanup_candidates": extract_markdown_section_bullets(self.shared_findings_path, "Cleanup Candidates", limit=8),
         }
 
     def _memory_sync_status(self) -> dict[str, Any]:
@@ -2208,6 +2369,7 @@ class DashboardBackend:
             "embeddings_created": int(summary.get("embeddings_created", 0) or 0),
             "stdout_tail": str(raw.get("stdout_tail") or "").strip() or None,
             "stderr_tail": str(raw.get("stderr_tail") or "").strip() or None,
+            "governance_consolidation": ensure_dict(raw.get("governance_consolidation")),
         }
 
     def run_provider_smoke_check(self, *, live: bool = False) -> dict[str, Any]:
@@ -4170,6 +4332,8 @@ class DashboardBackend:
         agent_chats = self._agent_chats_status()
         agent_runtime = self._agent_runtime_snapshot()
         continuous_improvement_status = self._continuous_improvement_status()
+        knowledge_librarian_status = self._knowledge_librarian_status()
+        shared_governance_memory = self._shared_governance_memory()
         memory_sync_status = self._memory_sync_status()
         workspace = self._workspace_summary()
 
@@ -4256,6 +4420,8 @@ class DashboardBackend:
             "agent_chats": agent_chats,
             "agent_runtime": agent_runtime,
             "continuous_improvement_status": continuous_improvement_status,
+            "knowledge_librarian_status": knowledge_librarian_status,
+            "shared_governance_memory": shared_governance_memory,
             "memory_sync_status": memory_sync_status,
             "workspace": workspace,
             "env": env,

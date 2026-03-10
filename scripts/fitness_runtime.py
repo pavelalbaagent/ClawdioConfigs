@@ -25,23 +25,30 @@ DEFAULT_CONFIG = ROOT / "config" / "fitness_agent.yaml"
 DEFAULT_MEMORY_CONFIG = ROOT / "config" / "memory.yaml"
 DEFAULT_DB = ROOT / ".memory" / "fitness.db"
 DEFAULT_STATUS = ROOT / "data" / "fitness-runtime-status.json"
+FITNESS_CANONICAL_FILES = (
+    "ATHLETE_PROFILE.md",
+    "PROGRAM.md",
+    "RULES.md",
+    "EXERCISE_LIBRARY.md",
+    "SESSION_QUEUE.md",
+)
 
 DAY_CODE_TO_INDEX = {
     "M1": 1,
     "M2": 2,
     "M3": 3,
     "M4": 4,
-    "O5": 5,
+    "M5": 5,
 }
 INDEX_TO_DAY_CODE = {value: key for key, value in DAY_CODE_TO_INDEX.items()}
-MAIN_DAY_CODES = ("M1", "M2", "M3", "M4")
-OPTIONAL_DAY_CODE = "O5"
+MAIN_DAY_CODES = ("M1", "M2", "M3", "M4", "M5")
+OPTIONAL_DAY_CODE: str | None = None
 SESSION_CODE_TO_QUEUE_KEY = {
     "M1": "M1_mon_bench_1",
     "M2": "M2_tue_db",
-    "M3": "M3_thu_bb_db",
+    "M3": "M3_thu_db_bb",
     "M4": "M4_fri_bench_2",
-    "O5": "O5_sat_db_optional",
+    "M5": "M5_sat_db",
 }
 REST_DAY_TO_WEEKDAY = {
     "monday": 0,
@@ -141,6 +148,30 @@ def local_date_iso(timezone_name: str) -> str:
 
 def program_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def canonical_fitness_paths(root: Path) -> list[Path]:
+    return [root / "fitness" / name for name in FITNESS_CANONICAL_FILES]
+
+
+def build_canonical_fitness_context(root: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    hash_parts: list[str] = []
+    for path in canonical_fitness_paths(root):
+        text = path.read_text(encoding="utf-8")
+        relative_path = str(path.relative_to(root))
+        files.append(
+            {
+                "path": relative_path,
+                "content_hash": program_hash(text),
+                "updated_at": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds"),
+            }
+        )
+        hash_parts.append(f"## {relative_path}\n{text}")
+    return {
+        "hash": program_hash("\n\n".join(hash_parts)),
+        "files": files,
+    }
 
 
 @dataclass
@@ -477,7 +508,10 @@ def sync_program(conn: sqlite3.Connection, *, config: dict[str, Any], plan: dict
 def load_fitness_config(root: Path, config_path: Path | None = None) -> dict[str, Any]:
     resolved = config_path or (root / "config" / "fitness_agent.yaml")
     config = load_yaml_dict(resolved)
+    canonical_context = build_canonical_fitness_context(root)
     catalog = parse_exercise_library(root / "fitness" / "EXERCISE_LIBRARY.md")
+    config["_canonical_context"] = canonical_context
+    config["_canonical_hash"] = canonical_context["hash"]
     config["_exercise_definitions"] = catalog["definitions"]
     config["_exercise_alias_map"] = catalog["alias_map"]
     config["_program"] = parse_program(root / "fitness" / "PROGRAM.md", catalog)
@@ -533,7 +567,7 @@ def determine_next_main_code(conn: sqlite3.Connection) -> str:
     if not row:
         return "M1"
     current = int(row["training_day_index"])
-    return INDEX_TO_DAY_CODE[(current % 4) + 1]
+    return INDEX_TO_DAY_CODE[(current % len(MAIN_DAY_CODES)) + 1]
 
 
 def current_local_weekday(timezone_name: str) -> int:
@@ -546,6 +580,9 @@ def default_rest_weekdays(config: dict[str, Any]) -> set[int]:
 
 
 def optional_session_available(config: dict[str, Any]) -> bool:
+    optional_count = int(ensure_dict(config.get("schedule")).get("optional_workouts_per_week") or 0)
+    if not OPTIONAL_DAY_CODE or optional_count <= 0:
+        return False
     return current_local_weekday(str(ensure_dict(config.get("schedule")).get("timezone") or "UTC")) == 5
 
 
@@ -588,12 +625,14 @@ def determine_today_plan(conn: sqlite3.Connection, config: dict[str, Any], *, in
 
     next_main_code = determine_next_main_code(conn)
     plan = load_day_plan(config, next_main_code)
-    optional_plan = build_plan_row(load_day_plan(config, OPTIONAL_DAY_CODE)) if include_optional and optional_session_available(config) else None
+    optional_plan = None
+    if include_optional and OPTIONAL_DAY_CODE and optional_session_available(config):
+        optional_plan = build_plan_row(load_day_plan(config, OPTIONAL_DAY_CODE))
     notes: list[str] = []
     if weekday in rest_anchors:
         notes.append("Today is a default rest anchor. Main-session queue still rolls forward.")
     if optional_plan:
-        notes.append("Optional O5 is available today if recovery and schedule allow it.")
+        notes.append(f"Optional {OPTIONAL_DAY_CODE} is available today if recovery and schedule allow it.")
     return {
         "mode": "next_pending",
         "is_rest_anchor": weekday in rest_anchors,
@@ -1082,6 +1121,7 @@ def build_status_payload(
         "action": action,
         "timezone": timezone_name,
         "db_path": str(db_path),
+        "canonical_context": ensure_dict(config.get("_canonical_context")),
         "settings": {
             "barbell_empty_weight_kg": (
                 float(get_setting(conn, "barbell_empty_weight_kg"))
@@ -1239,7 +1279,16 @@ class FitnessRuntime:
         self.db_path = db_path or (root / str(sqlite_cfg.get("db_path") or ".memory/fitness.db"))
         self.schema_path = root / str(sqlite_cfg.get("schema_file") or "contracts/fitness/sqlite_schema.sql")
 
+    def refresh_config(self) -> dict[str, Any]:
+        self.config = load_fitness_config(self.root, self.config_path)
+        return self.config
+
+    def current_canonical_hash(self) -> str:
+        config = self.refresh_config()
+        return str(config.get("_canonical_hash") or "").strip()
+
     def conn(self) -> sqlite3.Connection:
+        self.refresh_config()
         conn = open_conn(self.db_path, self.schema_path)
         get_program_id(conn, self.config)
         return conn
@@ -1271,7 +1320,12 @@ class FitnessRuntime:
     def start(self, *, optional: bool = False) -> dict[str, Any]:
         conn = self.conn()
         try:
-            code = OPTIONAL_DAY_CODE if optional else determine_next_main_code(conn)
+            if optional:
+                if not OPTIONAL_DAY_CODE:
+                    raise ValueError("No optional workout is configured in the current program.")
+                code = OPTIONAL_DAY_CODE
+            else:
+                code = determine_next_main_code(conn)
             result = create_session(
                 conn,
                 program_id=get_program_id(conn, self.config),

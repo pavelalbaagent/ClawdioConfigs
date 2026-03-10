@@ -193,6 +193,25 @@ class ValidateConfigsTests(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("job_search.job_search.schedule.delivery_time_local must be HH:MM", proc.stdout)
 
+    def test_invalid_job_search_discovery_provider_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for name in CONFIG_FILES:
+                shutil.copy(CONFIG_DIR / f"{name}.yaml", tmp_path / f"{name}.yaml")
+
+            job_search_path = tmp_path / "job_search.yaml"
+            text = job_search_path.read_text()
+            text = text.replace("brave_search_api", "unknown_search_provider", 1)
+            job_search_path.write_text(text)
+
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--config-dir", str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("job_search.job_search.discovery.provider_priority references unknown values", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -62,6 +62,8 @@ class JobSearchAssistantTests(unittest.TestCase):
             triage_dir = tmp_path / "triage"
             summary_dir = tmp_path / "daily"
             latest_status = tmp_path / "job-search-status.json"
+            discovery_status = tmp_path / "job-discovery-status.json"
+            discovery_state = tmp_path / "job-discovery-state.json"
             config_path = tmp_path / "job_search.yaml"
 
             input_dir.mkdir()
@@ -99,6 +101,16 @@ class JobSearchAssistantTests(unittest.TestCase):
             config_text = config_text.replace(
                 "latest_status_file: data/job-search-daily-summary.json",
                 f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-discovery-status.json",
+                f"latest_status_file: {discovery_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "state_file: data/job-search-discovery-state.json",
+                f"state_file: {discovery_state}",
                 1,
             )
             config_path.write_text(config_text, encoding="utf-8")
@@ -189,6 +201,139 @@ class JobSearchAssistantTests(unittest.TestCase):
             self.assertIn("Apply Today", payload["delivery"]["preview"])
             self.assertIn("AI Enablement Consultant", payload["delivery"]["preview"])
 
+    def test_publish_report_can_run_discovery_before_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "postings"
+            triage_dir = tmp_path / "triage"
+            summary_dir = tmp_path / "daily"
+            latest_status = tmp_path / "job-search-status.json"
+            discovery_status = tmp_path / "job-discovery-status.json"
+            discovery_state = tmp_path / "job-discovery-state.json"
+            config_path = tmp_path / "job_search.yaml"
+            fixtures_path = tmp_path / "fixtures.json"
+
+            input_dir.mkdir()
+            fixtures_path.write_text(
+                json.dumps(
+                    {
+                        "queries": [
+                            {
+                                "query": 'site:linkedin.com/jobs/view ("ai adoption") remote',
+                                "results": [
+                                    {
+                                        "url": "https://www.linkedin.com/jobs/view/555555/",
+                                        "title": "AI Adoption Manager",
+                                        "snippet": "Global remote across LATAM including Ecuador.",
+                                        "content_text": "AI Adoption Manager Global remote across LATAM including Ecuador. AI adoption, workflow automation, stakeholder alignment, Python.",
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("saved_postings_dir: data/job-search/inbox", f"saved_postings_dir: {input_dir}", 1)
+            config_text = config_text.replace("triage_dir: output/jobs/triage", f"triage_dir: {triage_dir}", 1)
+            config_text = config_text.replace("daily_summary_dir: output/jobs/daily", f"daily_summary_dir: {summary_dir}", 1)
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-daily-summary.json",
+                f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-discovery-status.json",
+                f"latest_status_file: {discovery_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "state_file: data/job-search-discovery-state.json",
+                f"state_file: {discovery_state}",
+                1,
+            )
+            config_path.write_text(config_text, encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "publish-report",
+                    "--config",
+                    str(config_path),
+                    "--discovery-fixtures-file",
+                    str(fixtures_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload["processed_count"], 1)
+            self.assertEqual(payload["discovery"]["summary"]["saved_count"], 1)
+            self.assertTrue(Path(payload["summary_json"]).exists())
+            self.assertTrue(discovery_status.exists())
+            self.assertIn("AI Adoption Manager", payload["delivery"]["preview"])
+
+    def test_publish_report_allow_empty_creates_missing_inbox_and_writes_zero_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "postings-missing"
+            triage_dir = tmp_path / "triage"
+            summary_dir = tmp_path / "daily"
+            latest_status = tmp_path / "job-search-status.json"
+            discovery_status = tmp_path / "job-discovery-status.json"
+            discovery_state = tmp_path / "job-discovery-state.json"
+            config_path = tmp_path / "job_search.yaml"
+
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("saved_postings_dir: data/job-search/inbox", f"saved_postings_dir: {input_dir}", 1)
+            config_text = config_text.replace("triage_dir: output/jobs/triage", f"triage_dir: {triage_dir}", 1)
+            config_text = config_text.replace("daily_summary_dir: output/jobs/daily", f"daily_summary_dir: {summary_dir}", 1)
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-daily-summary.json",
+                f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-discovery-status.json",
+                f"latest_status_file: {discovery_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "state_file: data/job-search-discovery-state.json",
+                f"state_file: {discovery_state}",
+                1,
+            )
+            config_path.write_text(config_text, encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "publish-report",
+                    "--config",
+                    str(config_path),
+                    "--day-label",
+                    "2026-03-10",
+                    "--allow-empty",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertTrue(input_dir.exists())
+            self.assertEqual(payload["processed_count"], 0)
+            self.assertEqual(payload["input_dir"], str(input_dir))
+            self.assertIn("No saved postings found", payload["delivery"]["preview"])
+            self.assertTrue(Path(payload["summary_json"]).exists())
+            self.assertTrue(Path(payload["summary_markdown"]).exists())
+
     def test_publish_report_apply_prefers_research_chat_binding(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -196,6 +341,8 @@ class JobSearchAssistantTests(unittest.TestCase):
             triage_dir = tmp_path / "triage"
             summary_dir = tmp_path / "daily"
             latest_status = tmp_path / "job-search-status.json"
+            discovery_status = tmp_path / "job-discovery-status.json"
+            discovery_state = tmp_path / "job-discovery-state.json"
             config_path = tmp_path / "job_search.yaml"
             env_path = tmp_path / "openclaw.env"
 
@@ -217,6 +364,16 @@ class JobSearchAssistantTests(unittest.TestCase):
             config_text = config_text.replace(
                 "latest_status_file: data/job-search-daily-summary.json",
                 f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-discovery-status.json",
+                f"latest_status_file: {discovery_status}",
+                1,
+            )
+            config_text = config_text.replace(
+                "state_file: data/job-search-discovery-state.json",
+                f"state_file: {discovery_state}",
                 1,
             )
             config_path.write_text(config_text, encoding="utf-8")

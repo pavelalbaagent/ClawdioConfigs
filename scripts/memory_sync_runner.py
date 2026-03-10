@@ -15,6 +15,7 @@ from typing import Any
 
 import model_route_decider
 from env_file_utils import load_env_file
+from governance_loop import consolidate_governance
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", help="optional env file with OPENAI_API_KEY")
     parser.add_argument("--max-files", type=int)
     parser.add_argument("--lock-timeout-seconds", type=float, default=90.0)
+    parser.add_argument("--skip-governance-consolidation", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -130,7 +132,18 @@ def main() -> int:
     if isinstance(args.max_files, int) and args.max_files > 0:
         cmd.extend(["--max-files", str(args.max_files)])
 
+    governance_payload: dict[str, Any] | None = None
     try:
+        if not args.skip_governance_consolidation:
+            try:
+                governance_payload = consolidate_governance(root)
+            except Exception as exc:  # noqa: BLE001
+                governance_payload = {
+                    "generated_at": iso_now_utc(),
+                    "owner_role": "knowledge_librarian",
+                    "ok": False,
+                    "error": str(exc),
+                }
         proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, env=env)
     finally:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
@@ -146,6 +159,11 @@ def main() -> int:
         "summary": parse_summary(proc.stdout),
         "stdout_tail": "\n".join(proc.stdout.strip().splitlines()[-20:]) if proc.stdout.strip() else "",
         "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-20:]) if proc.stderr.strip() else "",
+        "governance_consolidation": (
+            governance_payload
+            if governance_payload is not None
+            else {"skipped": True, "reason": "disabled"}
+        ),
     }
 
     status_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,6 +174,16 @@ def main() -> int:
     else:
         print(f"Memory sync {'ok' if payload['ok'] else 'failed'}")
         print(f"- Profile: {payload['profile'] or '-'}")
+        governance = ensure_dict(payload.get("governance_consolidation"))
+        if governance:
+            if governance.get("skipped") is True:
+                print("- Governance consolidation: skipped")
+            elif governance.get("ok") is False:
+                print(f"- Governance consolidation: error ({governance.get('error') or 'unknown'})")
+            else:
+                print(
+                    f"- Governance consolidation: promoted={len(governance.get('promoted_directives', []))} | pending={len(governance.get('pending_directive_candidates', []))}"
+                )
         for key in ("files_changed", "chunks_created", "embeddings_created", "embeddings_skipped_missing_key", "embeddings_skipped_budget"):
             if key in payload["summary"]:
                 print(f"- {key}: {payload['summary'][key]}")

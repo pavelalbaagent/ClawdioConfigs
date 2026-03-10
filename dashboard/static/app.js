@@ -502,17 +502,35 @@ function renderAgentRuntime(snapshot) {
 
   const telegram = snapshot.telegram_adapter || {};
   const bindings = telegram.bindings || [];
+  const briefing = telegram.morning_briefing || {};
+  const briefingParts = [];
+  if (briefing.enabled) {
+    briefingParts.push(`briefing=${briefing.delivery_time_local || "-"} ${briefing.timezone || "-"}`);
+    briefingParts.push(`target=${briefing.binding_label || briefing.binding_id || "-"}`);
+    briefingParts.push(`last=${briefing.last_sent_at || "never"}`);
+    if (briefing.last_status) {
+      briefingParts.push(`status=${briefing.last_status}`);
+    }
+    const summary = briefing.last_summary || {};
+    if (Object.keys(summary).length) {
+      briefingParts.push(
+        `summary=${summary.calendar_events_today || 0} cal / ${summary.tasks_due_today || 0} today / ${summary.tasks_overdue || 0} overdue / ${summary.schedule_suggestions || 0} suggest`
+      );
+    }
+  } else {
+    briefingParts.push("briefing=off");
+  }
   if (!bindings.length) {
-    setText("agent-telegram-focus-meta", "No Telegram bindings configured.");
+    setText("agent-telegram-focus-meta", `No Telegram bindings configured. | ${briefingParts.join(" | ")}`);
   } else {
     setText(
       "agent-telegram-focus-meta",
-      bindings
+      `${bindings
         .map((row) => {
           const state = row.configured ? (row.chat_id_mask || "configured") : "not configured";
           return `${row.label || row.binding_id || "-"} -> ${row.default_agent || "assistant"}/${row.default_space || "general"} (${state})`;
         })
-        .join(" | ")
+        .join(" | ")} | ${briefingParts.join(" | ")}`
     );
   }
 
@@ -548,6 +566,11 @@ function renderAgentRuntime(snapshot) {
     }
     if (lastRoute.action) {
       parts.push(`action=${lastRoute.action}`);
+    }
+    if (lastRoute.lane || lastRoute.provider || lastRoute.model) {
+      parts.push(`lane=${lastRoute.lane || "-"}`);
+      parts.push(`provider=${lastRoute.provider || "-"}`);
+      parts.push(`model=${lastRoute.model || "-"}`);
     }
     if (lastRoute.excerpt) {
       parts.push(`text=${lastRoute.excerpt}`);
@@ -622,9 +645,76 @@ function renderAgentRuntime(snapshot) {
   } else {
     setText(
       "memory-sync-meta",
-      `${memorySync.ok ? "ok" : "error"} | profile=${memorySync.profile || "-"} | files=${memorySync.files_scanned || 0} | embeds=${memorySync.embeddings_created || 0}`
+      `${memorySync.ok ? "ok" : "error"} | profile=${memorySync.profile || "-"} | files=${memorySync.files_scanned || 0} | embeds=${memorySync.embeddings_created || 0}${
+        memorySync.governance_consolidation && Object.keys(memorySync.governance_consolidation).length
+          ? ` | consolidation=${memorySync.governance_consolidation.ok === false ? "error" : memorySync.governance_consolidation.skipped ? "skipped" : "ok"}`
+          : ""
+      }`
     );
   }
+}
+
+function renderGovernanceLoop(snapshot) {
+  const review = snapshot.continuous_improvement_status || {};
+  const librarian = snapshot.knowledge_librarian_status || {};
+  const shared = snapshot.shared_governance_memory || {};
+  const usage = review.usage || {};
+
+  const activeDirectives = shared.active_directives || [];
+  setText(
+    "governance-directives-meta",
+    activeDirectives.length ? `${activeDirectives.length} directives | ${activeDirectives.slice(0, 4).join(" | ")}` : "No shared directives yet."
+  );
+
+  const recentFindings = shared.recent_findings || [];
+  setText(
+    "governance-findings-meta",
+    recentFindings.length ? recentFindings.slice(0, 4).join(" | ") : "No shared findings yet."
+  );
+
+  if (!librarian.available) {
+    setText("governance-consolidation-meta", "No knowledge_librarian consolidation snapshot yet.");
+  } else {
+    setText(
+      "governance-consolidation-meta",
+      `${librarian.generated_at || "-"} | promoted=${(librarian.promoted_directives || []).length} | pending=${(librarian.pending_directive_candidates || []).length} | changed=${(librarian.changed_files || []).length}`
+    );
+  }
+
+  const byAgent = usage.by_agent || [];
+  setText(
+    "governance-usage-agents-meta",
+    byAgent.length
+      ? byAgent.slice(0, 4).map((row) => `${row.agent_id || "-"}=${row.total_tokens || 0}t/${row.calls || 0}c`).join(" | ")
+      : "No recent per-agent usage."
+  );
+
+  const byLane = usage.by_lane || [];
+  setText(
+    "governance-usage-lanes-meta",
+    byLane.length
+      ? byLane.slice(0, 4).map((row) => `${row.lane || "-"}=${row.total_tokens || 0}t/${row.calls || 0}c`).join(" | ")
+      : "No recent per-lane usage."
+  );
+
+  const byModel = usage.by_model || [];
+  setText(
+    "governance-usage-models-meta",
+    byModel.length
+      ? byModel.slice(0, 4).map((row) => `${row.model || "-"}=${row.total_tokens || 0}t/${row.calls || 0}c`).join(" | ")
+      : "No recent per-model usage."
+  );
+
+  const cleanup = review.cleanup_candidates || shared.cleanup_candidates || [];
+  setText(
+    "governance-cleanup-meta",
+    cleanup.length
+      ? cleanup
+          .slice(0, 4)
+          .map((row) => (typeof row === "string" ? row : `${row.kind || "artifact"}:${row.target || row.path || row.id || "-"}`))
+          .join(" | ")
+      : "No cleanup candidates."
+  );
 }
 
 function renderReminders(snapshot) {
@@ -2540,6 +2630,7 @@ async function loadState() {
     renderIntegrationLists(snapshot);
     renderProviderHealth(snapshot);
     renderAgentRuntime(snapshot);
+    renderGovernanceLoop(snapshot);
     renderReminders(snapshot);
     renderTodoQueue(snapshot);
     renderGmailInbox(snapshot);

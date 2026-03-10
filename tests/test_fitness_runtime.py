@@ -44,6 +44,16 @@ class FitnessRuntimeTests(unittest.TestCase):
         self.assertEqual(result["status"]["today_plan"]["plan"]["code"], "M1")
         self.assertEqual(result["status"]["today_plan"]["plan"]["title"], "Mon (Bench 1)")
 
+    def test_runtime_reloads_canonical_program_without_reinstantiation(self):
+        original = (self.root / "fitness" / "PROGRAM.md").read_text(encoding="utf-8")
+        updated = original.replace("### M1: Mon (Bench 1)", "### M1: Mon (Bench 1 Reloaded)", 1)
+        (self.root / "fitness" / "PROGRAM.md").write_text(updated, encoding="utf-8")
+
+        result = self.runtime.today()
+
+        self.assertEqual(result["status"]["today_plan"]["plan"]["title"], "Mon (Bench 1 Reloaded)")
+        self.assertIn("Mon (Bench 1 Reloaded)", result["reply_text"])
+
     def test_start_log_and_finish_workout_cycle(self):
         started = self.runtime.start()
         self.assertTrue(started["created"])

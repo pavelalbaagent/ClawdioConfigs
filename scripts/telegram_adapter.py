@@ -52,10 +52,14 @@ TELEGRAM_MESSAGE_CHUNK_LIMIT = 3500
 HELP_TEXT = "\n".join(
     [
         "Examples:",
+        "- research flow status",
+        "- run job search digest",
+        "- run tech digest",
         "- remind me to review grades in 1 hour",
         "- what reminders do i have?",
         "- add review syllabus to my tasks for tomorrow 10am",
         "- what's on my calendar tomorrow?",
+        "- give me my morning briefing",
         "- note this: test AgentMail later",
         "- what's my workout today?",
         "- I'm starting my workout",
@@ -109,6 +113,27 @@ TASK_LIST_PHRASES = {
     "due tasks",
     "tasks due today",
 }
+
+DAY_BRIEFING_PHRASES = {
+    "morning briefing",
+    "daily briefing",
+    "day briefing",
+    "brief me on my day",
+    "brief me on today",
+    "give me my morning briefing",
+    "give me today's briefing",
+    "give me todays briefing",
+    "give me my daily briefing",
+    "how does my day look",
+    "how does my day look today",
+    "how is my day looking",
+    "how is my day looking today",
+    "what should i schedule today",
+    "what still needs to be scheduled today",
+}
+
+MORNING_BRIEFING_DEFAULT_TIME = "07:00"
+OPEN_CALENDAR_CANDIDATE_STATUSES = {"proposed", "needs_details", "ready", "approved"}
 
 BRAINDUMP_NATURAL_PATTERNS = [
     (re.compile(r"^(?:note this|save this|save this idea|remember this for later)\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "personal_note"),
@@ -171,6 +196,15 @@ class TelegramChatBinding:
 
     def allows(self, capability: str, *, default: bool = False) -> bool:
         return bool(self.natural_language_services.get(capability, default))
+
+
+@dataclass(frozen=True)
+class MorningBriefingConfig:
+    enabled: bool
+    binding_id: str
+    delivery_time_local: str
+    timezone_name: str
+    max_schedule_suggestions: int
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -249,6 +283,35 @@ def resolve_chat_bindings(root: Path, env_values: dict[str, str]) -> tuple[dict[
                 },
             )
     return bindings, default_binding_id
+
+
+def resolve_morning_briefing_config(
+    root: Path,
+    *,
+    default_binding_id: str,
+    default_timezone: str,
+) -> MorningBriefingConfig:
+    channels_cfg = ensure_dict(load_yaml_dict(root / "config" / "channels.yaml").get("channels"))
+    telegram_cfg = ensure_dict(channels_cfg.get("telegram"))
+    briefing_cfg = ensure_dict(telegram_cfg.get("assistant_morning_briefing"))
+
+    delivery_time = str(briefing_cfg.get("delivery_time_local") or MORNING_BRIEFING_DEFAULT_TIME).strip()
+    if parse_hhmm(delivery_time) is None:
+        delivery_time = MORNING_BRIEFING_DEFAULT_TIME
+
+    max_suggestions_raw = briefing_cfg.get("max_schedule_suggestions")
+    if isinstance(max_suggestions_raw, int):
+        max_suggestions = max(1, min(6, max_suggestions_raw))
+    else:
+        max_suggestions = 3
+
+    return MorningBriefingConfig(
+        enabled=bool(briefing_cfg.get("enabled") is True),
+        binding_id=str(briefing_cfg.get("binding_id") or default_binding_id).strip() or default_binding_id,
+        delivery_time_local=delivery_time,
+        timezone_name=str(briefing_cfg.get("timezone") or default_timezone).strip() or default_timezone,
+        max_schedule_suggestions=max_suggestions,
+    )
 
 
 def env_get(name: str, env_values: dict[str, str]) -> str:
@@ -335,9 +398,126 @@ def detect_focus_instruction(text: str) -> dict[str, str] | None:
     return None
 
 
+def classify_research_flow_workflow(text: str) -> str | None:
+    lowered = normalize_phrase(text)
+    if any(phrase in lowered for phrase in {"both digests", "all digests", "run both", "run all"}):
+        return "all"
+    if any(
+        phrase in lowered
+        for phrase in {
+            "job search digest",
+            "job-search digest",
+            "job digest",
+            "job search report",
+            "job report",
+        }
+    ):
+        return "job_search_digest"
+    if any(
+        phrase in lowered
+        for phrase in {
+            "tech digest",
+            "ai tools digest",
+            "ai-tools digest",
+            "ai digest",
+            "tools digest",
+        }
+    ):
+        return "ai_tools_watch"
+    return None
+
+
+def is_bare_research_flow_phrase(text: str) -> bool:
+    lowered = normalize_phrase(text)
+    return lowered in {
+        "tech digest",
+        "ai tools digest",
+        "ai-tools digest",
+        "ai digest",
+        "tools digest",
+        "job search digest",
+        "job-search digest",
+        "job digest",
+        "job search report",
+        "job report",
+        "both digests",
+        "all digests",
+    }
+
+
+def parse_research_flow_request(text: str, *, command_name: str = "", body: str = "") -> dict[str, Any] | None:
+    clean = normalize_phrase(text)
+    if command_name in {"researchflow", "research-flow", "rf"}:
+        lowered_body = normalize_phrase(body)
+        workflow = classify_research_flow_workflow(lowered_body)
+        if not lowered_body or any(word in lowered_body for word in {"status", "state", "health"}):
+            return {"action": "status"}
+        if workflow is not None:
+            return {
+                "action": "run",
+                "workflow": workflow,
+                "apply": bool(re.search(r"\b(send|publish|deliver)\b", lowered_body)),
+            }
+        if any(word in lowered_body for word in {"run", "refresh", "generate"}):
+            return {"action": "run", "workflow": "all", "apply": False}
+        return {"action": "status"}
+
+    if clean in {
+        "research flow",
+        "researchflow",
+        "digests",
+        "digest status",
+        "research digest status",
+        "research flow status",
+        "research status",
+    }:
+        return {"action": "status"}
+    if any(phrase in clean for phrase in {"research flow status", "digest status", "digests status"}):
+        return {"action": "status"}
+
+    workflow = classify_research_flow_workflow(clean)
+    if workflow is None:
+        return None
+    if is_bare_research_flow_phrase(clean):
+        return {"action": "run", "workflow": workflow, "apply": False}
+    if not re.search(r"\b(run|refresh|generate|create|send|publish|deliver|do)\b", clean):
+        return None
+    return {
+        "action": "run",
+        "workflow": workflow,
+        "apply": bool(re.search(r"\b(send|publish|deliver)\b", clean)),
+    }
+
+
 def is_reminder_list_request(text: str) -> bool:
     lowered = normalize_phrase(text)
     return lowered in REMINDER_LIST_PHRASES
+
+
+def parse_hhmm(text: str | None) -> tuple[int, int] | None:
+    clean = str(text or "").strip()
+    match = re.fullmatch(r"(\d{2}):(\d{2})", clean)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return hour, minute
+
+
+def is_day_briefing_request(text: str) -> bool:
+    clean = normalize_phrase(text)
+    if clean in DAY_BRIEFING_PHRASES:
+        return True
+    return bool(
+        re.fullmatch(
+            r"(?:show|give|send)(?: me)? (?:my |a )?(?:morning |daily |today'?s )?(?:brief|briefing|day plan)",
+            clean,
+        )
+        or re.fullmatch(r"(?:what|how)(?:'s| is| does)? my day (?:look|looking)(?: like)?(?: today)?", clean)
+        or re.fullmatch(r"what should i (?:put on my calendar|schedule)(?: today)?", clean)
+    )
 
 
 def infer_natural_agent(text: str) -> tuple[str, str] | None:
@@ -687,6 +867,13 @@ def split_calendar_title_when(body: str) -> tuple[str, str] | None:
     return None
 
 
+def normalize_created_title(title: str) -> str:
+    clean = str(title or "").strip(" .")
+    if not clean:
+        return ""
+    return re.sub(r"^(?:a|an)\s+", "", clean, count=1, flags=re.IGNORECASE).strip(" .")
+
+
 def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
     clean = str(text or "").strip()
     heuristic_patterns = [
@@ -705,7 +892,7 @@ def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
         title, when_text = split
         when_text, inferred_duration = extract_calendar_time_range(when_text)
         return {
-            "title": title,
+            "title": normalize_created_title(title),
             "when_text": when_text,
             "duration": inferred_duration,
         }
@@ -734,7 +921,7 @@ def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
         when_text, inferred_duration = extract_calendar_time_range(when_text)
         if title and when_text:
             return {
-                "title": title,
+                "title": normalize_created_title(title),
                 "when_text": when_text,
                 "duration": parse_duration_text(duration_text) or inferred_duration,
             }
@@ -817,6 +1004,33 @@ def task_due_local_date(task: dict[str, Any], timezone_name: str) -> date | None
     return None
 
 
+def reminder_local_date(reminder: dict[str, Any], timezone_name: str) -> date | None:
+    remind_at = str(reminder.get("remind_at") or "").strip()
+    if not remind_at:
+        return None
+    try:
+        dt = datetime.fromisoformat(remind_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo(timezone_name)).date()
+
+
+def task_due_bucket(task: dict[str, Any], *, timezone_name: str, today_local: date) -> str | None:
+    due_date = task_due_local_date(task, timezone_name)
+    if due_date is not None:
+        if due_date < today_local:
+            return "overdue"
+        if due_date == today_local:
+            return "today"
+        return None
+    due_string = normalize_phrase(str(task.get("due_string") or ""))
+    if due_string.startswith("today") or due_string.startswith("tonight"):
+        return "today"
+    return None
+
+
 def short_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -888,6 +1102,17 @@ def calendar_event_match_score(query: str, summary: str) -> float:
     if clean_summary in clean_query:
         return 0.9
     return difflib.SequenceMatcher(a=clean_query, b=clean_summary).ratio()
+
+
+def title_has_calendar_match(title: str, events: list[dict[str, Any]]) -> bool:
+    clean_title = str(title or "").strip()
+    if not clean_title:
+        return False
+    return any(
+        calendar_event_match_score(clean_title, str(ensure_dict(event).get("summary") or "")) >= 0.7
+        for event in events
+        if isinstance(event, dict)
+    )
 
 
 def split_telegram_text(text: str, *, limit: int = TELEGRAM_MESSAGE_CHUNK_LIMIT) -> list[str]:
@@ -1011,6 +1236,11 @@ class TelegramAdapter:
         self.state_path = state_path
         self.reminder_state_path = reminder_state_path
         self.default_timezone = default_timezone
+        self.morning_briefing_cfg = resolve_morning_briefing_config(
+            root,
+            default_binding_id=self.default_binding_id,
+            default_timezone=default_timezone,
+        )
         self.agent_chats = {
             agent_id: assistant_chat_runtime.AgentChatRuntime(
                 root=root,
@@ -1085,6 +1315,20 @@ class TelegramAdapter:
             "agent_id": str(focus.get("agent_id") or "assistant").strip() or "assistant",
             "space_key": str(focus.get("space_key") or "general").strip() or "general",
             "set_at": str(focus.get("set_at") or "").strip() or None,
+        }
+        briefing = ensure_dict(data.get("morning_briefing"))
+        data["morning_briefing"] = {
+            "enabled": self.morning_briefing_cfg.enabled,
+            "binding_id": self.morning_briefing_cfg.binding_id,
+            "delivery_time_local": self.morning_briefing_cfg.delivery_time_local,
+            "timezone": self.morning_briefing_cfg.timezone_name,
+            "max_schedule_suggestions": self.morning_briefing_cfg.max_schedule_suggestions,
+            "last_sent_at": str(briefing.get("last_sent_at") or "").strip() or None,
+            "last_sent_local_date": str(briefing.get("last_sent_local_date") or "").strip() or None,
+            "last_delivery_kind": str(briefing.get("last_delivery_kind") or "").strip() or None,
+            "last_status": str(briefing.get("last_status") or "").strip() or None,
+            "last_message_preview": str(briefing.get("last_message_preview") or "").strip() or None,
+            "last_summary": ensure_dict(briefing.get("last_summary")),
         }
         if "last_update_id" not in data:
             data["last_update_id"] = 0
@@ -1690,12 +1934,19 @@ class TelegramAdapter:
         agent_runtime = ensure_dict(snapshot.get("agent_runtime"))
         activity = ensure_dict(agent_runtime.get("activity"))
         last_route = ensure_dict(activity.get("last_route"))
+        recent_routes = [ensure_dict(item) for item in activity.get("recent_routes", []) if isinstance(item, dict)]
         reminders = ensure_dict(snapshot.get("reminders"))
         calendar_runtime_state = ensure_dict(snapshot.get("calendar_runtime"))
         personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
         braindump = ensure_dict(snapshot.get("braindump"))
         workspace = ensure_dict(snapshot.get("workspace"))
         active_binding = binding or self._assistant_binding()
+        display_route = last_route
+        if str(last_route.get("action") or "").strip() == "status":
+            for candidate in reversed(recent_routes[:-1] if recent_routes else []):
+                if str(candidate.get("action") or "").strip() != "status":
+                    display_route = candidate
+                    break
         lines = [
             "OpenClaw status",
             f"- Reminders pending: {ensure_dict(reminders.get('counts')).get('pending', 0)}",
@@ -1707,11 +1958,387 @@ class TelegramAdapter:
             f"- Front door agent: {agent_runtime.get('default_user_facing_agent') or 'assistant'}",
             f"- Current surface: {(active_binding.label + ' -> ' + active_binding.default_agent + '/' + active_binding.default_space) if active_binding else '-'}",
         ]
-        if last_route:
+        if display_route:
             lines.append(
-                f"- Last route: {last_route.get('agent_id')} -> {last_route.get('space_key')} ({last_route.get('route_mode')})"
+                f"- Last routed work: {display_route.get('agent_id')} -> {display_route.get('space_key')} ({display_route.get('route_mode')})"
+            )
+            if display_route.get("lane") or display_route.get("provider") or display_route.get("model"):
+                lines.append(
+                    f"- Last provider route: lane={display_route.get('lane') or '-'} | provider={display_route.get('provider') or '-'} | model={display_route.get('model') or '-'}"
+                )
+        if active_binding and active_binding.default_agent == "builder":
+            builder_status = assistant_chat_runtime.builder_runtime_capability_snapshot(
+                root=self.root,
+                env_values=self.env_values,
+            )
+            tools = ensure_dict(builder_status.get("tools"))
+            github = ensure_dict(builder_status.get("github"))
+            github_auth = ensure_dict(github.get("auth"))
+            lines.extend(
+                [
+                    f"- Builder workbench mode: {ensure_dict(builder_status.get('policy')).get('workbench_mode') or 'repo_task_oriented'}",
+                    f"- Builder local tools: codex={'ready' if ensure_dict(tools.get('codex_cli')).get('ready') else 'missing'}, gemini={'ready' if ensure_dict(tools.get('gemini_cli')).get('ready') else 'missing'}, git={'ready' if ensure_dict(tools.get('git')).get('ready') else 'missing'}, gh={'ready' if ensure_dict(tools.get('gh')).get('ready') else 'missing'}",
+                    f"- Builder GitHub: source={github.get('credential_source') or 'unconfigured'} | owner={github.get('owner') or '-'} | repo={github.get('repo') or '-'} | token={'set' if github.get('token_configured') else 'missing'} | gh_auth={github_auth.get('status') or '-'} | account={github_auth.get('account') or '-'}",
+                ]
             )
         return "\n".join(lines)
+
+    def _format_research_flow_status(self, status: dict[str, Any]) -> str:
+        if status.get("available") is not True:
+            return "ResearchFlow is not configured."
+        lines = [
+            "ResearchFlow status",
+            f"- Owner: {status.get('owner_agent') or 'researcher'} / {status.get('default_space') or 'research'}",
+        ]
+        last_run = ensure_dict(status.get("last_run"))
+        if last_run:
+            lines.append(
+                f"- Last run: {last_run.get('workflow') or '-'} @ {last_run.get('executed_at') or '-'}"
+            )
+        workflows = [ensure_dict(item) for item in status.get("workflows", []) if isinstance(item, dict)]
+        for row in workflows:
+            name = str(row.get("name") or "-")
+            label = str(row.get("output_label") or name).strip() or name
+            last_status = ensure_dict(row.get("last_status"))
+            artifacts = row.get("artifact_paths") if isinstance(row.get("artifact_paths"), list) else []
+            if name == "job_search_digest":
+                summary = ensure_dict(last_status.get("summary"))
+                lines.append(
+                    f"- {label}: processed={summary.get('processed_count', 0)} | recommended={summary.get('recommended_count', 0)} | artifacts={len(artifacts)}"
+                )
+            elif name == "ai_tools_watch":
+                lines.append(
+                    f"- {label}: items={last_status.get('item_count', 0)} | delivered={last_status.get('delivered', False)} | artifacts={len(artifacts)}"
+                )
+            else:
+                lines.append(f"- {label}: artifacts={len(artifacts)}")
+        return "\n".join(lines)
+
+    def _format_research_flow_run_result(self, status: dict[str, Any]) -> str:
+        last_run = ensure_dict(status.get("last_run"))
+        workflows = {
+            str(row.get("name") or ""): ensure_dict(row)
+            for row in status.get("workflows", [])
+            if isinstance(row, dict)
+        }
+        results = [ensure_dict(item) for item in last_run.get("results", []) if isinstance(item, dict)]
+        if not results:
+            return "ResearchFlow ran, but no workflow results were returned."
+        lines = [f"ResearchFlow run complete: {last_run.get('workflow') or '-'}"]
+        for row in results:
+            workflow_name = str(row.get("workflow") or "-")
+            workflow_status = ensure_dict(workflows.get(workflow_name))
+            label = str(workflow_status.get("output_label") or workflow_name).strip() or workflow_name
+            if row.get("ok") is not True:
+                error = str(row.get("stderr") or row.get("stdout") or "workflow failed").strip()
+                lines.append(f"- {label}: failed | {error}")
+                continue
+            payload = ensure_dict(row.get("payload"))
+            artifacts = row.get("artifact_paths") if isinstance(row.get("artifact_paths"), list) else []
+            preview = str(
+                ensure_dict(payload.get("delivery")).get("preview")
+                or payload.get("preview")
+                or ""
+            ).strip()
+            if workflow_name == "job_search_digest":
+                lines.append(
+                    f"- {label}: processed={payload.get('processed_count', 0)} | artifacts={len(artifacts)}"
+                )
+            elif workflow_name == "ai_tools_watch":
+                lines.append(
+                    f"- {label}: items={payload.get('item_count', 0)} | artifacts={len(artifacts)}"
+                )
+            else:
+                lines.append(f"- {label}: ok | artifacts={len(artifacts)}")
+            if preview:
+                lines.append(preview[:800].rstrip())
+            if artifacts:
+                lines.append("Artifacts:")
+                lines.extend(f"- {path}" for path in artifacts[:4])
+        return "\n".join(lines)
+
+    def _handle_research_flow_request(self, request: dict[str, Any]) -> str:
+        if request.get("action") == "status":
+            return self._format_research_flow_status(self.backend._research_flow_status())
+        workflow = str(request.get("workflow") or "all").strip() or "all"
+        apply = bool(request.get("apply") is True)
+        try:
+            result = self.backend.run_research_flow_runtime(workflow=workflow, apply=apply)
+        except Exception as exc:  # noqa: BLE001
+            return f"ResearchFlow failed: {exc}"
+        status = ensure_dict(result.get("status"))
+        return self._format_research_flow_run_result(status)
+
+    def _morning_briefing_binding(self) -> TelegramChatBinding | None:
+        return self._binding_by_id(self.morning_briefing_cfg.binding_id) or self._assistant_binding()
+
+    def _store_morning_briefing_result(
+        self,
+        state: dict[str, Any],
+        *,
+        payload: dict[str, Any],
+        delivery_kind: str,
+        status: str,
+    ) -> None:
+        briefing = ensure_dict(state.setdefault("morning_briefing", {}))
+        briefing.update(
+            {
+                "enabled": self.morning_briefing_cfg.enabled,
+                "binding_id": self.morning_briefing_cfg.binding_id,
+                "delivery_time_local": self.morning_briefing_cfg.delivery_time_local,
+                "timezone": self.morning_briefing_cfg.timezone_name,
+                "max_schedule_suggestions": self.morning_briefing_cfg.max_schedule_suggestions,
+                "last_delivery_kind": delivery_kind,
+                "last_status": status,
+                "last_message_preview": " ".join(str(payload.get("text") or "").split())[:220] or None,
+                "last_summary": ensure_dict(payload.get("summary")),
+            }
+        )
+        if status == "sent":
+            briefing["last_sent_at"] = str(payload.get("generated_at") or "").strip() or short_now_iso()
+            briefing["last_sent_local_date"] = str(payload.get("local_date") or "").strip() or None
+
+    def _briefing_calendar_state(self, *, current: datetime) -> dict[str, Any]:
+        timezone_name = self.default_timezone
+        calendar_status = self.backend._calendar_runtime_status()
+        upcoming_events = [ensure_dict(item) for item in calendar_status.get("upcoming_events", []) if isinstance(item, dict)]
+        try:
+            client, timezone_name = self._calendar_client()
+            env_values = self._runtime_env_values()
+            calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=env_values, override=None)
+            upcoming_events = calendar_runtime.list_upcoming(
+                client,
+                calendar_id=calendar_id,
+                default_timezone=timezone_name,
+                limit=20,
+                window_days=7,
+            )
+            self._refresh_calendar_runtime_status(
+                client=client,
+                calendar_id=calendar_id,
+                timezone_name=timezone_name,
+                action="snapshot",
+                recent_results=[],
+            )
+            calendar_status = self.backend._calendar_runtime_status()
+        except Exception:
+            pass
+
+        today_local = current.astimezone(ZoneInfo(timezone_name)).date()
+        today_events = [row for row in upcoming_events if event_local_date(row, timezone_name) == today_local]
+        return {
+            "available": bool(calendar_status.get("available")) or bool(upcoming_events),
+            "timezone": timezone_name,
+            "today_events": today_events,
+            "upcoming_events": upcoming_events,
+            "summary": ensure_dict(calendar_status.get("summary")),
+        }
+
+    def _briefing_personal_tasks_status(self) -> dict[str, Any]:
+        status = self.backend._personal_task_runtime_status()
+        try:
+            self.backend.sync_personal_tasks_runtime()
+            status = self.backend._personal_task_runtime_status()
+        except Exception:
+            pass
+        return status
+
+    def _build_morning_briefing_payload(self, *, current: datetime | None = None) -> dict[str, Any]:
+        now_utc = current or datetime.now(timezone.utc)
+        timezone_name = self.morning_briefing_cfg.timezone_name or self.default_timezone
+        local_now = now_utc.astimezone(ZoneInfo(timezone_name))
+        today_local = local_now.date()
+
+        reminders = self.backend._pending_reminders()
+        reminders_today = [row for row in reminders if reminder_local_date(row, timezone_name) == today_local]
+        reminders_overdue = [
+            row
+            for row in reminders
+            if (due_date := reminder_local_date(row, timezone_name)) is not None and due_date < today_local
+        ]
+
+        calendar_state = self._briefing_calendar_state(current=now_utc)
+        calendar_timezone = str(calendar_state.get("timezone") or timezone_name).strip() or timezone_name
+        today_events = [ensure_dict(item) for item in calendar_state.get("today_events", []) if isinstance(item, dict)]
+
+        personal_status = self._briefing_personal_tasks_status()
+        personal_tasks = [ensure_dict(item) for item in personal_status.get("tasks", []) if isinstance(item, dict)]
+        tasks_due_today = [
+            row for row in personal_tasks if task_due_bucket(row, timezone_name=timezone_name, today_local=today_local) == "today"
+        ]
+        tasks_overdue = [
+            row for row in personal_tasks if task_due_bucket(row, timezone_name=timezone_name, today_local=today_local) == "overdue"
+        ]
+
+        gmail_status = self.backend._gmail_inbox_status()
+        manual_review_open = int(gmail_status.get("manual_review_open", 0) or 0)
+        calendar_candidates = self.backend._calendar_candidates()
+        open_candidates = [
+            ensure_dict(item)
+            for item in calendar_candidates.get("items", [])
+            if isinstance(item, dict) and str(ensure_dict(item).get("status") or "proposed") in OPEN_CALENDAR_CANDIDATE_STATUSES
+        ]
+
+        suggestions: list[str] = []
+        schedule_note = (
+            "I do not see a matching calendar block yet."
+            if calendar_state.get("available")
+            else "Consider blocking time for it today."
+        )
+        for task in tasks_overdue + tasks_due_today:
+            if title_has_calendar_match(str(task.get("title") or ""), today_events):
+                continue
+            due_date = task_due_local_date(task, timezone_name)
+            if due_date is not None and due_date < today_local:
+                due_label = f"overdue from {due_date.isoformat()}"
+            else:
+                due_label = "due today"
+            suggestions.append(f"{task.get('title')}: {due_label}. {schedule_note}")
+            if len(suggestions) >= self.morning_briefing_cfg.max_schedule_suggestions:
+                break
+
+        if len(suggestions) < self.morning_briefing_cfg.max_schedule_suggestions:
+            for candidate in open_candidates:
+                title = str(candidate.get("title") or candidate.get("summary") or "").strip() or "(untitled candidate)"
+                status = str(candidate.get("status") or "proposed").strip() or "proposed"
+                if status == "needs_details":
+                    suggestions.append(f"{title}: it is in calendar candidates and still needs timing details.")
+                else:
+                    suggestions.append(f"{title}: it is in calendar candidates and still needs a real calendar slot.")
+                if len(suggestions) >= self.morning_briefing_cfg.max_schedule_suggestions:
+                    break
+
+        calendar_count = len(today_events)
+        task_pressure = len(tasks_due_today) + len(tasks_overdue)
+        reminder_pressure = len(reminders_today) + len(reminders_overdue)
+        headline = (
+            f"Today looks like {calendar_count} calendar item{'s' if calendar_count != 1 else ''}, "
+            f"{task_pressure} due or overdue task{'s' if task_pressure != 1 else ''}, "
+            f"{reminder_pressure} active reminder{'s' if reminder_pressure != 1 else ''}"
+        )
+        if gmail_status.get("available"):
+            headline += f", and {manual_review_open} Gmail review item{'s' if manual_review_open != 1 else ''}"
+        headline += "."
+
+        greeting = "Good morning." if local_now.hour < 12 else "Here is today's briefing."
+        lines = [
+            f"{greeting} {local_now.strftime('%A %Y-%m-%d')}.",
+            headline,
+            "",
+            "Calendar:",
+        ]
+        if today_events:
+            lines.extend(f"- {format_calendar_event_brief(event, calendar_timezone)}" for event in today_events[:6])
+        elif calendar_state.get("available"):
+            lines.append("- Your calendar is still open today.")
+        else:
+            lines.append("- Calendar is not configured yet.")
+
+        lines.extend(["", "Tasks:"])
+        if not personal_status.get("available"):
+            lines.append("- Personal tasks are not configured yet.")
+        elif not tasks_due_today and not tasks_overdue:
+            lines.append("- No personal tasks are due today.")
+        else:
+            for task in tasks_overdue[:3]:
+                due = str(task.get("due_value") or task.get("due_string") or "-")
+                lines.append(f"- Overdue: {task.get('title')} | due={due}")
+            for task in tasks_due_today[:3]:
+                due = str(task.get("due_value") or task.get("due_string") or "-")
+                lines.append(f"- Due today: {task.get('title')} | due={due}")
+
+        lines.extend(["", "Reminders:"])
+        if not reminders_today and not reminders_overdue:
+            lines.append("- No active reminders are due today.")
+        else:
+            for reminder in reminders_overdue[:3]:
+                lines.append(f"- Overdue: {reminder.get('message')} | {format_dt(str(reminder.get('remind_at') or ''), timezone_name)}")
+            for reminder in reminders_today[:3]:
+                lines.append(f"- Today: {reminder.get('message')} | {format_dt(str(reminder.get('remind_at') or ''), timezone_name)}")
+
+        lines.extend(["", "Inbox:"])
+        if gmail_status.get("available"):
+            if manual_review_open:
+                lines.append(f"- {manual_review_open} Gmail item(s) still need assistant review.")
+            else:
+                lines.append("- Gmail manual-review queue is clear.")
+        else:
+            lines.append("- Gmail inbox triage snapshot is not available yet.")
+        if open_candidates:
+            for candidate in open_candidates[:2]:
+                lines.append(
+                    f"- Calendar candidate: {candidate.get('title') or candidate.get('summary') or '(untitled)'} | status={candidate.get('status') or 'proposed'}"
+                )
+        elif calendar_candidates.get("available"):
+            lines.append("- No open calendar candidates are waiting on the assistant.")
+
+        lines.extend(["", "Things you should probably schedule:"])
+        if suggestions:
+            lines.extend(f"- {item}" for item in suggestions[: self.morning_briefing_cfg.max_schedule_suggestions])
+        else:
+            lines.append("- Nothing obvious still needs a calendar slot right now.")
+
+        summary = {
+            "calendar_events_today": calendar_count,
+            "tasks_due_today": len(tasks_due_today),
+            "tasks_overdue": len(tasks_overdue),
+            "reminders_today": len(reminders_today),
+            "reminders_overdue": len(reminders_overdue),
+            "gmail_manual_review_open": manual_review_open,
+            "calendar_candidates_open": len(open_candidates),
+            "schedule_suggestions": min(len(suggestions), self.morning_briefing_cfg.max_schedule_suggestions),
+        }
+        return {
+            "text": "\n".join(lines).strip(),
+            "summary": summary,
+            "generated_at": now_utc.isoformat(timespec="seconds"),
+            "local_date": today_local.isoformat(),
+            "timezone": timezone_name,
+        }
+
+    def _handle_morning_briefing_request(self, *, state: dict[str, Any]) -> str:
+        payload = self._build_morning_briefing_payload()
+        self._store_morning_briefing_result(state, payload=payload, delivery_kind="manual", status="sent")
+        return str(payload.get("text") or "").strip()
+
+    def maybe_send_morning_briefing(self, *, state: dict[str, Any], current: datetime | None = None) -> int:
+        if not self.morning_briefing_cfg.enabled:
+            return 0
+        binding = self._morning_briefing_binding()
+        schedule_clock = parse_hhmm(self.morning_briefing_cfg.delivery_time_local)
+        if binding is None or schedule_clock is None:
+            return 0
+
+        now_utc = current or datetime.now(timezone.utc)
+        zone = ZoneInfo(self.morning_briefing_cfg.timezone_name)
+        now_local = now_utc.astimezone(zone)
+        already_sent = str(ensure_dict(state.get("morning_briefing")).get("last_sent_local_date") or "").strip()
+        if already_sent == now_local.date().isoformat():
+            return 0
+
+        due_local = datetime.combine(now_local.date(), datetime.min.time(), tzinfo=zone).replace(
+            hour=schedule_clock[0],
+            minute=schedule_clock[1],
+        )
+        if now_local < due_local:
+            return 0
+
+        payload = self._build_morning_briefing_payload(current=now_utc)
+        try:
+            self._send_text(chat_id=binding.chat_id, text=str(payload.get("text") or ""))
+        except Exception:
+            self._store_morning_briefing_result(state, payload=payload, delivery_kind="scheduled", status="error")
+            return 0
+
+        self._store_morning_briefing_result(state, payload=payload, delivery_kind="scheduled", status="sent")
+        self._record_agent_activity(
+            agent_id="assistant",
+            space_key="general",
+            action="morning_briefing_auto",
+            route_mode="scheduled_delivery",
+            lane="L0_no_model",
+        )
+        return 1
 
     def _route_for_conversation(self, *, text: str, state: dict[str, Any], binding: TelegramChatBinding) -> dict[str, Any]:
         route = self.backend.route_text_to_space(text=text)
@@ -1964,6 +2591,33 @@ class TelegramAdapter:
             )
             return [self._handle_status(binding=binding)]
 
+        if (binding.default_agent == "assistant" or str(route.get("agent_id") or "assistant") == "assistant") and is_day_briefing_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="general",
+                action="morning_briefing",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+                lane="L0_no_model",
+            )
+            return [self._handle_morning_briefing_request(state=state)]
+
+        research_flow_request = parse_research_flow_request(routed_text, command_name=command_name, body=body)
+        if research_flow_request is not None and (
+            agent_id == "researcher"
+            or route_space in {"research", "job-search"}
+            or binding.default_agent == "researcher"
+        ):
+            self._record_agent_activity(
+                agent_id="researcher",
+                space_key=route_space if route_space in {"research", "job-search"} else "research",
+                action="research_flow_status" if research_flow_request.get("action") == "status" else "research_flow_run",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+                lane="L0_no_model",
+            )
+            return [self._handle_research_flow_request(research_flow_request)]
+
         translated_fitness = translate_natural_fitness_text(routed_text) if fitness_allowed else None
         if fitness_allowed and (translated_fitness or fitness_runtime.supports_command_text(routed_text, explicit_context=False)):
             return [
@@ -2207,11 +2861,13 @@ class TelegramAdapter:
         processed = self.process_updates(updates, state=state)
         reminder_chat_id = self._reminder_chat_id()
         due_sent = self.scan_and_dispatch_due_reminders(state=state, chat_id=reminder_chat_id) if reminder_chat_id else 0
+        briefing_sent = self.maybe_send_morning_briefing(state=state)
         self.save_adapter_state(state)
         return {
             "ok": True,
             "processed_updates": processed,
             "due_messages_sent": due_sent,
+            "morning_briefings_sent": briefing_sent,
             "last_update_id": int(state.get("last_update_id") or 0),
         }
 

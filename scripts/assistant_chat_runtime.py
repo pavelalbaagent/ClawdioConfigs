@@ -116,6 +116,19 @@ MEMORY_HINT_KEYWORDS = {
     "what did we",
     "last time",
 }
+DEFAULT_BUILDER_RUNTIME_POLICY = {
+    "workbench_mode": "repo_task_oriented",
+    "require_explicit_repo_or_project_context": True,
+    "keep_project_space_routing_explicit": True,
+    "keep_coding_work_separate_from_other_agents": True,
+    "local_tool_priority": ["codex_cli", "gemini_cli"],
+    "github_identity_env_priority": {
+        "token": ["BUILDER_GITHUB_TOKEN", "GITHUB_TOKEN"],
+        "owner": ["BUILDER_GITHUB_OWNER", "GITHUB_OWNER"],
+        "repo": ["BUILDER_GITHUB_REPO", "GITHUB_REPO"],
+        "host": ["BUILDER_GITHUB_HOST", "GITHUB_HOST", "GH_HOST"],
+    },
+}
 
 
 def iso_now_utc() -> str:
@@ -146,6 +159,18 @@ def truncate(text: str, *, limit: int = 220) -> str:
     if len(clean) <= limit:
         return clean
     return clean[: limit - 1].rstrip() + "…"
+
+
+def first_configured_env(
+    names: list[str],
+    *,
+    env_values: dict[str, str],
+) -> tuple[str | None, str | None]:
+    for name in names:
+        value = env_get(name, env_values)
+        if value:
+            return name, value
+    return None, None
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -634,8 +659,11 @@ def build_space_snapshot(
     reminders = ensure_dict(snapshot.get("reminders"))
     calendar = ensure_dict(snapshot.get("calendar_runtime"))
     personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
+    gmail_inbox = ensure_dict(snapshot.get("gmail_inbox"))
+    calendar_candidates = ensure_dict(snapshot.get("calendar_candidates"))
     braindump = ensure_dict(snapshot.get("braindump"))
     fitness_state = ensure_dict(snapshot.get("fitness_runtime"))
+    research_flow = ensure_dict(snapshot.get("research_flow"))
     workspace = ensure_dict(snapshot.get("workspace"))
     provider_health = ensure_dict(snapshot.get("provider_health"))
     pending_reminders = reminders.get("pending_items", [])
@@ -652,6 +680,16 @@ def build_space_snapshot(
     task_lines = [
         f"- {truncate(str(row.get('title') or ''), limit=90)} | due={str(row.get('due_at') or row.get('due_value') or '-')}"
         for row in workspace.get("todo_queue", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("tasks", 6)]
+        if isinstance(row, dict)
+    ]
+    personal_task_lines = [
+        f"- {truncate(str(row.get('title') or ''), limit=90)} | due={str(row.get('due_value') or row.get('due_string') or '-')}"
+        for row in personal_tasks.get("tasks", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("tasks", 6)]
+        if isinstance(row, dict)
+    ]
+    calendar_candidate_lines = [
+        f"- {truncate(str(row.get('title') or row.get('summary') or ''), limit=90)} | status={str(row.get('status') or 'proposed')}"
+        for row in calendar_candidates.get("items", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("calendar", 4)]
         if isinstance(row, dict)
     ]
     due_braindump = [
@@ -675,6 +713,8 @@ def build_space_snapshot(
         f"- reminders_awaiting_reply={ensure_dict(reminders.get('counts')).get('awaiting_reply', 0)}",
         f"- calendar_upcoming={ensure_dict(calendar.get('summary')).get('upcoming_count', 0)}",
         f"- personal_tasks_open={ensure_dict(personal_tasks.get('summary')).get('open_count', 0)}",
+        f"- gmail_manual_review_open={gmail_inbox.get('manual_review_open', 0)}",
+        f"- calendar_candidates_open={calendar_candidates.get('count', 0)}",
         f"- braindump_due={braindump.get('due_count', 0)}",
         f"- active_projects={ensure_dict(workspace.get('project_counts')).get('active', 0)}",
     ]
@@ -685,8 +725,20 @@ def build_space_snapshot(
         sections.extend(["Upcoming calendar:", *event_lines])
     if space_key in {"general", "tasks"} and task_lines:
         sections.extend(["Open tasks:", *task_lines])
+    if space_key in {"general", "tasks"} and personal_task_lines:
+        sections.extend(["Personal task runtime:", *personal_task_lines])
+    if space_key in {"general", "calendar"} and calendar_candidate_lines:
+        sections.extend(["Calendar candidates:", *calendar_candidate_lines])
     if space_key in {"general", "braindump"} and due_braindump:
         sections.extend(["Braindump due for review:", *due_braindump])
+    if agent_id == "assistant" and space_key == "general" and gmail_inbox:
+        sections.extend(
+            [
+                "Inbox triage:",
+                f"- manual_review_open={gmail_inbox.get('manual_review_open', 0)}",
+                f"- recent_gmail_decisions={len(gmail_inbox.get('recent_results', []))}",
+            ]
+        )
 
     if agent_id == "researcher" or space_key in {"research", "job-search"}:
         summary_path = root / "data" / "job-search-daily-summary.json"
@@ -697,10 +749,31 @@ def build_space_snapshot(
                 [
                     "Research/job-search state:",
                     f"- generated_at={str(raw_summary.get('generated_at') or '-')}",
-                    f"- reviewed_items={summary.get('reviewed_items', 0)}",
-                    f"- shortlisted={summary.get('shortlisted_items', 0)}",
+                    f"- processed_count={summary.get('processed_count', 0)}",
+                    f"- recommended_count={summary.get('recommended_count', 0)}",
+                    f"- apply_count={summary.get('apply_count', 0)}",
+                    f"- manual_review_count={summary.get('manual_review_count', 0)}",
                 ]
             )
+        if research_flow.get("available") is True:
+            last_run = ensure_dict(research_flow.get("last_run"))
+            workflows = [
+                ensure_dict(item)
+                for item in research_flow.get("workflows", [])
+                if isinstance(item, dict)
+            ]
+            sections.append("ResearchFlow:")
+            if last_run:
+                sections.append(
+                    f"- last_run={str(last_run.get('workflow') or '-')} @ {str(last_run.get('executed_at') or '-')}"
+                )
+            for row in workflows[:4]:
+                name = str(row.get("name") or "-")
+                artifacts = ensure_string_list(row.get("artifact_paths", []))
+                last_status = ensure_dict(row.get("last_status"))
+                sections.append(
+                    f"- {name}: artifacts={len(artifacts)} | generated_at={str(last_status.get('generated_at') or '-')}"
+                )
 
     if agent_id == "builder" or space_key == "coding":
         builder_tasks = [
@@ -820,14 +893,250 @@ def extract_session_queue_pointer(path: Path) -> str | None:
     return rows[0]
 
 
+def build_shared_directives_brief(root: Path) -> str:
+    path = root / "memory" / "SHARED_DIRECTIVES.md"
+    active = extract_markdown_section_bullets(path, "Active Directives", limit=8)
+    boundaries = extract_markdown_section_bullets(path, "Approval Boundaries", limit=6)
+    if not active and not boundaries:
+        return ""
+    lines = ["Shared governance directives:"]
+    if active:
+        lines.extend(f"- {item}" for item in active)
+    if boundaries:
+        lines.append("Approval boundaries:")
+        lines.extend(f"- {item}" for item in boundaries)
+    return "\n".join(lines)
+
+
+def resolve_builder_runtime_policy(root: Path) -> dict[str, Any]:
+    agents_data = ensure_dict(model_route_decider.load_yaml(root / "config" / "agents.yaml"))
+    builder_cfg = ensure_dict(ensure_dict(agents_data.get("agents")).get("builder"))
+    raw_policy = ensure_dict(builder_cfg.get("runtime_policy"))
+    github_priority = ensure_dict(raw_policy.get("github_identity_env_priority"))
+    policy = {
+        "workbench_mode": str(raw_policy.get("workbench_mode") or DEFAULT_BUILDER_RUNTIME_POLICY["workbench_mode"]).strip()
+        or DEFAULT_BUILDER_RUNTIME_POLICY["workbench_mode"],
+        "require_explicit_repo_or_project_context": (
+            raw_policy.get("require_explicit_repo_or_project_context")
+            if "require_explicit_repo_or_project_context" in raw_policy
+            else DEFAULT_BUILDER_RUNTIME_POLICY["require_explicit_repo_or_project_context"]
+        )
+        is True,
+        "keep_project_space_routing_explicit": (
+            raw_policy.get("keep_project_space_routing_explicit")
+            if "keep_project_space_routing_explicit" in raw_policy
+            else DEFAULT_BUILDER_RUNTIME_POLICY["keep_project_space_routing_explicit"]
+        )
+        is True,
+        "keep_coding_work_separate_from_other_agents": (
+            raw_policy.get("keep_coding_work_separate_from_other_agents")
+            if "keep_coding_work_separate_from_other_agents" in raw_policy
+            else DEFAULT_BUILDER_RUNTIME_POLICY["keep_coding_work_separate_from_other_agents"]
+        )
+        is True,
+        "local_tool_priority": ensure_string_list(raw_policy.get("local_tool_priority"))
+        or list(DEFAULT_BUILDER_RUNTIME_POLICY["local_tool_priority"]),
+        "github_identity_env_priority": {
+            "token": ensure_string_list(github_priority.get("token"))
+            or list(DEFAULT_BUILDER_RUNTIME_POLICY["github_identity_env_priority"]["token"]),
+            "owner": ensure_string_list(github_priority.get("owner"))
+            or list(DEFAULT_BUILDER_RUNTIME_POLICY["github_identity_env_priority"]["owner"]),
+            "repo": ensure_string_list(github_priority.get("repo"))
+            or list(DEFAULT_BUILDER_RUNTIME_POLICY["github_identity_env_priority"]["repo"]),
+            "host": ensure_string_list(github_priority.get("host"))
+            or list(DEFAULT_BUILDER_RUNTIME_POLICY["github_identity_env_priority"]["host"]),
+        },
+    }
+    return policy
+
+
+def tool_command_snapshot(*, name: str, command: str) -> dict[str, Any]:
+    resolved = shutil.which(command)
+    return {
+        "name": name,
+        "command": command,
+        "command_path": resolved,
+        "ready": bool(resolved),
+    }
+
+
+def probe_github_cli_auth(*, env_values: dict[str, str]) -> dict[str, Any]:
+    command_path = shutil.which("gh")
+    if not command_path:
+        return {
+            "status": "missing_command",
+            "host": None,
+            "account": None,
+            "detail": "gh command not found",
+            "command_path": None,
+        }
+    env = os.environ.copy()
+    env.update({key: value for key, value in env_values.items() if isinstance(value, str)})
+    try:
+        proc = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=5,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "host": None,
+            "account": None,
+            "detail": str(exc),
+            "command_path": command_path,
+        }
+    detail = "\n".join(part.strip() for part in [proc.stdout, proc.stderr] if str(part).strip()).strip()
+    lines = [line.strip() for line in detail.splitlines() if line.strip()]
+    host = lines[0] if lines else None
+    account_match = re.search(r"account\s+([A-Za-z0-9_.-]+)", detail)
+    account = account_match.group(1) if account_match else None
+    lowered = detail.lower()
+    if proc.returncode == 0:
+        status = "ready"
+    elif "token" in lowered and "invalid" in lowered:
+        status = "invalid"
+    elif "failed to log in" in lowered:
+        status = "invalid"
+    elif "not logged in" in lowered:
+        status = "missing_auth"
+    else:
+        status = "error"
+    return {
+        "status": status,
+        "host": host,
+        "account": account,
+        "detail": truncate(detail, limit=220) if detail else None,
+        "command_path": command_path,
+    }
+
+
+def builder_runtime_capability_snapshot(*, root: Path, env_values: dict[str, str]) -> dict[str, Any]:
+    integrations_data = ensure_dict(model_route_decider.load_yaml(root / "config" / "integrations.yaml"))
+    tool_clis = ensure_dict(integrations_data.get("tool_clis"))
+    github_cfg = ensure_dict(ensure_dict(integrations_data.get("integrations")).get("github"))
+    policy = resolve_builder_runtime_policy(root)
+
+    tools = {
+        "codex_cli": tool_command_snapshot(
+            name="codex_cli",
+            command=str(ensure_dict(tool_clis.get("codex_cli")).get("command") or "codex").strip() or "codex",
+        ),
+        "gemini_cli": tool_command_snapshot(
+            name="gemini_cli",
+            command=str(ensure_dict(tool_clis.get("gemini_cli")).get("command") or "gemini").strip() or "gemini",
+        ),
+        "git": tool_command_snapshot(name="git", command="git"),
+        "gh": tool_command_snapshot(name="gh", command="gh"),
+    }
+
+    github_priority = ensure_dict(policy.get("github_identity_env_priority"))
+    token_env_key, token_value = first_configured_env(
+        ensure_string_list(github_priority.get("token")),
+        env_values=env_values,
+    )
+    owner_env_key, owner_value = first_configured_env(
+        ensure_string_list(github_priority.get("owner")),
+        env_values=env_values,
+    )
+    repo_env_key, repo_value = first_configured_env(
+        ensure_string_list(github_priority.get("repo")),
+        env_values=env_values,
+    )
+    host_env_key, host_value = first_configured_env(
+        ensure_string_list(github_priority.get("host")),
+        env_values=env_values,
+    )
+    credential_source = "builder_specific" if any(
+        key and key.startswith("BUILDER_") for key in (token_env_key, owner_env_key, repo_env_key, host_env_key)
+    ) else ("shared" if any((token_env_key, owner_env_key, repo_env_key, host_env_key)) else "unconfigured")
+
+    github_auth = probe_github_cli_auth(env_values=env_values)
+    return {
+        "policy": policy,
+        "tools": tools,
+        "github": {
+            "enabled": github_cfg.get("enabled") is True,
+            "token_env_key": token_env_key,
+            "token_configured": bool(token_value),
+            "owner_env_key": owner_env_key,
+            "owner": owner_value,
+            "repo_env_key": repo_env_key,
+            "repo": repo_value,
+            "host_env_key": host_env_key,
+            "host": host_value or github_auth.get("host"),
+            "credential_source": credential_source,
+            "auth": github_auth,
+        },
+    }
+
+
+def build_builder_runtime_brief(
+    *,
+    root: Path,
+    env_values: dict[str, str],
+    space_key: str,
+    route: dict[str, Any],
+) -> str:
+    snapshot = builder_runtime_capability_snapshot(root=root, env_values=env_values)
+    policy = ensure_dict(snapshot.get("policy"))
+    tools = ensure_dict(snapshot.get("tools"))
+    github = ensure_dict(snapshot.get("github"))
+    github_auth = ensure_dict(github.get("auth"))
+    active_scope = str(route.get("project_name") or "").strip() or space_key
+
+    lines = [
+        "Builder workbench context:",
+        f"- workbench_mode={policy.get('workbench_mode') or 'repo_task_oriented'}",
+        f"- active_scope={active_scope}",
+    ]
+    if str(route.get("project_name") or "").strip():
+        lines.append(f"- active_project_space={space_key}")
+    elif space_key == "coding" and policy.get("require_explicit_repo_or_project_context") is True:
+        lines.append("- repo_scope=ask_for_repo_or_[project:slug]_before_cross_repo_changes")
+
+    lines.extend(
+        [
+            "Local coding tools:",
+            f"- codex_cli={'ready' if ensure_dict(tools.get('codex_cli')).get('ready') else 'missing'} | command={ensure_dict(tools.get('codex_cli')).get('command') or 'codex'} | path={ensure_dict(tools.get('codex_cli')).get('command_path') or '-'}",
+            f"- gemini_cli={'ready' if ensure_dict(tools.get('gemini_cli')).get('ready') else 'missing'} | command={ensure_dict(tools.get('gemini_cli')).get('command') or 'gemini'} | path={ensure_dict(tools.get('gemini_cli')).get('command_path') or '-'}",
+            f"- git={'ready' if ensure_dict(tools.get('git')).get('ready') else 'missing'} | path={ensure_dict(tools.get('git')).get('command_path') or '-'}",
+            f"- gh={'ready' if ensure_dict(tools.get('gh')).get('ready') else 'missing'} | path={ensure_dict(tools.get('gh')).get('command_path') or '-'}",
+            "GitHub repo access:",
+            f"- integration_enabled={'yes' if github.get('enabled') else 'no'} | credential_source={github.get('credential_source') or 'unconfigured'}",
+            f"- token={'set' if github.get('token_configured') else 'missing'} | token_env={github.get('token_env_key') or '-'}",
+            f"- owner={github.get('owner') or '-'} | owner_env={github.get('owner_env_key') or '-'}",
+            f"- repo={github.get('repo') or '-'} | repo_env={github.get('repo_env_key') or '-'}",
+            f"- gh_auth={github_auth.get('status') or '-'} | account={github_auth.get('account') or '-'} | host={github.get('host') or '-'}",
+            "Boundary rules:",
+            "- stay on repo/task-oriented coding work; do not absorb reminder/calendar orchestration",
+            "- keep research synthesis and tool evaluation with researcher unless the ask is implementation-driven",
+        ]
+    )
+    if policy.get("keep_project_space_routing_explicit") is True:
+        lines.append("- keep ongoing repo work in explicit project spaces via [project:slug]")
+    return "\n".join(lines)
+
+
 def build_fitness_program_brief(root: Path) -> str:
     profile_path = root / "fitness" / "ATHLETE_PROFILE.md"
     queue_path = root / "fitness" / "SESSION_QUEUE.md"
+    rules_path = root / "fitness" / "RULES.md"
+    library_path = root / "fitness" / "EXERCISE_LIBRARY.md"
     config = fitness_runtime.load_fitness_config(root)
     program = ensure_dict(config.get("_program"))
+    canonical_context = ensure_dict(config.get("_canonical_context"))
     days = ensure_dict(program.get("days"))
 
     lines = ["Canonical fitness program context:"]
+    canonical_hash = str(canonical_context.get("hash") or "").strip()
+    if canonical_hash:
+        lines.append(f"Canonical context hash: {canonical_hash}")
+    program_name = str(program.get("name") or "Program").strip()
+    if program_name:
+        lines.append(f"Program: {program_name}")
     goals = extract_markdown_section_bullets(profile_path, "Goals", limit=3)
     if goals:
         lines.extend(["Goals:", *[f"- {item}" for item in goals]])
@@ -843,13 +1152,28 @@ def build_fitness_program_brief(root: Path) -> str:
     logging = extract_markdown_section_bullets(profile_path, "Logging Preferences", limit=4)
     if logging:
         lines.extend(["Logging preferences:", *[f"- {item}" for item in logging]])
+    progression = extract_markdown_section_bullets(rules_path, "3) Progression Framework", limit=4)
+    if progression:
+        lines.extend(["Progression framework:", *[f"- {item}" for item in progression]])
+    volume_rules = extract_markdown_section_bullets(rules_path, "3.1) Arms-Specialization Volume Rules", limit=4)
+    if volume_rules:
+        lines.extend(["Volume targets:", *[f"- {item}" for item in volume_rules]])
+    deload_rules = extract_markdown_section_bullets(rules_path, "4) Deload Triggers", limit=3)
+    if deload_rules:
+        lines.extend(["Deload triggers:", *[f"- {item}" for item in deload_rules]])
+    substitution_notes = extract_markdown_section_bullets(library_path, "Substitution Notes", limit=4)
+    if substitution_notes:
+        lines.extend(["Substitution notes:", *[f"- {item}" for item in substitution_notes]])
+    myorep_defaults = extract_markdown_section_bullets(library_path, "Myorep Defaults", limit=4)
+    if myorep_defaults:
+        lines.extend(["Myorep defaults:", *[f"- {item}" for item in myorep_defaults]])
 
     current_pointer = extract_session_queue_pointer(queue_path)
     if current_pointer:
         lines.append(f"Session queue pointer: {current_pointer}")
 
     lines.append("Canonical session templates:")
-    for code in ("M1", "M2", "M3", "M4", "O5"):
+    for code in ("M1", "M2", "M3", "M4", "M5"):
         plan = days.get(code)
         if not hasattr(plan, "title") or not hasattr(plan, "exercises"):
             continue
@@ -865,6 +1189,8 @@ def build_fitness_program_brief(root: Path) -> str:
 
 def build_system_prompt(
     *,
+    root: Path,
+    env_values: dict[str, str],
     agent_id: str,
     space_key: str,
     route: dict[str, Any],
@@ -899,6 +1225,18 @@ def build_system_prompt(
     instructions.append(build_space_snapshot(dashboard_snapshot, root=backend.root, agent_id=agent_id, space_key=space_key, route=route))
     if agent_id == "fitness_coach" or space_key == "fitness":
         instructions.append(build_fitness_program_brief(backend.root))
+    if agent_id == "builder" or space_key == "coding":
+        instructions.append(
+            build_builder_runtime_brief(
+                root=root,
+                env_values=env_values,
+                space_key=space_key,
+                route=route,
+            )
+        )
+    shared_directives = build_shared_directives_brief(backend.root)
+    if shared_directives:
+        instructions.append(shared_directives)
     if knowledge_context.strip():
         instructions.extend([knowledge_context.strip()])
     if memory_context.strip():
@@ -1127,7 +1465,7 @@ class AgentChatRuntime:
         return format_memory_context(results, mode=mode)
 
     def _knowledge_source_context(self, *, text: str, space_key: str) -> str:
-        if self.agent_id not in {"assistant", "researcher", "builder"}:
+        if self.agent_id not in {"assistant", "researcher", "builder", "fitness_coach", "ops_guard"}:
             return ""
         if not self.knowledge_sources_path.exists():
             return ""
@@ -1163,6 +1501,8 @@ class AgentChatRuntime:
         memory_context = self._memory_context(text=text, route=route, space_key=space_key)
         knowledge_context = self._knowledge_source_context(text=text, space_key=space_key)
         system_prompt = build_system_prompt(
+            root=self.root,
+            env_values=self.env_values,
             agent_id=self.agent_id,
             space_key=space_key,
             route=route,

@@ -37,6 +37,7 @@ Current responsibilities:
 12. execute the deterministic `fitness_coach` runtime directly for workout control and logging
 13. fall back to structured capture for non-conversational specialists that still have no live runtime
 14. infer common natural-language requests for reminders, tasks, calendar, braindump, and workout logging before sending text to chat runtimes
+15. generate and deliver one assistant-owned morning briefing from reminder/task/calendar/Gmail state
 
 ## Supported Interaction Model
 
@@ -61,6 +62,9 @@ Natural phrases now supported:
 10. `add parent teacher meeting to my calendar for friday 5pm`
 11. `move dentist appointment on my calendar to tomorrow 4pm`
 12. `reschedule parent teacher meeting on my calendar to monday 6pm`
+13. `give me my morning briefing`
+14. `how does my day look today?`
+15. `what should i schedule today?`
 
 Explicit grammar that still works:
 
@@ -109,6 +113,7 @@ Current behavior:
 5. project hints still work and can be combined with specialist prefixes, for example:
    - `coding: [project:calendar-cleanup] tighten dashboard route view`
 6. old focus commands still work inside the assistant chat, but they are compatibility behavior, not the preferred interaction model
+7. `status` inside `builder_workbench` exposes local `codex`/`gemini`/GitHub readiness and the last-route lane/provider/model
 
 ## Telegram Surface Binding
 
@@ -134,7 +139,7 @@ Optional env vars:
 1. Telegram adapter offset/state:
    - local default: `data/telegram-adapter-state.json`
    - VPS target: `/var/lib/openclaw/telegram-adapter-state.json`
-   - includes update offset, reminder reply links, and compatibility focus state if used
+   - includes update offset, reminder reply links, compatibility focus state if used, and morning-briefing delivery metadata
 2. Reminder state:
    - config-driven via [reminders.yaml](/Users/palba/Projects/Clawdio/config/reminders.yaml)
    - VPS target: `/var/lib/openclaw/reminders-state.json`
@@ -180,7 +185,7 @@ systemctl --user status openclaw-telegram-adapter.service --no-pager
 3. chat now supports natural-language calendar reads plus direct create/move actions from `assistant_main`; candidate editing still stays in dashboard for ambiguous cases
 4. if Calendar or personal-task providers are not configured yet, the adapter returns a clear unavailable message instead of failing
 5. personal-task support is simple create/list, not the full dashboard surface
-6. reminder/task/calendar linkage is still separate work
+6. morning briefing suggestions are heuristic-first: due personal tasks plus pending calendar candidates, not full schedule optimization
 7. `fitness_coach` is now hybrid: deterministic for workout actions, conversational for coaching/progression
 8. `ops_guard` is still not conversational
 9. Telegram topics/groups are not modeled yet; dedicated surfaces currently mean separate bound chats

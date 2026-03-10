@@ -93,6 +93,7 @@ Behavior:
 5. applies only safe primary actions when `--apply` is explicitly passed
 6. promoted task candidates are assigned to `assistant` by default
 7. promoted calendar candidates are tagged for assistant review/redirect first
+8. the resulting status snapshot is now part of the assistant morning-briefing input, not a separate user-facing inbox surface
 
 ## Run commands
 

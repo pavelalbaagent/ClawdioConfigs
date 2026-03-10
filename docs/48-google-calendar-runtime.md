@@ -14,6 +14,7 @@ This runtime now covers:
 4. apply ready calendar candidates into Google Calendar
 5. publish a dashboard-readable status snapshot
 6. edit candidate schedule fields from the dashboard and promote candidates to `ready` or `approved`
+7. feed assistant-owned morning briefings with the latest upcoming-event snapshot
 
 ## Files
 

@@ -16,7 +16,10 @@ This avoids treating those as unrelated timers. The researcher now has one orche
 1. Config: [research_flow.yaml](/Users/palba/Projects/Clawdio/config/research_flow.yaml)
 2. Runtime: [research_flow_runtime.py](/Users/palba/Projects/Clawdio/scripts/research_flow_runtime.py)
 3. Dashboard state: `data/research-flow-status.json`
-4. Wrapped workflows:
+4. Shared latest-record dropzones:
+   - `data/researchflow/inbox`
+   - `data/researchflow/notes`
+5. Wrapped workflows:
    - [job_search_assistant.py](/Users/palba/Projects/Clawdio/scripts/job_search_assistant.py)
    - [ai_tools_digest.py](/Users/palba/Projects/Clawdio/scripts/ai_tools_digest.py)
 
@@ -33,8 +36,9 @@ The main assistant does not own this automation lane. It can report status, but 
 ### Job Search Digest
 
 1. wraps `publish-report` from the job-search assistant
-2. uses the saved-postings inbox and manual-review-first ranking logic
-3. default delivery time: `18:30` `America/Guayaquil`
+2. can run public job-posting discovery first when enabled in the job-search config
+3. uses the saved-postings inbox and manual-review-first ranking logic
+4. default delivery time: `18:30` `America/Guayaquil`
 
 ### AI Tools Watch
 
@@ -68,6 +72,13 @@ python3 scripts/research_flow_runtime.py \
   run --workflow all --apply --json
 ```
 
+Research Telegram surface:
+
+1. `research flow status`
+2. `run job search digest`
+3. `run tech digest`
+4. `run both digests`
+
 ## VPS Contract
 
 The systemd timers remain separate, but both now call the same ResearchFlow wrapper:
@@ -88,6 +99,18 @@ The dashboard should show:
    - job search digest
    - AI tools digest
    - both
+
+## Artifact Contract
+
+Each workflow should leave behind reusable files, not only Telegram text.
+
+Current contract:
+
+1. Job search digest writes `output/jobs/daily/<day>.json` and `.md`
+2. AI tools digest writes `output/research/ai_tools_digest/<day>.json` and `.md`
+3. ResearchFlow writes stable latest-record pointers per workflow into each shared dropzone, for example:
+   - `data/researchflow/inbox/job_search_digest-latest.json`
+   - `data/researchflow/inbox/ai_tools_watch-latest.json`
 
 ## Design Rule
 

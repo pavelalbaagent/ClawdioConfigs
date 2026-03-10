@@ -16,19 +16,19 @@ execution_policy:
 
 schedule:
   timezone: America/Guayaquil
-  main_workouts_per_week: 4
-  optional_workouts_per_week: 1
+  main_workouts_per_week: 5
+  optional_workouts_per_week: 0
   default_rest_days:
     - wednesday
     - sunday
   flexible_schedule: true
   missed_workout_policy: rolling_carry_forward
   workout_queue:
-    - M1_push_pull_barbell
-    - M2_pull_arms_db
-    - M3_push_arms_db
-    - M4_push_pull_barbell_2
-    - O5_optional_pump_or_legs
+    - M1_mon_bench_1
+    - M2_tue_db
+    - M3_thu_db_bb
+    - M4_fri_bench_2
+    - M5_sat_db
 
 memory_strategy:
   profile_recommendation: hybrid_124

@@ -96,6 +96,7 @@ If you want the simplest stable setup:
 4. Use the OpenAI subscription/session lane only for operator-triggered hard work with bigger limits.
 5. Use Codex CLI or Gemini CLI only as explicit local tools for supervised coding/repo tasks.
 6. Enable Anthropic only when explicitly needed.
+7. Keep the chosen lane/provider/model visible in runtime state and operator-facing status outputs.
 
 ## Interactive Premium Lane
 

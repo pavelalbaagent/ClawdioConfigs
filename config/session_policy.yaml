@@ -119,16 +119,23 @@ continuous_improvement_policy:
     - session_checkpoint_drift
     - task_queue_backlog
     - memory_sync_status
+    - token_usage_by_agent
+    - token_usage_by_lane_model
+    - cleanup_candidate_scan
   weekly_review_inputs:
     - routing_cost_mix
     - stale_project_spaces
     - repeated_manual_work_patterns
     - underused_or_broken_integrations
+    - stable_directive_candidate_review
   output_sections:
     - observations
+    - usage_summary
     - recommended_changes
     - approval_required_changes
     - archive_candidates
+    - cleanup_candidates
+    - directive_candidates
   max_auto_actions:
     - refresh_summaries_only
     - mark_review_candidates_only

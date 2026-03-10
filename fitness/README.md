@@ -17,3 +17,9 @@
 
 1. `output/spreadsheet/` is treated as export/history space, not source of truth.
 2. `fitness/logs/` contains generated session summaries, not program definition files.
+
+## Read-Only Grounding
+
+1. `fitness/knowledge/` is a conversational grounding corpus for `fitness_coach`.
+2. It is advisory context only and must not override deterministic workout control.
+3. If coaching guidance changes, update the canonical files in `fitness/` when the program itself changes.

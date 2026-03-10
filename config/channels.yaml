@@ -15,6 +15,12 @@ channels:
     adapter_mode: long_polling
     default_binding: assistant_main
     reminder_binding: assistant_main
+    assistant_morning_briefing:
+      enabled: true
+      binding_id: assistant_main
+      delivery_time_local: "07:00"
+      timezone: America/Guayaquil
+      max_schedule_suggestions: 3
     allow_unbound_chats: false
     chat_bindings:
       assistant_main:

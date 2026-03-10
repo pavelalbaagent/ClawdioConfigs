@@ -41,6 +41,7 @@ TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
 PRIORITY_LEVELS = {"low", "medium", "high", "urgent"}
 JOB_RECOMMENDATIONS = {"apply", "manual_review", "stretch_apply", "pass"}
 JOB_ELIGIBILITY = {"direct_yes", "possible_manual_check", "unclear", "likely_no"}
+JOB_DISCOVERY_PROVIDERS = {"brave_search_api", "serpapi"}
 
 
 def _parse_with_python_yaml(path: Path) -> Any:
@@ -672,6 +673,52 @@ def validate_job_search(data: dict[str, Any], errors: list[str], warnings: list[
     inputs = require_dict(job_search.get("inputs"), errors, "job_search.job_search.inputs")
     if not is_non_empty_str(inputs.get("saved_postings_dir")):
         add_error(errors, "REQ", "job_search.job_search.inputs.saved_postings_dir is required")
+
+    discovery = require_dict(job_search.get("discovery"), errors, "job_search.job_search.discovery")
+    if not isinstance(discovery.get("enabled"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.discovery.enabled must be boolean")
+    if not isinstance(discovery.get("run_before_report"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.discovery.run_before_report must be boolean")
+    for field_name in ("latest_status_file", "state_file"):
+        if not is_non_empty_str(discovery.get(field_name)):
+            add_error(errors, "REQ", f"job_search.job_search.discovery.{field_name} is required")
+    provider_priority = validate_string_list(
+        discovery.get("provider_priority"),
+        "job_search.job_search.discovery.provider_priority",
+        errors,
+        allow_empty=False,
+    )
+    unknown_discovery_providers = sorted(set(provider_priority) - JOB_DISCOVERY_PROVIDERS)
+    if unknown_discovery_providers:
+        add_error(
+            errors,
+            "TYPE",
+            f"job_search.job_search.discovery.provider_priority references unknown values: {unknown_discovery_providers}",
+        )
+    validate_string_list(
+        discovery.get("search_queries"),
+        "job_search.job_search.discovery.search_queries",
+        errors,
+        allow_empty=False,
+    )
+    validate_string_list(
+        discovery.get("allowed_domains"),
+        "job_search.job_search.discovery.allowed_domains",
+        errors,
+        allow_empty=False,
+    )
+    validate_string_list(
+        discovery.get("required_url_substrings"),
+        "job_search.job_search.discovery.required_url_substrings",
+        errors,
+        allow_empty=True,
+    )
+    for field_name in ("max_results_per_query", "max_saved_postings_per_run", "fetch_timeout_seconds"):
+        value = discovery.get(field_name)
+        if not isinstance(value, int) or value <= 0:
+            add_error(errors, "RANGE", f"job_search.job_search.discovery.{field_name} must be integer > 0")
+    if not isinstance(discovery.get("allow_snippet_only_fallback"), bool):
+        add_error(errors, "TYPE", "job_search.job_search.discovery.allow_snippet_only_fallback must be boolean")
 
     schedule = require_dict(job_search.get("schedule"), errors, "job_search.job_search.schedule")
     if not isinstance(schedule.get("enabled"), bool):

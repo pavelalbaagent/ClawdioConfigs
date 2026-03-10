@@ -1,6 +1,6 @@
 # Exercise Library (Canonical Names)
 
-Last updated: 2026-03-06
+Last updated: 2026-03-10
 
 ## Rule
 
@@ -14,7 +14,7 @@ Last updated: 2026-03-06
 2. `close_grip_barbell_press`
    - aliases: `cg bb press`, `close grip press`, `close grip bb press`, `close-grip bb press`, `cgbp`
 3. `barbell_curl`
-   - aliases: `bb curl`, `cheat curl`, `bb curl cheat curl`, `bb curl / cheat curl`
+   - aliases: `bb curl`, `cheat curl`, `bb curl cheat curl`, `bb curl / cheat curl`, `bb bicep curl`, `bb bicep curl / cheat curl`
 4. `hammer_curl`
    - aliases: `robot hammer`, `db hammer curl`
 5. `overhead_dumbbell_triceps_extension`
@@ -42,7 +42,7 @@ Last updated: 2026-03-06
 
 ## Myorep Defaults
 
-1. `hammer_curl`
+1. `barbell_curl`
 2. `lateral_raise`
 3. `incline_dumbbell_curl`
 

@@ -20,13 +20,13 @@ Current conversational runtimes:
 1. `assistant`
 2. `researcher`
 3. `builder`
+4. `fitness_coach`
 
 Current non-conversational specialist roles:
 
-1. `fitness_coach`
-2. `ops_guard`
+1. `ops_guard`
 
-These still route through structured handlers or task capture until their dedicated runtimes exist.
+`ops_guard` still routes through structured handlers or task capture until its dedicated runtime exists.
 
 ## Main file
 
@@ -37,6 +37,7 @@ The file now hosts the generalized role-aware chat runtime used by:
 1. `assistant`
 2. `researcher`
 3. `builder`
+4. `fitness_coach`
 
 ## Routing contract
 
@@ -73,6 +74,13 @@ When hybrid memory is active:
 2. `researcher` can pull prior findings and relevant docs
 3. `builder` can pull project and implementation context
 
+Builder-specific workbench context now also carries:
+
+1. local `codex` readiness
+2. local `gemini` readiness
+3. GitHub repo/account wiring state for the builder surface
+4. explicit reminders to stay repo/task oriented and keep project-space routing explicit
+
 Memory is selective:
 
 1. retrieval is not performed on every turn
@@ -92,13 +100,13 @@ These are runtime artifacts and stay out of git.
 
 ## Current limits
 
-1. no conversational `fitness_coach` yet
-2. no conversational `ops_guard` yet
-3. no visible session registry UI yet
-4. no cross-agent handoff transcripts beyond checkpoints and route history
+1. no conversational `ops_guard` yet
+2. no visible session registry UI yet
+3. no cross-agent handoff transcripts beyond checkpoints and route history
+4. `fitness_coach` still depends on deterministic workout/runtime state for actions; chat is advisory, not authoritative
 
 ## Next gates
 
 1. add a visible session registry in the dashboard
-2. make `fitness_coach` a real runtime over the fitness app
-3. decide whether `builder` gets VPS-local `codex` or remains API-first there
+2. decide whether `builder` gets VPS-local `codex` or remains API-first there
+3. decide whether `ops_guard` gets a bounded conversational runtime or stays structured-only

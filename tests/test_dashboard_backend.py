@@ -81,6 +81,8 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("telegram_adapter", state)
         self.assertIn("agent_chats", state)
         self.assertIn("continuous_improvement_status", state)
+        self.assertIn("knowledge_librarian_status", state)
+        self.assertIn("shared_governance_memory", state)
         self.assertIn("memory_sync_status", state)
 
         self.assertEqual(state["profiles"]["integrations"]["active"], "bootstrap_command_center")
@@ -110,6 +112,109 @@ class DashboardBackendTests(unittest.TestCase):
         binding_ids = [row["binding_id"] for row in telegram["bindings"]]
         self.assertIn("assistant_main", binding_ids)
         self.assertIn("fitness_coach", binding_ids)
+
+    def test_build_state_exposes_telegram_morning_briefing_status(self):
+        (self.tmp_path / "data").mkdir(parents=True, exist_ok=True)
+        (self.tmp_path / "data" / "telegram-adapter-state.json").write_text(
+            json.dumps(
+                {
+                    "morning_briefing": {
+                        "last_sent_at": "2026-03-10T12:05:00+00:00",
+                        "last_sent_local_date": "2026-03-10",
+                        "last_delivery_kind": "scheduled",
+                        "last_status": "sent",
+                        "last_message_preview": "Good morning. Here is your assistant briefing.",
+                        "last_summary": {
+                            "calendar_events_today": 2,
+                            "tasks_due_today": 1,
+                            "tasks_overdue": 1,
+                            "schedule_suggestions": 2,
+                        },
+                    }
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        state = self.backend.build_state()
+        briefing = state["telegram_adapter"]["morning_briefing"]
+        self.assertTrue(briefing["enabled"])
+        self.assertEqual(briefing["binding_id"], "assistant_main")
+        self.assertEqual(briefing["binding_label"], "Assistant Main")
+        self.assertEqual(briefing["delivery_time_local"], "07:00")
+        self.assertEqual(briefing["last_delivery_kind"], "scheduled")
+        self.assertEqual(briefing["last_summary"]["schedule_suggestions"], 2)
+        self.assertIsNotNone(briefing["next_due_at"])
+
+    def test_build_state_exposes_governance_outputs(self):
+        (self.tmp_path / "data").mkdir(parents=True, exist_ok=True)
+        (self.tmp_path / "memory").mkdir(parents=True, exist_ok=True)
+        (self.tmp_path / "data" / "continuous-improvement-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-10T07:30:00+00:00",
+                    "mode": "daily_ops_review",
+                    "report_path": str(self.tmp_path / "docs" / "reviews" / "2026-03-10-daily_ops_review.md"),
+                    "history_path": str(self.tmp_path / "data" / "continuous-improvement-history" / "2026-03-10-daily_ops_review.json"),
+                    "findings_count": 2,
+                    "recommended_changes": ["Re-run provider smoke checks."],
+                    "directive_candidates": [
+                        {"key": "reserve_heavy_lane_for_hard_work", "text": "Reserve L3_heavy for genuinely hard work."}
+                    ],
+                    "cleanup_candidates": [
+                        {"kind": "project_space", "target": "projects/paused-cleanup", "age_days": 20}
+                    ],
+                    "usage": {
+                        "window_hours": 24,
+                        "overall": {"calls": 2, "prompt_tokens": 200, "completion_tokens": 80, "total_tokens": 280, "errors": 0, "fallbacks": 0, "latency_ms": 0, "estimated_cost_usd": 0.01},
+                        "by_agent": [{"agent_id": "assistant", "calls": 1, "total_tokens": 120}],
+                        "by_lane": [{"lane": "L1_low_cost", "calls": 1, "total_tokens": 120}],
+                        "by_model": [{"model": "gemini-2.5-flash-lite", "calls": 1, "total_tokens": 120}],
+                    },
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.tmp_path / "data" / "knowledge-librarian-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-10T08:00:00+00:00",
+                    "owner_role": "knowledge_librarian",
+                    "promoted_directives": [{"key": "reserve_heavy_lane_for_hard_work", "text": "Reserve L3_heavy for genuinely hard work."}],
+                    "pending_directive_candidates": [],
+                    "recent_findings": [{"summary": "Heavy-lane usage looks elevated."}],
+                    "cleanup_candidates": [{"kind": "project_space", "target": "projects/paused-cleanup"}],
+                    "changed_files": [str(self.tmp_path / "memory" / "SHARED_DIRECTIVES.md")],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.tmp_path / "memory" / "SHARED_DIRECTIVES.md").write_text(
+            "# Shared Directives\n\n## Active Directives\n- [all_agents] Reserve L3_heavy for genuinely hard work.\n\n## Approval Boundaries\n- Changing credentials requires approval.\n",
+            encoding="utf-8",
+        )
+        (self.tmp_path / "memory" / "SHARED_FINDINGS.md").write_text(
+            "# Shared Findings\n\n## Recent Findings\n- [daily_ops_review | 2026-03-10] Heavy-lane usage looks elevated.\n\n## Directive Candidates\n- None.\n\n## Cleanup Candidates\n- [project_space | age=20d] projects/paused-cleanup\n",
+            encoding="utf-8",
+        )
+
+        state = self.backend.build_state()
+        review = state["continuous_improvement_status"]
+        librarian = state["knowledge_librarian_status"]
+        shared = state["shared_governance_memory"]
+
+        self.assertTrue(review["available"])
+        self.assertEqual(review["usage"]["window_hours"], 24)
+        self.assertEqual(review["usage"]["by_agent"][0]["agent_id"], "assistant")
+        self.assertTrue(librarian["available"])
+        self.assertEqual(len(librarian["promoted_directives"]), 1)
+        self.assertIn("Reserve L3_heavy for genuinely hard work.", shared["active_directives"][0])
 
     def test_integration_env_file_prefers_configured_path_over_local_secrets(self):
         (self.tmp_path / "secrets").mkdir(parents=True, exist_ok=True)
@@ -553,6 +658,19 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("fitness_runtime", state)
         self.assertTrue(state["fitness_runtime"]["available"])
         self.assertEqual(state["fitness_runtime"]["today_plan"]["plan"]["code"], "M1")
+
+    def test_build_state_refreshes_fitness_status_when_canonical_program_changes(self):
+        initial = self.backend.build_state()
+        initial_hash = initial["fitness_runtime"]["canonical_context"]["hash"]
+
+        program_path = self.tmp_path / "fitness" / "PROGRAM.md"
+        original = program_path.read_text(encoding="utf-8")
+        updated = original.replace("### M1: Mon (Bench 1)", "### M1: Mon (Bench 1 Updated)", 1)
+        program_path.write_text(updated, encoding="utf-8")
+
+        refreshed = self.backend.build_state()
+        self.assertEqual(refreshed["fitness_runtime"]["today_plan"]["plan"]["title"], "Mon (Bench 1 Updated)")
+        self.assertNotEqual(refreshed["fitness_runtime"]["canonical_context"]["hash"], initial_hash)
 
     def test_create_task_from_template(self):
         project = self.backend.create_project(name="Template Project")

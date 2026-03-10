@@ -1,6 +1,6 @@
 # Job Search Assistant
 
-Last updated: 2026-03-09
+Last updated: 2026-03-10
 
 ## Purpose
 
@@ -26,6 +26,8 @@ This module is not for:
 4. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Clawdio/scripts/research_flow_runtime.py)
 5. VPS report service: [openclaw-job-search-report.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-job-search-report.service)
 6. VPS report timer: [openclaw-job-search-report.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-job-search-report.timer)
+7. Discovery worker: [job_posting_discovery.py](/Users/palba/Projects/Clawdio/scripts/job_posting_discovery.py)
+8. Discovery runbook: [61-job-posting-discovery.md](/Users/palba/Projects/Clawdio/docs/61-job-posting-discovery.md)
 
 ## Safety Model
 
@@ -33,6 +35,7 @@ This module is not for:
 2. Use copied text, saved text files, or public URL fetches only when the page is accessible without login.
 3. Treat `remote` alone as insufficient evidence for Ecuador eligibility.
 4. Surface recommendations for operator review; do not submit applications automatically.
+5. Autonomous discovery, when enabled, is limited to public-web search and fetch.
 
 ## Commands
 
@@ -70,6 +73,12 @@ Preview the daily digest that would be sent to Telegram:
 python3 scripts/job_search_assistant.py publish-report
 ```
 
+Preview the daily digest after running public discovery first:
+
+```bash
+python3 scripts/job_search_assistant.py publish-report --discover
+```
+
 Send the digest to the configured Telegram chat:
 
 ```bash
@@ -99,6 +108,8 @@ Daily summary writes:
 2. `output/jobs/daily/<day>.md`
 3. `data/job-search-daily-summary.json`
 
+If the saved-postings inbox does not exist yet, the scheduled flow now creates it and still writes a zero-item report instead of failing the run.
+
 ## Recurrence Contract
 
 Default contract in config:
@@ -107,12 +118,14 @@ Default contract in config:
 2. schedule: every day at `18:30` in `America/Guayaquil`
 3. empty-day behavior: still produce and send a report
 4. delivery channel: Telegram private operator chat
+5. if `discovery.run_before_report=true`, the report run performs public discovery first
 
 Live default:
 
 1. deliver to the `researcher` surface via `TELEGRAM_RESEARCH_CHAT_ID`
 2. do not send the scheduled digest to the assistant main chat
 3. the VPS timer now calls the ResearchFlow wrapper, not the raw script directly
+4. the researcher Telegram surface can manually trigger this via `run job search digest` or inspect the lane via `research flow status`
 
 ## Report Presentation
 
@@ -144,8 +157,9 @@ The output groups postings into:
 ## Current Limits
 
 1. This is still a saved-posting workflow, not a live LinkedIn browser runtime.
-2. URL fetching is best effort only and will be unreliable on JS-heavy job pages.
-3. Resume tailoring and application queue state are not included yet.
+2. Autonomous discovery is public-web only and depends on optional search-provider keys.
+3. URL fetching is best effort only and will be unreliable on JS-heavy job pages.
+4. Resume tailoring and application queue state are not included yet.
 
 ## Next Gate
 

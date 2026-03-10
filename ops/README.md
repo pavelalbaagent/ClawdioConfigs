@@ -13,8 +13,8 @@
 9. `systemd/openclaw-telegram-adapter.service`: user-mode Telegram long-polling adapter that also drives reminder due/follow-up delivery.
 10. `systemd/openclaw-gateway.service`: gateway unit backed by `/etc/openclaw/gateway.env` so it stays isolated from the main app secrets file.
 11. `systemd/openclaw-dashboard.service`: user-mode dashboard service on loopback port `18890` so it can run in parallel with the legacy gateway on `18789` during migration and replace it cleanly afterward.
-12. `systemd/openclaw-memory-sync.service` + `systemd/openclaw-memory-sync.timer`: bounded hybrid-memory sync loop with dashboard-readable status output.
-13. `systemd/openclaw-ops-guard-review.service` + `systemd/openclaw-ops-guard-review.timer`: daily ops-guard review output.
+12. `systemd/openclaw-memory-sync.service` + `systemd/openclaw-memory-sync.timer`: bounded hybrid-memory sync loop that also runs `knowledge_librarian` consolidation into the shared directives/findings memory files.
+13. `systemd/openclaw-ops-guard-review.service` + `systemd/openclaw-ops-guard-review.timer`: daily ops-guard review output with token usage and cleanup candidates.
 14. `systemd/openclaw-ops-guard-architecture-review.service` + `systemd/openclaw-ops-guard-architecture-review.timer`: weekly architecture/governance review output.
 
 ## Recommended placement on VPS

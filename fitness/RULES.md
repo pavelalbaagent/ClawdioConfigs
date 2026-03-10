@@ -1,6 +1,6 @@
 # Fitness Agent Rules
 
-Last updated: 2026-03-05
+Last updated: 2026-03-10
 
 ## 1) Session Control
 
@@ -25,10 +25,10 @@ Last updated: 2026-03-05
 
 ## 3.1) Arms-Specialization Volume Rules
 
-1. Biceps target range: 20-24 hard sets per week.
-2. Triceps target range: 18-22 hard sets per week.
-3. Keep exercise variety intentionally low during the 12-week block.
-4. Prefer adding sets/reps on core arm anchors before adding new exercises.
+1. Current trial target: `18` direct biceps sets per week.
+2. Current trial target: `15` direct triceps sets per week, plus pressing carryover.
+3. Keep exercise variety intentionally low during the trial block.
+4. Prefer repeating the chosen arm anchors before adding new exercises.
 
 ## 4) Deload Triggers
 
@@ -45,28 +45,31 @@ Last updated: 2026-03-05
 ## 6) Superset Conventions
 
 1. Use labels `A1/A2`, `B1/B2`, `C1/C2`.
-2. Prefer antagonistic pairings when possible.
-3. Prioritize pairings that avoid load changes and repeated setup.
-4. Keep heavy antagonist pairs first (for example bench/row, close-grip press/curl).
-5. Use myorep antagonist pairs later in the session for density work.
+2. Every programmed block is run as a superset.
+3. Alternate the two block exercises instead of completing one exercise first.
+4. Keep the same working load across both exercises in a block when practical.
+5. Prioritize pairings that avoid load changes and repeated setup.
 
 ## 6.1) Myorep Matching Rules
 
 1. Use myoreps mainly on isolation and low-skill movements.
-2. Do not use myoreps for heavy compounds (bench, row, squat, deadlift).
-3. Log activation and mini-sets explicitly in cluster format.
-4. For matched myorep supersets, keep the same dumbbell load when practical to reduce setup churn.
-5. Default arm myorep pair for O5: biceps (`hammer_curl`) + triceps (`kickbacks`).
-6. Optional second arm myorep pair for O5: biceps (`incline_dumbbell_curl`) + triceps (`overhead_dumbbell_triceps_extension`) when elbows tolerate.
+2. Current trial myorep slots are:
+   - `barbell_curl` / cheat-curl slot
+   - `incline_dumbbell_curl`
+   - `lateral_raise`
+3. Do not use myoreps for heavy compounds (bench, row, floor press, deadlift).
+4. Log activation and mini-sets explicitly in cluster format.
+5. For this trial, each programmed myorep set is its own cluster.
+6. Hammer curl and overhead triceps work stay as straight sets in this version.
 
 ## 6.2) Plate-Change Minimization Rules
 
 1. Max 2-3 load blocks per session.
 2. Keep only one heavy barbell block per non-bench day whenever possible.
-3. On bench days, complete all barbell work before switching to dumbbells, or keep full DB-only sessions.
+3. Follow the programmed block order even if a DB block comes before a BB block.
 4. Prefer pairings that can run with the same dumbbell bucket (`DB-H`, `DB-M`, `DB-L`).
 5. Avoid introducing extra exercises that require unique one-off load setups.
-6. Saturday optional session must remain no-bench (DB/bodyweight only).
+6. Saturday is a fixed DB day, not an optional add-on.
 
 ## 7) Logging Grammar (Short Form)
 

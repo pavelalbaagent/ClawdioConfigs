@@ -22,6 +22,7 @@ from typing import Any
 
 from env_file_utils import load_env_file
 from google_workspace_common import ensure_dict, load_yaml, resolve_repo_path  # type: ignore
+import job_posting_discovery  # type: ignore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -458,6 +459,9 @@ def build_priority_map(values: list[str]) -> dict[str, int]:
 
 def collect_posting_files(input_dir: Path, *, allow_empty: bool = False) -> list[Path]:
     if not input_dir.exists():
+        if allow_empty:
+            input_dir.mkdir(parents=True, exist_ok=True)
+            return []
         raise RuntimeError(f"input directory not found: {input_dir}")
     if not input_dir.is_dir():
         raise RuntimeError(f"input path is not a directory: {input_dir}")
@@ -581,6 +585,10 @@ def write_daily_summary(
         f"- Stretch apply: `{payload['summary']['stretch_apply_count']}`",
         f"- Pass: `{payload['summary']['pass_count']}`",
     ]
+    if payload["summary"]["processed_count"] == 0:
+        markdown_lines.append(
+            "- No saved postings were found. Add `.txt`, `.md`, `.html`, or `.htm` files to the input directory before the next run."
+        )
 
     for section_name in section_order:
         section_rows = grouped.get(section_name) or []
@@ -600,6 +608,9 @@ def write_daily_summary(
 
     json_path = output_dir / f"{day_label}.json"
     md_path = output_dir / f"{day_label}.md"
+    payload["summary_json"] = str(json_path)
+    payload["summary_markdown"] = str(md_path)
+    payload["latest_status"] = str(latest_status_file)
     write_json(json_path, payload)
     md_path.write_text("\n".join(markdown_lines) + "\n", encoding="utf-8")
     write_json(latest_status_file, payload)
@@ -625,6 +636,9 @@ def format_report_message(
         f"Processed: {summary.get('processed_count', 0)} | Apply: {summary.get('apply_count', 0)} | Review: {summary.get('manual_review_count', 0)} | Stretch: {summary.get('stretch_apply_count', 0)} | Pass: {summary.get('pass_count', 0)}",
         "",
     ]
+    if int(summary.get("processed_count", 0) or 0) == 0:
+        lines.append("No saved postings found in the inbox. Add posting files, then rerun the digest.")
+        lines.append("")
 
     section_specs = [
         ("apply", "Apply Today"),
@@ -704,6 +718,8 @@ def parse_args() -> argparse.Namespace:
     summary_parser.add_argument("--summary-output-dir", type=Path)
     summary_parser.add_argument("--day-label")
     summary_parser.add_argument("--allow-empty", action="store_true")
+    summary_parser.add_argument("--discover", action="store_true", help="run public discovery before building the summary")
+    summary_parser.add_argument("--discovery-fixtures-file", type=Path)
 
     publish_parser = subparsers.add_parser(
         "publish-report",
@@ -716,6 +732,8 @@ def parse_args() -> argparse.Namespace:
     publish_parser.add_argument("--day-label")
     publish_parser.add_argument("--env-file", type=Path)
     publish_parser.add_argument("--allow-empty", action="store_true")
+    publish_parser.add_argument("--discover", action="store_true", help="run public discovery before building the report")
+    publish_parser.add_argument("--discovery-fixtures-file", type=Path)
     publish_parser.add_argument("--apply", action="store_true", help="send the report to the configured Telegram chat")
 
     return parser.parse_args()
@@ -764,6 +782,24 @@ def generate_daily_report(
     )
 
 
+def maybe_run_discovery(
+    *,
+    args: argparse.Namespace,
+    config: dict[str, Any],
+) -> dict[str, Any] | None:
+    discovery_cfg = ensure_dict(config.get("discovery"))
+    should_run = bool(args.discover or (args.command == "publish-report" and discovery_cfg.get("run_before_report") is True))
+    if not should_run:
+        return None
+    return job_posting_discovery.discover(
+        config_path=args.config.expanduser().resolve(),
+        env_file=args.env_file.expanduser().resolve() if getattr(args, "env_file", None) else None,
+        fixtures_file=args.discovery_fixtures_file.expanduser().resolve()
+        if getattr(args, "discovery_fixtures_file", None)
+        else None,
+    )
+
+
 def main() -> int:
     args = parse_args()
     config = load_config(args.config)
@@ -801,6 +837,7 @@ def main() -> int:
         summary_output_dir = resolve_output_dir(config, override=args.summary_output_dir, key="daily_summary_dir")
         latest_status_file = resolve_output_dir(config, override=None, key="latest_status_file")
         day_label = str(args.day_label or datetime.now().date().isoformat())
+        discovery_payload = maybe_run_discovery(args=args, config=config)
         summary_json, summary_md, payload = generate_daily_report(
             config=config,
             input_dir=input_dir,
@@ -814,10 +851,12 @@ def main() -> int:
             json.dumps(
                 {
                     "day_label": day_label,
+                    "input_dir": str(input_dir),
                     "processed_count": payload["summary"]["processed_count"],
                     "summary_json": str(summary_json),
                     "summary_markdown": str(summary_md),
                     "latest_status": str(latest_status_file),
+                    "discovery": discovery_payload,
                     "top_recommendations": payload["recommendations"][:5],
                 }
             )
@@ -832,6 +871,7 @@ def main() -> int:
     schedule_cfg = ensure_dict(config.get("schedule"))
     delivery_cfg = ensure_dict(config.get("delivery"))
     allow_empty = bool(args.allow_empty or schedule_cfg.get("allow_empty_report") or delivery_cfg.get("send_when_empty"))
+    discovery_payload = maybe_run_discovery(args=args, config=config)
     summary_json, summary_md, payload = generate_daily_report(
         config=config,
         input_dir=input_dir,
@@ -862,10 +902,13 @@ def main() -> int:
         json.dumps(
             {
                 "day_label": day_label,
+                "input_dir": str(input_dir),
                 "processed_count": payload["summary"]["processed_count"],
                 "summary_json": str(summary_json),
                 "summary_markdown": str(summary_md),
                 "latest_status": str(latest_status_file),
+                "discovery_status": str(discovery_payload.get("status_file")) if isinstance(discovery_payload, dict) and discovery_payload.get("status_file") else None,
+                "discovery": discovery_payload,
                 "delivery": {
                     **delivery_meta,
                     "sent": sent,

@@ -71,9 +71,11 @@ def resolve_source_config(config: dict[str, Any], source_id: str) -> dict[str, A
     return ensure_dict(sources.get(source_id))
 
 
-def resolve_source_root(source_cfg: dict[str, Any]) -> Path | None:
+def resolve_source_root(source_cfg: dict[str, Any], *, base_dir: Path | None = None) -> Path | None:
     for candidate in ensure_string_list(source_cfg.get("root_candidates")):
         path = Path(candidate).expanduser()
+        if not path.is_absolute() and base_dir is not None:
+            path = (base_dir / path).resolve()
         if path.exists() and path.is_dir():
             return path.resolve()
     return None
@@ -159,9 +161,10 @@ def search_source(
     *,
     source_cfg: dict[str, Any],
     query: str,
+    base_dir: Path | None = None,
     top_k: int | None = None,
 ) -> dict[str, Any]:
-    source_root = resolve_source_root(source_cfg)
+    source_root = resolve_source_root(source_cfg, base_dir=base_dir)
     if source_root is None:
         return {"available": False, "root": None, "results": []}
 
@@ -203,7 +206,7 @@ def search_enabled_sources(
         source_cfg = resolve_source_config(config, source_id)
         if not should_query_source(source_cfg=source_cfg, agent_id=agent_id, space_key=space_key, query=query):
             continue
-        payload = search_source(source_cfg=source_cfg, query=query, top_k=top_k)
+        payload = search_source(source_cfg=source_cfg, query=query, base_dir=config_path.parent, top_k=top_k)
         if not payload.get("available") or not payload.get("results"):
             continue
         results.append(

@@ -120,6 +120,7 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
                     """\
                     import argparse
                     import json
+                    from pathlib import Path
 
                     parser = argparse.ArgumentParser()
                     parser.add_argument("--env-file")
@@ -127,11 +128,19 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
                     parser.add_argument("--json", action="store_true")
                     parser.add_argument("args", nargs="*")
                     parsed = parser.parse_args()
+                    root = Path(__file__).resolve().parent
+                    summary_json = root / "job-report.json"
+                    summary_markdown = root / "job-report.md"
+                    summary_json.write_text("{}", encoding="utf-8")
+                    summary_markdown.write_text("# Job report\\n", encoding="utf-8")
                     print(json.dumps({
                         "generated_at": "2026-03-10T03:00:00+00:00",
                         "processed_count": 3,
                         "delivered": parsed.apply,
                         "args": parsed.args,
+                        "summary_json": str(summary_json),
+                        "summary_markdown": str(summary_markdown),
+                        "latest_status": str(root / "job-status.json"),
                     }))
                     """
                 ),
@@ -144,6 +153,7 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
                     """\
                     import argparse
                     import json
+                    from pathlib import Path
 
                     parser = argparse.ArgumentParser()
                     parser.add_argument("--env-file")
@@ -151,11 +161,19 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
                     parser.add_argument("--json", action="store_true")
                     parser.add_argument("args", nargs="*")
                     parsed = parser.parse_args()
+                    root = Path(__file__).resolve().parent
+                    digest_json = root / "ai-digest.json"
+                    digest_markdown = root / "ai-digest.md"
+                    digest_json.write_text("{}", encoding="utf-8")
+                    digest_markdown.write_text("# AI digest\\n", encoding="utf-8")
                     print(json.dumps({
                         "generated_at": "2026-03-10T04:00:00+00:00",
                         "item_count": 5,
                         "delivered": parsed.apply,
                         "args": parsed.args,
+                        "digest_json": str(digest_json),
+                        "digest_markdown": str(digest_markdown),
+                        "status_file": str(root / "ai-status.json"),
                     }))
                     """
                 ),
@@ -227,6 +245,9 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
             self.assertEqual(len(results), 2)
             self.assertTrue(all(row["ok"] for row in results))
             self.assertEqual(results[0]["workflow"], "job_search_digest")
+            self.assertTrue(results[0]["artifact_paths"])
+            self.assertTrue(results[1]["artifact_paths"])
+            self.assertTrue(all(Path(path).exists() for path in results[0]["dropzone_records"]))
             self.assertTrue(aggregate_status.exists())
 
     def test_run_workflow_skips_json_flag_when_disabled(self):

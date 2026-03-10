@@ -1,6 +1,6 @@
 # AIToolsDB Knowledge Source
 
-Last updated: 2026-03-09
+Last updated: 2026-03-10
 
 ## Goal
 
@@ -59,6 +59,12 @@ python3 scripts/knowledge_source_search.py --query "GPT-5.3 Codex" --agent-id re
 
 The digest is deterministic and based on recently modified corpus files.
 
+Outputs now include:
+
+1. `output/research/ai_tools_digest/<day>.json`
+2. `output/research/ai_tools_digest/<day>.md`
+3. `data/ai-tools-digest-status.json`
+
 Preview:
 
 ```bash
@@ -78,6 +84,11 @@ python3 scripts/research_flow_runtime.py \
   --env-file /etc/openclaw/openclaw.env \
   run --workflow ai_tools_watch --apply --json
 ```
+
+Research Telegram surface:
+
+1. `run tech digest`
+2. `research flow status`
 
 Systemd units:
 

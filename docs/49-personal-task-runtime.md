@@ -17,6 +17,7 @@ Current runtime covers:
 3. complete a task
 4. defer a task
 5. publish a dashboard-readable status snapshot
+6. feed assistant-owned morning briefings with current due/overdue task pressure
 
 ## Files
 

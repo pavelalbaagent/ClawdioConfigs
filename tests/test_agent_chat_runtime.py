@@ -31,6 +31,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
         (self.root / "baselines" / "agent_md").mkdir(parents=True)
         (self.root / "fitness").mkdir(parents=True)
         (self.root / "fitness" / "logs").mkdir(parents=True)
+        (self.root / "memory").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
 
         for name in (
@@ -58,10 +59,24 @@ class AgentChatRuntimeTests(unittest.TestCase):
         )
         for name in ("ATHLETE_PROFILE.md", "PROGRAM.md", "EXERCISE_LIBRARY.md", "RULES.md", "SESSION_QUEUE.md"):
             shutil.copy(ROOT / "fitness" / name, self.root / "fitness" / name)
+        shutil.copytree(ROOT / "fitness" / "knowledge", self.root / "fitness" / "knowledge")
         for name in ("MEMORY.md", "USER.md", "SOUL.md", "SESSION.md", "TODO.md"):
             (self.root / "baselines" / "agent_md" / name).write_text(f"# {name}\n\n## Notes\nExisting context for {name}.\n", encoding="utf-8")
+        (self.root / "memory" / "SHARED_DIRECTIVES.md").write_text(
+            "# Shared Directives\n\n## Active Directives\n- [all_agents] Reserve L3_heavy for genuinely hard work.\n\n## Approval Boundaries\n- Changing provider priorities requires approval.\n",
+            encoding="utf-8",
+        )
 
         self.backend = DashboardBackend(root=self.root)
+
+    def _fake_tool_lookup(self, command: str) -> str | None:
+        mapping = {
+            "codex": "/usr/local/bin/codex",
+            "gemini": "/usr/local/bin/gemini",
+            "git": "/usr/local/bin/git",
+            "gh": "/usr/local/bin/gh",
+        }
+        return mapping.get(command)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -137,11 +152,22 @@ class AgentChatRuntimeTests(unittest.TestCase):
             "route_mode": "explicit_agent_prefix",
         }
 
-        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None):
+        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None, timeout=None):
             joined = " ".join(str(part) for part in cmd)
             if "memory_search.py" in joined:
                 return mock.Mock(returncode=0, stdout=json.dumps({"mode": "keyword", "results": []}), stderr="")
-            return REAL_SUBPROCESS_RUN(cmd, cwd=cwd, capture_output=capture_output, text=text, env=env)
+            if joined == "gh auth status":
+                return mock.Mock(
+                    returncode=1,
+                    stdout="",
+                    stderr=(
+                        "github.com\n"
+                        "  X Failed to log in to github.com account devxiy (default)\n"
+                        "  - Active account: true\n"
+                        "  - The token in default is invalid.\n"
+                    ),
+                )
+            return REAL_SUBPROCESS_RUN(cmd, cwd=cwd, capture_output=capture_output, text=text, env=env, timeout=timeout)
 
         with mock.patch(
             "assistant_chat_runtime.resolve_chat_route",
@@ -153,7 +179,9 @@ class AgentChatRuntimeTests(unittest.TestCase):
                 "provider_cfg": {"transport": "google_generative_language"},
                 "model": "gemini-2.5-flash",
             },
-        ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(
+        ), mock.patch("assistant_chat_runtime.shutil.which", side_effect=self._fake_tool_lookup), mock.patch(
+            "assistant_chat_runtime.subprocess.run", side_effect=fake_run
+        ) as run_mock, mock.patch(
             "assistant_chat_runtime.invoke_chat_provider",
             return_value={
                 "text": "Start with the dashboard badge in the runtime panel and add a small backend field for status.",
@@ -171,6 +199,79 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.assertEqual(result["space_key"], "projects/openclaw-v2-rebuild")
         raw = json.loads((self.root / "data" / "builder-chat-state.json").read_text(encoding="utf-8"))
         self.assertIn("projects/openclaw-v2-rebuild", raw["spaces"])
+
+    def test_builder_chat_prompt_includes_local_tool_and_github_context(self):
+        runtime = AgentChatRuntime(
+            root=self.root,
+            backend=self.backend,
+            env_values={
+                "BUILDER_GITHUB_TOKEN": "builder-token",
+                "BUILDER_GITHUB_OWNER": "builder-bot",
+                "BUILDER_GITHUB_REPO": "Clawdio",
+            },
+            agent_id="builder",
+        )
+        route = {"agent_id": "builder", "space_key": "coding", "route_mode": "bound_chat"}
+
+        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None, timeout=None):
+            joined = " ".join(str(part) for part in cmd)
+            if "memory_search.py" in joined:
+                return mock.Mock(returncode=0, stdout=json.dumps({"mode": "keyword", "results": []}), stderr="")
+            if joined == "gh auth status":
+                return mock.Mock(
+                    returncode=1,
+                    stdout="",
+                    stderr=(
+                        "github.com\n"
+                        "  X Failed to log in to github.com account devxiy (default)\n"
+                        "  - Active account: true\n"
+                        "  - The token in default is invalid.\n"
+                    ),
+                )
+            return REAL_SUBPROCESS_RUN(
+                cmd,
+                cwd=cwd,
+                capture_output=capture_output,
+                text=text,
+                env=env,
+                timeout=timeout,
+            )
+
+        with mock.patch(
+            "assistant_chat_runtime.resolve_chat_route",
+            return_value={
+                "lane": "L2_balanced",
+                "requested_lane": "L2_balanced",
+                "downgraded_from_lane": None,
+                "provider": "openai_subscription_session",
+                "provider_cfg": {"required_command": "codex", "transport": "codex_exec_session"},
+                "model": "gpt-5.1-codex-mini",
+                "max_output_tokens": 1800,
+            },
+        ), mock.patch("assistant_chat_runtime.shutil.which", side_effect=self._fake_tool_lookup), mock.patch(
+            "assistant_chat_runtime.subprocess.run", side_effect=fake_run
+        ), mock.patch(
+            "assistant_chat_runtime.invoke_chat_provider",
+            return_value={
+                "text": "Start in the repo with a failing-test reproduction first.",
+                "prompt_tokens": 180,
+                "completion_tokens": 32,
+                "latency_ms": 85,
+            },
+        ) as provider_mock:
+            runtime.reply(text="Review the next coding task and outline the first patch step.", route=route)
+
+        system_prompt = provider_mock.call_args.kwargs["system_prompt"]
+        self.assertIn("Builder workbench context:", system_prompt)
+        self.assertIn("repo_scope=ask_for_repo_or_[project:slug]_before_cross_repo_changes", system_prompt)
+        self.assertIn("codex_cli=ready", system_prompt)
+        self.assertIn("gemini_cli=ready", system_prompt)
+        self.assertIn("credential_source=builder_specific", system_prompt)
+        self.assertIn("owner=builder-bot", system_prompt)
+        self.assertIn("repo=Clawdio", system_prompt)
+        self.assertIn("gh_auth=invalid | account=devxiy", system_prompt)
+        self.assertIn("Shared governance directives:", system_prompt)
+        self.assertIn("Reserve L3_heavy for genuinely hard work.", system_prompt)
 
     def test_fitness_chat_uses_dedicated_state_and_provider_preference(self):
         runtime = AgentChatRuntime(
@@ -232,9 +333,12 @@ class AgentChatRuntimeTests(unittest.TestCase):
         system_prompt = provider_kwargs["system_prompt"]
         self.assertEqual(provider_kwargs["max_output_tokens"], 2000)
         self.assertIn("Canonical fitness program context:", system_prompt)
+        self.assertIn("Relevant local knowledge sources:", system_prompt)
         self.assertIn("M1: Mon (Bench 1)", system_prompt)
-        self.assertIn("A1 DB Incline Press: 4 x 10-15", system_prompt)
+        self.assertIn("A1 DB Incline Press:", system_prompt)
+        self.assertIn("reduce myorep density", system_prompt)
         self.assertIn("Session queue pointer:", system_prompt)
+        self.assertTrue(result["knowledge_context_used"])
 
     def test_resolve_chat_route_applies_agent_provider_model_override(self):
         with mock.patch("assistant_chat_runtime.shutil.which", return_value="/usr/local/bin/codex"):

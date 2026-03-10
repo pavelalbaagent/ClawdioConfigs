@@ -19,6 +19,29 @@ job_search:
   inputs:
     saved_postings_dir: data/job-search/inbox
 
+  discovery:
+    enabled: true
+    run_before_report: true
+    latest_status_file: data/job-search-discovery-status.json
+    state_file: data/job-search-discovery-state.json
+    provider_priority:
+      - brave_search_api
+      - serpapi
+    search_queries:
+      - 'site:linkedin.com/jobs/view ("ai enablement" OR "ai adoption" OR "workflow automation") remote'
+      - 'site:linkedin.com/jobs/view ("solutions consultant" OR "implementation consultant" OR "solutions engineer") (ai OR automation) remote'
+      - 'site:linkedin.com/jobs/view ("business process automation" OR "digital transformation") remote'
+      - 'site:linkedin.com/jobs/view ("internal tools" OR "ai operations" OR "technical enablement") (automation OR ai) remote'
+    allowed_domains:
+      - linkedin.com
+      - www.linkedin.com
+    required_url_substrings:
+      - /jobs/view/
+    max_results_per_query: 5
+    max_saved_postings_per_run: 10
+    fetch_timeout_seconds: 20
+    allow_snippet_only_fallback: true
+
   schedule:
     enabled: true
     timezone: America/Guayaquil

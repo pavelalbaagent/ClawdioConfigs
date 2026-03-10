@@ -1,6 +1,6 @@
 # Ops Guard And Memory Sync
 
-Last updated: 2026-03-09
+Last updated: 2026-03-10
 
 ## Goal
 
@@ -8,8 +8,8 @@ Turn continuous improvement into a bounded operational loop instead of a vague s
 
 Two supporting processes do that:
 
-1. memory sync
-2. ops-guard reviews
+1. `ops_guard` review detection
+2. `knowledge_librarian` consolidation into shared memory
 
 ## Memory sync runner
 
@@ -19,10 +19,14 @@ Main file:
 
 Purpose:
 
-1. run [memory_index_sync.py](/Users/palba/Projects/Clawdio/scripts/memory_index_sync.py)
-2. persist a dashboard-readable snapshot to `data/memory-sync-status.json`
-3. make hybrid-memory health visible without reading raw logs
-4. serialize concurrent sync attempts so timer-driven and manual runs do not collide at the SQLite layer
+1. run the `knowledge_librarian` consolidation step for the latest bounded review outputs
+2. update shared governance memory files:
+   - [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md)
+   - [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md)
+3. run [memory_index_sync.py](/Users/palba/Projects/Clawdio/scripts/memory_index_sync.py)
+4. persist a dashboard-readable snapshot to `data/memory-sync-status.json`
+5. persist consolidation status to `data/knowledge-librarian-status.json`
+6. serialize concurrent sync attempts so timer-driven and manual runs do not collide at the SQLite layer
 
 Typical run:
 
@@ -45,6 +49,9 @@ Outputs:
 
 1. machine-readable status in `data/continuous-improvement-status.json`
 2. markdown review reports in `docs/reviews/`
+3. structured review history in `data/continuous-improvement-history/`
+4. token-usage summaries by agent, lane, and model
+5. cleanup candidates and directive candidates for consolidation
 
 Typical runs:
 
@@ -66,7 +73,25 @@ The review loop currently checks:
 4. assistant-vs-specialist route mix
 5. missing conversational agent state
 6. memory-sync health
-7. paused-project archive candidates
+7. heavy-lane cost drift
+8. paused/stale project-space cleanup candidates
+9. stale generated review/temp artifacts
+
+## Consolidation outputs
+
+`knowledge_librarian` promotes only bounded, non-structural findings.
+
+Outputs:
+
+1. shared directives in [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md)
+2. recent shared findings in [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md)
+3. machine-readable consolidation status in `data/knowledge-librarian-status.json`
+
+Promotion rule:
+
+1. only repeated safe directive candidates are auto-promoted
+2. approval-required or structural candidates stay visible as findings/candidates
+3. core policy/config rewrites still require normal human approval
 
 ## VPS timers
 

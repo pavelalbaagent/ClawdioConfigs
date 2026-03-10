@@ -208,6 +208,10 @@ integrations:
       - GITHUB_OWNER
     optional_env:
       - GITHUB_REPO
+      - BUILDER_GITHUB_TOKEN
+      - BUILDER_GITHUB_OWNER
+      - BUILDER_GITHUB_REPO
+      - BUILDER_GITHUB_HOST
     scopes:
       - repo
       - read:org
@@ -221,6 +225,7 @@ integrations:
       - comment_pr
       - push_changes_with_approval
     cost_class: low
+    notes: builder_workbench prefers BUILDER_GITHUB_* when present and falls back to shared GITHUB_* values
 
   linkedin:
     enabled: false

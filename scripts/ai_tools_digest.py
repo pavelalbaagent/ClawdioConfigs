@@ -20,6 +20,7 @@ from knowledge_source_search import load_config, resolve_source_config, resolve_
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "knowledge_sources.yaml"
 DEFAULT_STATUS_PATH = ROOT / "data" / "ai-tools-digest-status.json"
+DEFAULT_OUTPUT_DIR = ROOT / "output" / "research" / "ai_tools_digest"
 TELEGRAM_MESSAGE_CHUNK_LIMIT = 3500
 
 
@@ -134,10 +135,46 @@ def render_digest(*, items: list[dict[str, Any]], source_label: str) -> str:
     return "\n".join(lines)
 
 
+def write_digest_outputs(
+    *,
+    output_dir: Path,
+    day_label: str,
+    generated_at: str,
+    source_root: Path,
+    items: list[dict[str, Any]],
+    preview: str,
+) -> tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / f"{day_label}.json"
+    md_path = output_dir / f"{day_label}.md"
+    payload = {
+        "generated_at": generated_at,
+        "day_label": day_label,
+        "source_root": str(source_root),
+        "item_count": len(items),
+        "items": items,
+        "preview": preview,
+    }
+    markdown_lines = [
+        f"# AI Tools Digest - {day_label}",
+        "",
+        f"- Generated at: `{generated_at}`",
+        f"- Source root: `{source_root}`",
+        f"- Item count: `{len(items)}`",
+        "",
+        preview,
+    ]
+    write_json(json_path, payload)
+    md_path.write_text("\n".join(markdown_lines) + "\n", encoding="utf-8")
+    return json_path, md_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish a daily AI tools digest sourced from AIToolsDB.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--env-file", help="env file with telegram token/chat bindings")
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--day-label")
     parser.add_argument("--status-file", default=str(DEFAULT_STATUS_PATH))
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--json", action="store_true")
@@ -164,13 +201,29 @@ def main() -> int:
         limit=int(digest_cfg.get("max_items", 8) or 8),
     )
     digest_text = render_digest(items=items, source_label=str(source_root))
+    generated_at = now_iso()
+    day_label = str(args.day_label or datetime.now().date().isoformat())
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    digest_json, digest_markdown = write_digest_outputs(
+        output_dir=output_dir,
+        day_label=day_label,
+        generated_at=generated_at,
+        source_root=source_root,
+        items=items,
+        preview=digest_text,
+    )
+    status_path = Path(args.status_file).expanduser().resolve()
     payload = {
         "ok": True,
-        "generated_at": now_iso(),
+        "generated_at": generated_at,
+        "day_label": day_label,
         "source_root": str(source_root),
         "item_count": len(items),
         "delivered": False,
         "preview": digest_text,
+        "digest_json": str(digest_json),
+        "digest_markdown": str(digest_markdown),
+        "status_file": str(status_path),
     }
 
     if args.apply:
@@ -184,7 +237,7 @@ def main() -> int:
         payload["delivered"] = True
         payload["telegram_messages_sent"] = len(responses)
 
-    write_json(Path(args.status_file).expanduser().resolve(), payload)
+    write_json(status_path, payload)
     if args.json:
         print(json.dumps(payload, indent=2))
     else:

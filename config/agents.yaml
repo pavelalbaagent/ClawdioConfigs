@@ -162,6 +162,28 @@ agents:
       - implement_features
       - debug_and_refactor
       - operate_on_assigned_repos
+    runtime_policy:
+      workbench_mode: repo_task_oriented
+      require_explicit_repo_or_project_context: true
+      keep_project_space_routing_explicit: true
+      keep_coding_work_separate_from_other_agents: true
+      local_tool_priority:
+        - codex_cli
+        - gemini_cli
+      github_identity_env_priority:
+        token:
+          - BUILDER_GITHUB_TOKEN
+          - GITHUB_TOKEN
+        owner:
+          - BUILDER_GITHUB_OWNER
+          - GITHUB_OWNER
+        repo:
+          - BUILDER_GITHUB_REPO
+          - GITHUB_REPO
+        host:
+          - BUILDER_GITHUB_HOST
+          - GITHUB_HOST
+          - GH_HOST
     chat_routing:
       quick_read_write:
         preferred_lane: L1_low_cost
@@ -345,7 +367,19 @@ continuous_improvement:
     - data/job-search-daily-summary.json
   outputs:
     review_dir: docs/reviews
+    review_history_dir: data/continuous-improvement-history
     latest_status_file: data/continuous-improvement-status.json
+    shared_directives_file: memory/SHARED_DIRECTIVES.md
+    shared_findings_file: memory/SHARED_FINDINGS.md
+    consolidation_status_file: data/knowledge-librarian-status.json
+  consolidation:
+    owner_role: knowledge_librarian
+    promotion_threshold_reviews: 2
+    max_recent_findings: 10
+    max_cleanup_candidates: 10
+    review_retention_days: 21
+    history_retention_days: 45
+    temp_retention_days: 3
   bounded_rules:
     - do_not_auto_change_credentials
     - do_not_auto_change_provider_order_without_approval

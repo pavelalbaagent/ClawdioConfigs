@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -297,6 +298,231 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["agent_id"], "researcher")
         self.assertEqual(last_route["route_mode"], "bound_chat")
 
+    def test_bound_research_chat_can_run_tech_digest(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "22222": telegram_adapter.TelegramChatBinding(
+                    binding_id="researcher_lab",
+                    label="Researcher Lab",
+                    chat_id="22222",
+                    default_agent="researcher",
+                    default_space="research",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": True,
+                        "fitness": False,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        status_payload = {
+            "workflows": [
+                {"name": "ai_tools_watch", "output_label": "AI tools digest"},
+                {"name": "job_search_digest", "output_label": "Job search digest"},
+            ],
+            "last_run": {
+                "workflow": "ai_tools_watch",
+                "results": [
+                    {
+                        "workflow": "ai_tools_watch",
+                        "ok": True,
+                        "artifact_paths": ["/tmp/ai-digest.md"],
+                        "payload": {
+                            "item_count": 4,
+                            "preview": "AI tools digest (/tmp/corpus)\n\nBlog\n- New model release",
+                        },
+                    }
+                ],
+            },
+        }
+        with mock.patch.object(self.backend, "run_research_flow_runtime", return_value={"status": status_payload}) as run_flow:
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(62, "run tech digest", chat_id=22222)],
+                state=state,
+            )
+
+        run_flow.assert_called_once_with(workflow="ai_tools_watch", apply=False)
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("ResearchFlow run complete", response)
+        self.assertIn("AI tools digest", response)
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "researcher")
+        self.assertEqual(last_route["action"], "research_flow_run")
+
+    def test_bound_research_chat_treats_bare_tech_digest_as_flow_run(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "22222": telegram_adapter.TelegramChatBinding(
+                    binding_id="researcher_lab",
+                    label="Researcher Lab",
+                    chat_id="22222",
+                    default_agent="researcher",
+                    default_space="research",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": True,
+                        "fitness": False,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        status_payload = {
+            "workflows": [{"name": "ai_tools_watch", "output_label": "AI tools digest"}],
+            "last_run": {
+                "workflow": "ai_tools_watch",
+                "results": [
+                    {
+                        "workflow": "ai_tools_watch",
+                        "ok": True,
+                        "artifact_paths": ["/tmp/ai-digest.md"],
+                        "payload": {"item_count": 2, "preview": "AI tools digest (/tmp/corpus)\n\nBlog\n- Item"},
+                    }
+                ],
+            },
+        }
+        with mock.patch.object(self.backend, "run_research_flow_runtime", return_value={"status": status_payload}) as run_flow:
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(64, "tech digest", chat_id=22222)],
+                state=state,
+            )
+
+        run_flow.assert_called_once_with(workflow="ai_tools_watch", apply=False)
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("ResearchFlow run complete", response)
+
+    def test_bound_research_chat_can_check_research_flow_status(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "22222": telegram_adapter.TelegramChatBinding(
+                    binding_id="researcher_lab",
+                    label="Researcher Lab",
+                    chat_id="22222",
+                    default_agent="researcher",
+                    default_space="research",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": True,
+                        "fitness": False,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        flow_status = {
+            "available": True,
+            "owner_agent": "researcher",
+            "default_space": "research",
+            "workflows": [
+                {
+                    "name": "ai_tools_watch",
+                    "output_label": "AI tools digest",
+                    "artifact_paths": ["/tmp/ai-digest.md"],
+                    "last_status": {"item_count": 6, "delivered": True},
+                },
+                {
+                    "name": "job_search_digest",
+                    "output_label": "Job search digest",
+                    "artifact_paths": ["/tmp/job-digest.md"],
+                    "last_status": {"summary": {"processed_count": 3, "recommended_count": 2}},
+                },
+            ],
+            "last_run": {"workflow": "all", "executed_at": "2026-03-10T18:00:00+00:00"},
+        }
+        with mock.patch.object(self.backend, "_research_flow_status", return_value=flow_status):
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(63, "research flow status", chat_id=22222)],
+                state=state,
+            )
+
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("ResearchFlow status", response)
+        self.assertIn("AI tools digest", response)
+        self.assertIn("Job search digest", response)
+
     def test_bound_fitness_chat_uses_conversational_fitness_for_non_command_text(self):
         bound_adapter = telegram_adapter.TelegramAdapter(
             root=self.root,
@@ -364,6 +590,108 @@ class TelegramAdapterTests(unittest.TestCase):
         last_route = snapshot["agent_runtime"]["activity"]["last_route"]
         self.assertEqual(last_route["agent_id"], "fitness_coach")
         self.assertEqual(last_route["action"], "agent_chat")
+
+    def test_bound_builder_chat_routes_without_prefix_and_status_shows_workbench_state(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "44444": telegram_adapter.TelegramChatBinding(
+                    binding_id="builder_workbench",
+                    label="Builder Workbench",
+                    chat_id="44444",
+                    default_agent="builder",
+                    default_space="coding",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": False,
+                        "fitness": False,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        with mock.patch.object(
+            bound_adapter.agent_chats["builder"],
+            "reply",
+            return_value={
+                "reply_text": "Reproduce the failure in the repo first, then patch the auth guard.",
+                "space_key": "coding",
+                "lane": "L2_balanced",
+                "provider": "openai_subscription_session",
+                "model": "gpt-5.1-codex-mini",
+            },
+        ) as reply, mock.patch(
+            "assistant_chat_runtime.builder_runtime_capability_snapshot",
+            return_value={
+                "policy": {"workbench_mode": "repo_task_oriented"},
+                "tools": {
+                    "codex_cli": {"ready": True},
+                    "gemini_cli": {"ready": True},
+                    "git": {"ready": True},
+                    "gh": {"ready": True},
+                },
+                "github": {
+                    "credential_source": "builder_specific",
+                    "owner": "builder-bot",
+                    "repo": "Clawdio",
+                    "token_configured": True,
+                    "auth": {"status": "invalid", "account": "devxiy"},
+                },
+            },
+        ):
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(62, "review the auth flow bug in repo clawdio", chat_id=44444)],
+                state=state,
+            )
+            bound_adapter.process_updates([self._update_for_chat(63, "status", chat_id=44444)], state=state)
+
+        reply.assert_called_once()
+        self.assertIn("patch the auth guard", str(self.client.sent_messages[-2]["text"]))
+        status_text = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Last routed work: builder -> coding (bound_chat)", status_text)
+        self.assertIn(
+            "Last provider route: lane=L2_balanced | provider=openai_subscription_session | model=gpt-5.1-codex-mini",
+            status_text,
+        )
+        self.assertIn("Builder workbench mode: repo_task_oriented", status_text)
+        self.assertIn("Builder local tools: codex=ready, gemini=ready, git=ready, gh=ready", status_text)
+        self.assertIn(
+            "Builder GitHub: source=builder_specific | owner=builder-bot | repo=Clawdio | token=set | gh_auth=invalid | account=devxiy",
+            status_text,
+        )
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["action"], "status")
+        recent_routes = snapshot["agent_runtime"]["activity"]["recent_routes"]
+        self.assertEqual(recent_routes[-2]["agent_id"], "builder")
+        self.assertEqual(recent_routes[-2]["provider"], "openai_subscription_session")
+        self.assertEqual(recent_routes[-2]["route_mode"], "bound_chat")
 
     def test_switch_to_research_mode_makes_followup_use_researcher_chat(self):
         with mock.patch.object(
@@ -557,7 +885,7 @@ class TelegramAdapterTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed["title"], "a medical appointment for Pali")
+        self.assertEqual(parsed["title"], "medical appointment for Pali")
         self.assertEqual(parsed["when_text"], "8:15 today")
 
     def test_parse_human_calendar_when_supports_time_before_today(self):
@@ -576,7 +904,7 @@ class TelegramAdapterTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed["title"], "a family board game night")
+        self.assertEqual(parsed["title"], "family board game night")
         self.assertEqual(parsed["when_text"], "Thursday 6pm")
         self.assertEqual(parsed["duration"], timedelta(hours=1))
 
@@ -658,6 +986,18 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["space_key"], "fitness")
         self.assertEqual(last_route["action"], "fitness_command")
 
+    def test_cached_telegram_fitness_runtime_uses_updated_program(self):
+        program_path = self.root / "fitness" / "PROGRAM.md"
+        original = program_path.read_text(encoding="utf-8")
+        updated = original.replace("### M1: Mon (Bench 1)", "### M1: Mon (Bench 1 Telegram)", 1)
+        program_path.write_text(updated, encoding="utf-8")
+
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(52, "fitness: workout today")], state=state)
+
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Mon (Bench 1 Telegram)", response)
+
     def test_unprefixed_workout_commands_execute_fitness_runtime(self):
         state = self.adapter.load_adapter_state()
         self.adapter.process_updates([self._update(9, "start workout")], state=state)
@@ -679,6 +1019,161 @@ class TelegramAdapterTests(unittest.TestCase):
         response = str(self.client.sent_messages[-1]["text"])
         self.assertIn("Pending reminders", response)
         self.assertIn("review grades", response)
+
+    def test_morning_briefing_request_uses_assistant_runtime_state_and_updates_dashboard(self):
+        data_dir = self.root / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        local_zone = ZoneInfo("America/Guayaquil")
+        now_local = datetime.now(local_zone)
+        today_local = now_local.date()
+        overdue_local = today_local - timedelta(days=1)
+        event_start_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0)
+        event_end_local = event_start_local + timedelta(minutes=30)
+
+        (data_dir / "calendar-runtime-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "calendar_id": "primary",
+                    "summary": {"action": "snapshot", "upcoming_count": 1},
+                    "recent_results": [],
+                    "upcoming_events": [
+                        {
+                            "id": "evt-brief-1",
+                            "summary": "Parent teacher meeting",
+                            "start_value": event_start_local.astimezone(timezone.utc).isoformat(timespec="seconds"),
+                            "end_value": event_end_local.astimezone(timezone.utc).isoformat(timespec="seconds"),
+                            "all_day": False,
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (data_dir / "personal-task-runtime-status.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "provider": "todoist",
+                    "summary": {"action": "snapshot", "open_count": 2, "overdue_count": 1},
+                    "recent_results": [],
+                    "tasks": [
+                        {
+                            "id": "task-overdue",
+                            "title": "Pay insurance",
+                            "due_value": overdue_local.isoformat(),
+                            "due_mode": "date",
+                            "due_string": overdue_local.isoformat(),
+                        },
+                        {
+                            "id": "task-today",
+                            "title": "Review syllabus",
+                            "due_value": today_local.isoformat(),
+                            "due_mode": "date",
+                            "due_string": today_local.isoformat(),
+                        },
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (data_dir / "gmail-inbox-last-run.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "run_id": 11,
+                    "dry_run": False,
+                    "summary": {"processed_count": 2},
+                    "promotions": {"calendar": {"created": 1, "updated": 0}},
+                    "recent_results": [
+                        {"from_email": "alex@example.com", "subject": "Meeting change", "primary_action": "keep_in_inbox"}
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (data_dir / "calendar-candidates.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "candidate-brief-1",
+                            "title": "Reschedule dentist",
+                            "status": "proposed",
+                            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.adapter.reminder_state_path.write_text(
+            json.dumps(
+                {
+                    "reminders": {
+                        "r-brief-1": {
+                            "id": "r-brief-1",
+                            "message": "Pack school bag",
+                            "status": "pending",
+                            "timezone": "America/Guayaquil",
+                            "remind_at": now_local.replace(hour=7, minute=30, second=0, microsecond=0)
+                            .astimezone(timezone.utc)
+                            .isoformat(timespec="seconds"),
+                        }
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(45, "give me my morning briefing")], state=state)
+
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Parent teacher meeting", response)
+        self.assertIn("Pay insurance", response)
+        self.assertIn("Pack school bag", response)
+        self.assertIn("Reschedule dentist", response)
+        self.assertIn("Things you should probably schedule", response)
+
+        snapshot = self.backend.build_state()
+        briefing = snapshot["telegram_adapter"]["morning_briefing"]
+        self.assertEqual(briefing["last_delivery_kind"], "manual")
+        self.assertEqual(briefing["last_status"], "sent")
+        self.assertEqual(briefing["last_summary"]["calendar_events_today"], 1)
+        self.assertEqual(briefing["last_summary"]["tasks_overdue"], 1)
+
+    def test_scheduled_morning_briefing_sends_only_once_per_day(self):
+        payload = {
+            "text": "Scheduled assistant briefing",
+            "summary": {"calendar_events_today": 0, "tasks_due_today": 0, "tasks_overdue": 0, "schedule_suggestions": 0},
+            "generated_at": "2026-03-10T12:05:00+00:00",
+            "local_date": "2026-03-10",
+            "timezone": "America/Guayaquil",
+        }
+
+        with mock.patch.object(self.adapter, "_build_morning_briefing_payload", return_value=payload):
+            state = self.adapter.load_adapter_state()
+            sent = self.adapter.maybe_send_morning_briefing(
+                state=state,
+                current=datetime(2026, 3, 10, 12, 5, tzinfo=timezone.utc),
+            )
+            sent_again = self.adapter.maybe_send_morning_briefing(
+                state=state,
+                current=datetime(2026, 3, 10, 13, 0, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(sent_again, 0)
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Scheduled assistant briefing")
+        self.assertEqual(state["morning_briefing"]["last_delivery_kind"], "scheduled")
+        self.assertEqual(state["morning_briefing"]["last_sent_local_date"], "2026-03-10")
 
 
 if __name__ == "__main__":

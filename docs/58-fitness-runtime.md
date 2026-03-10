@@ -4,7 +4,11 @@ Last updated: 2026-03-09
 
 ## Goal
 
-Make `fitness_coach` a real specialist runtime for workout selection, session control, and set logging without relying on freeform chat memory.
+Make `fitness_coach` a hybrid specialist surface:
+
+1. deterministic for workout selection, session control, and set logging
+2. conversational for coaching, substitutions, recovery, and progression review
+3. always grounded in the canonical files under `fitness/`
 
 ## Runtime
 
@@ -37,8 +41,10 @@ Core commands:
 
 1. Canonical program syncs from:
    - [PROGRAM.md](/Users/palba/Projects/Clawdio/fitness/PROGRAM.md)
+   - [ATHLETE_PROFILE.md](/Users/palba/Projects/Clawdio/fitness/ATHLETE_PROFILE.md)
    - [EXERCISE_LIBRARY.md](/Users/palba/Projects/Clawdio/fitness/EXERCISE_LIBRARY.md)
    - [RULES.md](/Users/palba/Projects/Clawdio/fitness/RULES.md)
+   - [SESSION_QUEUE.md](/Users/palba/Projects/Clawdio/fitness/SESSION_QUEUE.md)
 2. Queue rolls forward through `M1` to `M4`.
 3. `O5` is optional and can be started explicitly.
 4. Dumbbells default to `each`.
@@ -46,6 +52,8 @@ Core commands:
 6. `bb side` requires cached empty barbell weight first.
 7. Myoreps are stored as activation + mini-sets, not collapsed summaries.
 8. Session finish writes a markdown summary and advances the next main-session pointer deterministically from completed history.
+9. Long-lived runtimes reload canonical `fitness/` files on each command/snapshot, so Telegram and dashboard views stay aligned after program edits.
+10. Conversational fitness replies build prompt context from the same canonical files plus optional read-only grounding notes under `fitness/knowledge/`.
 
 ## Surfaces
 
@@ -64,9 +72,18 @@ Dashboard:
 4. active or last session summary
 5. weekly volume and progression flags
 
-## Non-goals for v1
+Conversational grounding:
 
-1. no conversational coaching layer yet
-2. no auto-progression writes back into the program
+1. deterministic workout control still ignores read-only knowledge corpora
+2. `fitness_coach` chat may use:
+   - canonical `fitness/*.md`
+   - `fitness/logs/*.md`
+   - read-only `fitness/knowledge/*.md`
+3. background/context notes must not silently overwrite the canonical program
+
+## Non-goals for current cut
+
+1. no auto-progression writes back into the program
+2. no autonomous program rewrite from conversational chat
 3. no reminder automation for workouts by default
 4. no mobile-specific logging UI yet

@@ -29,6 +29,7 @@ class AIToolsDigestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             corpus_root = tmp_path / "corpus" / "ai_tools"
+            output_dir = tmp_path / "digest-output"
             corpus_root.mkdir(parents=True)
             (corpus_root / "blog_OpenAI_News_Introducing_GPT-5_3-Codex.md").write_text(
                 "# Introducing GPT-5.3 Codex\n\nOpenAI released GPT-5.3 Codex.\n",
@@ -59,17 +60,33 @@ class AIToolsDigestTests(unittest.TestCase):
                 encoding="utf-8",
             )
             status_path = tmp_path / "digest-status.json"
-            proc = self.run_script(["--config", str(config_path), "--status-file", str(status_path), "--json"])
+            proc = self.run_script(
+                [
+                    "--config",
+                    str(config_path),
+                    "--status-file",
+                    str(status_path),
+                    "--output-dir",
+                    str(output_dir),
+                    "--day-label",
+                    "2026-03-10",
+                    "--json",
+                ]
+            )
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["item_count"], 1)
             self.assertIn("GPT-5.3 Codex", payload["preview"])
+            self.assertTrue(Path(payload["digest_json"]).exists())
+            self.assertTrue(Path(payload["digest_markdown"]).exists())
+            self.assertEqual(Path(payload["status_file"]).resolve(), status_path.resolve())
 
     def test_apply_sends_digest_to_configured_chat(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             corpus_root = tmp_path / "corpus" / "ai_tools"
+            output_dir = tmp_path / "digest-output"
             corpus_root.mkdir(parents=True)
             (corpus_root / "blog_OpenAI_News_Introducing_GPT-5_3-Codex.md").write_text(
                 "# Introducing GPT-5.3 Codex\n\nOpenAI released GPT-5.3 Codex.\n",
@@ -113,6 +130,8 @@ class AIToolsDigestTests(unittest.TestCase):
                     str(config_path),
                     "--env-file",
                     str(env_path),
+                    "--output-dir",
+                    str(output_dir),
                     "--apply",
                     "--json",
                 ],

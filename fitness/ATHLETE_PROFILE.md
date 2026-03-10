@@ -1,6 +1,6 @@
 # Athlete Profile (Pavel)
 
-Last updated: 2026-03-05
+Last updated: 2026-03-10
 
 ## Goals
 
@@ -11,7 +11,7 @@ Last updated: 2026-03-05
 
 1. Typical rest days: Wednesday and Sunday.
 2. Schedule flexibility: yes, with rolling carry-forward for missed workouts.
-3. Weekly structure: 4 main workouts + optional 5th workout.
+3. Weekly structure: 5 fixed training days with Wednesday and Sunday as rest anchors.
 
 ## Split Preferences
 
@@ -19,7 +19,8 @@ Last updated: 2026-03-05
 2. Prefer fewer exercises with more sets per movement.
 3. Session cap target: 4-5 exercises.
 4. Bench setup target: ideally only 2 days per week.
-5. Time optimization via antagonistic supersets.
+5. Time optimization via paired supersets.
+6. Prefer blocks where both paired exercises can run with the same working load when practical.
 
 ## Muscle Emphasis Preferences
 
