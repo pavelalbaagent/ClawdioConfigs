@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,28 @@ import job_search_assistant as jobs  # noqa: E402
 
 
 class JobSearchAssistantTests(unittest.TestCase):
+    def test_split_telegram_text_chunks_long_reports(self):
+        text = ("Apply Today\n" + ("Role line\n" * 900)).strip()
+        parts = jobs.split_telegram_text(text)
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(len(part) <= jobs.TELEGRAM_MESSAGE_CHUNK_LIMIT for part in parts))
+
+    def test_telegram_report_client_send_long_message_sends_all_chunks(self):
+        sent_texts: list[str] = []
+
+        def fake_send(self, *, chat_id: str, text: str):
+            sent_texts.append(text)
+            return {"message_id": len(sent_texts)}
+
+        text = ("Apply Today\n" + ("Role line\n" * 900)).strip()
+        client = jobs.TelegramReportClient("test-token")
+        with mock.patch.object(jobs.TelegramReportClient, "send_message", autospec=True, side_effect=fake_send):
+            responses = client.send_long_message(chat_id="12345", text=text)
+
+        self.assertEqual(len(responses), len(sent_texts))
+        self.assertGreater(len(sent_texts), 1)
+        self.assertTrue(all(len(part) <= jobs.TELEGRAM_MESSAGE_CHUNK_LIMIT for part in sent_texts))
+
     def test_triage_posting_recommends_apply_for_strong_latam_fit(self):
         config = jobs.load_config(CONFIG)
         posting = """

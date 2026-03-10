@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "job_search.yaml"
 ALLOWED_POSTING_SUFFIXES = {".txt", ".md", ".html", ".htm"}
 RECOMMENDATION_VALUES = {"apply", "manual_review", "stretch_apply", "pass"}
+TELEGRAM_MESSAGE_CHUNK_LIMIT = 3500
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -89,6 +90,35 @@ class TelegramReportClient:
         if not isinstance(data, dict) or data.get("ok") is not True:
             raise RuntimeError(f"telegram api error: {data}")
         return ensure_dict(data.get("result"))
+
+    def send_long_message(self, *, chat_id: str, text: str) -> list[dict[str, Any]]:
+        parts = split_telegram_text(text)
+        return [self.send_message(chat_id=chat_id, text=part) for part in parts]
+
+
+def split_telegram_text(text: str, *, limit: int = TELEGRAM_MESSAGE_CHUNK_LIMIT) -> list[str]:
+    clean = str(text or "").strip()
+    if not clean:
+        return [""]
+    if len(clean) <= limit:
+        return [clean]
+
+    parts: list[str] = []
+    remaining = clean
+    while len(remaining) > limit:
+        window = remaining[:limit]
+        cut = max(window.rfind("\n\n"), window.rfind("\n"), window.rfind(" "))
+        if cut < max(200, limit // 4):
+            cut = limit
+        chunk = remaining[:cut].strip()
+        if not chunk:
+            chunk = remaining[:limit].strip()
+            cut = len(chunk)
+        parts.append(chunk)
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        parts.append(remaining)
+    return parts
 
 
 def now_iso() -> str:
@@ -810,9 +840,11 @@ def main() -> int:
         if not chat_id:
             raise RuntimeError("missing TELEGRAM_ALLOWED_CHAT_ID")
         client = TelegramReportClient(token)
-        response = client.send_message(chat_id=chat_id, text=message)
+        responses = client.send_long_message(chat_id=chat_id, text=message)
+        response = responses[0] if responses else {}
         sent = True
         delivery_meta["telegram_message_id"] = response.get("message_id")
+        delivery_meta["telegram_chunks_sent"] = len(responses)
 
     print(
         json.dumps(
