@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from typing import Any
 
 import model_route_decider
 from env_file_utils import load_env_file
+import fitness_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -741,6 +743,82 @@ def build_space_snapshot(
     return "\n".join(sections)
 
 
+def extract_markdown_section_bullets(path: Path, heading: str, *, limit: int = 6) -> list[str]:
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    match = re.search(
+        rf"^##\s+{re.escape(heading)}\s*$" + r"(?P<body>.*?)(?=^##\s+|\Z)",
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if not match:
+        return []
+    body = str(match.group("body") or "")
+    rows: list[str] = []
+    for raw in body.splitlines():
+        line = raw.strip().replace("`", "")
+        if not line:
+            continue
+        line = re.sub(r"^\d+\.\s+", "", line)
+        line = re.sub(r"^-\s+", "", line)
+        line = " ".join(line.split())
+        if not line:
+            continue
+        rows.append(line)
+    return rows[:limit]
+
+
+def extract_session_queue_pointer(path: Path) -> str | None:
+    rows = extract_markdown_section_bullets(path, "Current Pointer", limit=2)
+    if not rows:
+        return None
+    return rows[0]
+
+
+def build_fitness_program_brief(root: Path) -> str:
+    profile_path = root / "fitness" / "ATHLETE_PROFILE.md"
+    queue_path = root / "fitness" / "SESSION_QUEUE.md"
+    config = fitness_runtime.load_fitness_config(root)
+    program = ensure_dict(config.get("_program"))
+    days = ensure_dict(program.get("days"))
+
+    lines = ["Canonical fitness program context:"]
+    goals = extract_markdown_section_bullets(profile_path, "Goals", limit=3)
+    if goals:
+        lines.extend(["Goals:", *[f"- {item}" for item in goals]])
+    schedule = extract_markdown_section_bullets(profile_path, "Schedule Preferences", limit=4)
+    if schedule:
+        lines.extend(["Schedule preferences:", *[f"- {item}" for item in schedule]])
+    emphasis = extract_markdown_section_bullets(profile_path, "Muscle Emphasis Preferences", limit=4)
+    if emphasis:
+        lines.extend(["Emphasis:", *[f"- {item}" for item in emphasis]])
+    equipment = extract_markdown_section_bullets(profile_path, "Equipment and Constraints", limit=4)
+    if equipment:
+        lines.extend(["Equipment and constraints:", *[f"- {item}" for item in equipment]])
+    logging = extract_markdown_section_bullets(profile_path, "Logging Preferences", limit=4)
+    if logging:
+        lines.extend(["Logging preferences:", *[f"- {item}" for item in logging]])
+
+    current_pointer = extract_session_queue_pointer(queue_path)
+    if current_pointer:
+        lines.append(f"Session queue pointer: {current_pointer}")
+
+    lines.append("Canonical session templates:")
+    for code in ("M1", "M2", "M3", "M4", "O5"):
+        plan = days.get(code)
+        if not hasattr(plan, "title") or not hasattr(plan, "exercises"):
+            continue
+        equipment_text = ", ".join(getattr(plan, "equipment", []) or []) or "-"
+        lines.append(f"- {getattr(plan, 'code', code)}: {getattr(plan, 'title', code)} | equipment={equipment_text}")
+        for item in getattr(plan, "exercises", [])[:5]:
+            slot_label = getattr(item, "slot_label", "?")
+            display_name = getattr(item, "display_name", getattr(item, "exercise_code", "exercise"))
+            prescription = getattr(item, "prescription_text", "-")
+            lines.append(f"  - {slot_label} {display_name}: {prescription}")
+    return "\n".join(lines)
+
+
 def build_system_prompt(
     *,
     agent_id: str,
@@ -774,6 +852,8 @@ def build_system_prompt(
     if tools:
         instructions.extend(["Available tool surface (read/plan against these, do not pretend writes happened):", *[f"- {item}" for item in tools[:8]]])
     instructions.append(build_space_snapshot(dashboard_snapshot, root=backend.root, agent_id=agent_id, space_key=space_key, route=route))
+    if agent_id == "fitness_coach" or space_key == "fitness":
+        instructions.append(build_fitness_program_brief(backend.root))
     if memory_context.strip():
         instructions.extend([memory_context.strip()])
     if session_summary.strip():

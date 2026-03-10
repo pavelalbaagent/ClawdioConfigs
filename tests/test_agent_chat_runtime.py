@@ -215,7 +215,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
                 "completion_tokens": 34,
                 "latency_ms": 95,
             },
-        ):
+        ) as provider_mock:
             result = runtime.reply(text="Should I keep today's arm work or swap anything because my elbows feel a bit off?", route=route)
 
         self.assertTrue(
@@ -226,6 +226,12 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.assertEqual(result["provider"], "openai_subscription_session")
         self.assertEqual(result["space_key"], "fitness")
         self.assertTrue((self.root / "data" / "fitness-coach-chat-state.json").exists())
+        provider_kwargs = provider_mock.call_args.kwargs
+        system_prompt = provider_kwargs["system_prompt"]
+        self.assertIn("Canonical fitness program context:", system_prompt)
+        self.assertIn("M1: Mon (Bench 1)", system_prompt)
+        self.assertIn("A1 DB Incline Press: 4 x 10-15", system_prompt)
+        self.assertIn("Session queue pointer:", system_prompt)
 
 
 if __name__ == "__main__":
