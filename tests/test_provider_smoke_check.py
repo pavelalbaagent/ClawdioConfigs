@@ -53,7 +53,7 @@ class ProviderSmokeCheckTests(unittest.TestCase):
         )
         openai = next(row for row in status["providers"] if row["provider"] == "openai_subscription_session")
         self.assertEqual(openai["transport"], "codex_exec_session")
-        self.assertEqual(openai["default_model"], "gpt-5-mini")
+        self.assertEqual(openai["default_model"], "gpt-5.3-codex-spark")
 
 
 if __name__ == "__main__":

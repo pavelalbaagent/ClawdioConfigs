@@ -43,14 +43,14 @@ routing:
 
     L2_balanced:
       provider: multi_provider
-      model: gpt-5-mini
+      model: gpt-5.3-codex-spark
       provider_priority:
         - openai_subscription_session
         - google_ai_studio_free
         - openrouter_free_overflow
         - anthropic_credit_pool
       provider_models:
-        openai_subscription_session: gpt-5-mini
+        openai_subscription_session: gpt-5.3-codex-spark
         google_ai_studio_free: gemini-2.5-flash
         openrouter_free_overflow: openrouter/free
         anthropic_credit_pool: claude-sonnet-4-20250514
@@ -263,13 +263,14 @@ provider_inventory:
     required_command: codex
     transport: codex_exec_session
     budget_type: interactive_subscription_session
-    default_model: gpt-5-mini
-    healthcheck_model: gpt-5-mini
+    default_model: gpt-5.3-codex-spark
+    healthcheck_model: gpt-5.3-codex-spark
     supported_models:
-      - gpt-5-mini
       - gpt-5.1
       - gpt-5.4
       - gpt-5.1-codex-mini
+      - gpt-5.3-codex
+      - gpt-5.3-codex-spark
     usage_policy: interactive_only_for_hard_work_or_bigger_limits
     strengths:
       - premium_interactive_reasoning

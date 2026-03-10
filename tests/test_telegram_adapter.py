@@ -349,7 +349,7 @@ class TelegramAdapterTests(unittest.TestCase):
                 "space_key": "fitness",
                 "lane": "L2_balanced",
                 "provider": "openai_subscription_session",
-                "model": "gpt-5-mini",
+                "model": "gpt-5.3-codex-spark",
             },
         ) as reply:
             state = bound_adapter.load_adapter_state()

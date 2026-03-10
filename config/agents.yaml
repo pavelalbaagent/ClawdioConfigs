@@ -41,7 +41,7 @@ agents:
           - openrouter_free_overflow
           - anthropic_credit_pool
         provider_models:
-          openai_subscription_session: gpt-5-mini
+          openai_subscription_session: gpt-5.3-codex-spark
       architecture_or_high_ambiguity:
         preferred_lane: L2_balanced
         provider_preference:
@@ -126,7 +126,7 @@ agents:
           - anthropic_credit_pool
           - openrouter_free_overflow
         provider_models:
-          openai_subscription_session: gpt-5-mini
+          openai_subscription_session: gpt-5.3-codex-spark
       architecture_or_high_ambiguity:
         preferred_lane: L2_balanced
         provider_preference:

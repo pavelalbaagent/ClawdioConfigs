@@ -31,7 +31,7 @@ class ModelRouteDeciderTests(unittest.TestCase):
         self.assertEqual(data["preferred_lane"], "L2_balanced")
         self.assertIn("openai_subscription_session", data["provider_preference"])
         self.assertNotIn("codex_subscription_cli", data["provider_preference"])
-        self.assertEqual(data["provider_candidates"][0]["model"], "gpt-5-mini")
+        self.assertEqual(data["provider_candidates"][0]["model"], "gpt-5.3-codex-spark")
 
     def test_strict_cost_limits_fallback_to_l2(self):
         proc = self.run_script(

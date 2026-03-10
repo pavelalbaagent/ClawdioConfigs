@@ -252,7 +252,7 @@ def _probe_provider(provider_name: str, provider_cfg: dict[str, Any], resolved_m
     if provider_name == "openai_subscription_session":
         return openai_session_transport.probe_codex_session(
             root=ROOT,
-            model=resolved_model or str(provider_cfg.get("healthcheck_model", "")).strip() or "gpt-5-mini",
+            model=resolved_model or str(provider_cfg.get("healthcheck_model", "")).strip() or "gpt-5.3-codex-spark",
         )
     if provider_name in {"codex_subscription_cli", "openai_subscription_session", "gemini_cli_local"}:
         command = str(provider_cfg.get("required_command", "")).strip()

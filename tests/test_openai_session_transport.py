@@ -26,7 +26,7 @@ class OpenAISessionTransportTests(unittest.TestCase):
                 self.assertIn("read-only", cmd)
                 self.assertIn("--ephemeral", cmd)
                 self.assertIn("-m", cmd)
-                self.assertIn("gpt-5-mini", cmd)
+                self.assertIn("gpt-5.3-codex-spark", cmd)
                 output_idx = cmd.index("-o") + 1
                 Path(cmd[output_idx]).write_text("Bounded reply", encoding="utf-8")
                 self.assertEqual(cwd, str(root))
@@ -40,7 +40,7 @@ class OpenAISessionTransportTests(unittest.TestCase):
             ):
                 result = openai_session_transport.invoke_codex_session(
                     root=root,
-                    model="gpt-5-mini",
+                    model="gpt-5.3-codex-spark",
                     system_prompt="You are a planner.",
                     messages=[{"role": "user", "content": "Help me plan tomorrow."}],
                     timeout_seconds=120,
@@ -57,7 +57,7 @@ class OpenAISessionTransportTests(unittest.TestCase):
                 "openai_session_transport.invoke_codex_session",
                 return_value={"text": "OK", "latency_ms": 12, "prompt_tokens": 0, "completion_tokens": 0},
             ):
-                probe = openai_session_transport.probe_codex_session(root=root, model="gpt-5-mini")
+                probe = openai_session_transport.probe_codex_session(root=root, model="gpt-5.3-codex-spark")
 
         self.assertTrue(probe["ok"])
         self.assertEqual(probe["latency_ms"], 12)
@@ -70,7 +70,7 @@ class OpenAISessionTransportTests(unittest.TestCase):
                 return_value={"text": "Not OK", "latency_ms": 12, "prompt_tokens": 0, "completion_tokens": 0},
             ):
                 with self.assertRaises(RuntimeError):
-                    openai_session_transport.probe_codex_session(root=root, model="gpt-5-mini")
+                    openai_session_transport.probe_codex_session(root=root, model="gpt-5.3-codex-spark")
 
 
 if __name__ == "__main__":
