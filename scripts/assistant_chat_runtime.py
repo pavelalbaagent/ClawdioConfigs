@@ -31,6 +31,7 @@ DEFAULT_AGENT_STATE_FILES = {
     "assistant": "assistant-chat-state.json",
     "researcher": "researcher-chat-state.json",
     "builder": "builder-chat-state.json",
+    "fitness_coach": "fitness-coach-chat-state.json",
 }
 
 SUPPORTED_CHAT_TRANSPORTS = {
@@ -47,6 +48,7 @@ SPACE_CONTEXT_ITEM_LIMITS = {
     "braindump": 8,
     "research": 6,
     "job-search": 6,
+    "fitness": 8,
     "coding": 6,
     "ops": 6,
     "project": 8,
@@ -77,6 +79,14 @@ ROLE_PROMPTS = {
             "Do not claim code or infra changed unless the deterministic tool path already executed it.",
         ],
     },
+    "fitness_coach": {
+        "headline": "You are Fitness Coach for Pavel.",
+        "guidance": [
+            "You coach Pavel through his home-training program, workout execution, substitutions, progression, and recovery decisions.",
+            "Treat the deterministic fitness runtime and workout logs as the source of truth for completed sessions and logged sets.",
+            "When advising, tie recommendations to the actual plan, recent logs, equipment limits, and recovery context instead of generic fitness advice.",
+        ],
+    },
     "ops_guard": {
         "headline": "You are Ops Guard for Pavel.",
         "guidance": [
@@ -86,7 +96,7 @@ ROLE_PROMPTS = {
     },
 }
 
-MEMORY_ENABLED_AGENTS = {"assistant", "researcher", "builder"}
+MEMORY_ENABLED_AGENTS = {"assistant", "researcher", "builder", "fitness_coach"}
 MEMORY_HINT_KEYWORDS = {
     "remember",
     "previous",
@@ -171,12 +181,33 @@ def choose_situation(*, agent_id: str, text: str, space_key: str) -> str:
         "reschedule",
         "prioritize",
     )
+    fitness_reflection_keywords = (
+        "progress",
+        "plateau",
+        "stalled",
+        "swap",
+        "replace",
+        "substitute",
+        "program",
+        "cycle",
+        "deload",
+        "volume",
+        "recover",
+        "recovery",
+        "sore",
+        "superset",
+        "myorep",
+    )
     if any(keyword in lowered for keyword in heavy_keywords):
         return "architecture_or_high_ambiguity"
     if agent_id == "builder":
         return "coding_and_integration"
     if agent_id == "researcher":
         return "research_synthesis"
+    if agent_id == "fitness_coach":
+        if any(keyword in lowered for keyword in fitness_reflection_keywords) or len(lowered) >= 80:
+            return "research_synthesis"
+        return "quick_read_write"
     if space_key.startswith("projects/"):
         return "research_synthesis"
     if space_key in {"calendar", "tasks", "reminders", "braindump"} and len(lowered) <= 120:
@@ -184,6 +215,20 @@ def choose_situation(*, agent_id: str, text: str, space_key: str) -> str:
     if len(lowered) > 180 or any(keyword in lowered for keyword in synthesis_keywords):
         return "research_synthesis"
     return "quick_read_write"
+
+
+def resolve_agent_chat_policy(
+    *,
+    agents_data: dict[str, Any],
+    agent_id: str,
+    situation: str,
+) -> dict[str, Any]:
+    agents_cfg = ensure_dict(agents_data.get("agents"))
+    internal_cfg = ensure_dict(agents_data.get("internal_roles"))
+    agent_row = ensure_dict(agents_cfg.get(agent_id))
+    if not agent_row:
+        agent_row = ensure_dict(internal_cfg.get(agent_id))
+    return ensure_dict(ensure_dict(agent_row.get("chat_routing")).get(situation))
 
 
 def local_provider_ready(
@@ -206,6 +251,7 @@ def local_provider_ready(
 
 def resolve_chat_route(
     *,
+    agent_id: str,
     situation: str,
     models_path: Path,
     agents_path: Path,
@@ -223,7 +269,12 @@ def resolve_chat_route(
     mode_name = str(ensure_dict(agents_data.get("routing_overrides")).get("active_mode", "")).strip() or "balanced_default"
     mode_cfg = ensure_dict(usage_modes.get(mode_name))
     situation_cfg = ensure_dict(decision_matrix.get(situation))
-    preferred_lane = str(situation_cfg.get("preferred_lane", "")).strip() or str(mode_cfg.get("default_lane", "")).strip()
+    agent_policy = resolve_agent_chat_policy(agents_data=agents_data, agent_id=agent_id, situation=situation)
+    preferred_lane = (
+        str(agent_policy.get("preferred_lane", "")).strip()
+        or str(situation_cfg.get("preferred_lane", "")).strip()
+        or str(mode_cfg.get("default_lane", "")).strip()
+    )
     if not preferred_lane:
         preferred_lane = fallback_order[0]
 
@@ -231,7 +282,9 @@ def resolve_chat_route(
     requested_lane_cfg = ensure_dict(lanes.get(requested_lane))
     requested_approval = bool(requested_lane_cfg.get("approval_required") is True or situation_cfg.get("approval_required") is True)
 
-    fallback_lanes = ensure_string_list(situation_cfg.get("fallback_lanes"))
+    fallback_lanes = ensure_string_list(agent_policy.get("fallback_lanes"))
+    if not fallback_lanes:
+        fallback_lanes = ensure_string_list(situation_cfg.get("fallback_lanes"))
     if not fallback_lanes:
         fallback_lanes = [lane for lane in fallback_order if lane != requested_lane]
 
@@ -246,7 +299,9 @@ def resolve_chat_route(
         lane_cfg = ensure_dict(lanes.get(lane_name))
         if not lane_cfg:
             continue
-        provider_preference = ensure_string_list(situation_cfg.get("provider_preference"))
+        provider_preference = ensure_string_list(agent_policy.get("provider_preference"))
+        if not provider_preference:
+            provider_preference = ensure_string_list(situation_cfg.get("provider_preference"))
         if lane_name != requested_lane or not provider_preference:
             provider_preference = ensure_string_list(lane_cfg.get("provider_priority"))
         candidates = model_route_decider.resolve_provider_candidates(
@@ -486,6 +541,22 @@ def should_query_memory(*, agent_id: str, text: str, space_key: str, route: dict
         return True
     if agent_id in {"researcher", "builder"}:
         return len(lowered) >= 20
+    if agent_id == "fitness_coach":
+        return len(lowered) >= 40 or any(
+            keyword in lowered
+            for keyword in (
+                "last",
+                "previous",
+                "progress",
+                "plateau",
+                "stalled",
+                "cycle",
+                "program",
+                "swap",
+                "replace",
+                "volume",
+            )
+        )
     if any(keyword in lowered for keyword in MEMORY_HINT_KEYWORDS):
         return True
     return len(lowered) >= 100
@@ -518,6 +589,7 @@ def build_space_snapshot(
     calendar = ensure_dict(snapshot.get("calendar_runtime"))
     personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
     braindump = ensure_dict(snapshot.get("braindump"))
+    fitness_state = ensure_dict(snapshot.get("fitness_runtime"))
     workspace = ensure_dict(snapshot.get("workspace"))
     provider_health = ensure_dict(snapshot.get("provider_health"))
     pending_reminders = reminders.get("pending_items", [])
@@ -541,6 +613,14 @@ def build_space_snapshot(
         for row in braindump.get("due_items", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("braindump", 6)]
         if isinstance(row, dict)
     ]
+    fitness_today = ensure_dict(fitness_state.get("today_plan"))
+    fitness_active = ensure_dict(fitness_state.get("active_session"))
+    fitness_progress_flags = [
+        ensure_dict(item)
+        for item in fitness_state.get("progression_flags", [])[: SPACE_CONTEXT_ITEM_LIMITS.get("fitness", 6)]
+        if isinstance(item, dict)
+    ]
+    weekly_volume = ensure_dict(fitness_state.get("weekly_volume"))
 
     sections = [
         f"Space: {space_key}",
@@ -589,6 +669,31 @@ def build_space_snapshot(
                     *[
                         f"- {truncate(str(row.get('title') or ''), limit=90)} | status={row.get('status') or '-'}"
                         for row in builder_tasks[: SPACE_CONTEXT_ITEM_LIMITS.get('coding', 6)]
+                    ],
+                ]
+            )
+
+    if agent_id == "fitness_coach" or space_key == "fitness":
+        sections.append("Fitness state:")
+        if fitness_today:
+            plan = ensure_dict(fitness_today.get("plan"))
+            sections.append(
+                f"- next_plan={plan.get('code') or '-'} | {plan.get('title') or '-'} | mode={fitness_today.get('mode') or '-'}"
+            )
+        if fitness_active:
+            sections.append(
+                f"- active_session={fitness_active.get('training_day_code') or '-'} | started={fitness_active.get('created_at') or '-'}"
+            )
+        if weekly_volume:
+            top_volume = sorted(weekly_volume.items(), key=lambda item: (-float(item[1] or 0), str(item[0])))[:4]
+            sections.extend(["Weekly volume:", *[f"- {name}={value}" for name, value in top_volume]])
+        if fitness_progress_flags:
+            sections.extend(
+                [
+                    "Progression flags:",
+                    *[
+                        f"- {truncate(str(row.get('message') or row.get('flag') or row.get('exercise_name') or ''), limit=100)}"
+                        for row in fitness_progress_flags
                     ],
                 ]
             )
@@ -900,6 +1005,7 @@ class AgentChatRuntime:
         space_key = str(route.get("space_key") or "general").strip() or "general"
         situation = choose_situation(agent_id=self.agent_id, text=text, space_key=space_key)
         plan = resolve_chat_route(
+            agent_id=self.agent_id,
             situation=situation,
             models_path=self.models_path,
             agents_path=self.agents_path,

@@ -2042,10 +2042,44 @@ class DashboardBackend:
 
     def _telegram_adapter_status(self) -> dict[str, Any]:
         raw = read_json(self.telegram_adapter_state_path)
+        channels_data = self.load_yaml_dict(self.channels_path)
+        telegram_cfg = ensure_dict(ensure_dict(channels_data.get("channels")).get("telegram"))
+        bindings_cfg = ensure_dict(telegram_cfg.get("chat_bindings"))
+        env_values: dict[str, str] = {}
+        env_path = self._integration_env_file_path()
+        if env_path and env_path.exists():
+            try:
+                env_values = calendar_runtime.load_env_file(env_path)
+            except Exception:
+                env_values = {}
+
+        bindings: list[dict[str, Any]] = []
+        for binding_id, raw_binding in bindings_cfg.items():
+            binding = ensure_dict(raw_binding)
+            env_key = str(binding.get("chat_id_env") or "").strip()
+            chat_id = str(env_values.get(env_key, "")).strip() if env_key else str(binding.get("chat_id") or "").strip()
+            if not chat_id and str(binding_id) == "assistant_main":
+                chat_id = str(env_values.get("TELEGRAM_ALLOWED_CHAT_ID", "")).strip()
+            masked = chat_id[-4:] if len(chat_id) >= 4 else chat_id
+            bindings.append(
+                {
+                    "binding_id": str(binding_id),
+                    "label": str(binding.get("label") or binding_id).strip() or str(binding_id),
+                    "default_agent": str(binding.get("default_agent") or "assistant").strip() or "assistant",
+                    "default_space": str(binding.get("default_space") or "general").strip() or "general",
+                    "chat_id_env": env_key or None,
+                    "configured": bool(chat_id),
+                    "chat_id_mask": (f"...{masked}" if masked else None),
+                }
+            )
+
         if not isinstance(raw, dict) or not raw:
             return {
                 "available": False,
                 "path": str(self.telegram_adapter_state_path),
+                "bindings": bindings,
+                "default_binding_id": str(telegram_cfg.get("default_binding") or "assistant_main").strip() or "assistant_main",
+                "reminder_binding_id": str(telegram_cfg.get("reminder_binding") or "assistant_main").strip() or "assistant_main",
                 "focus": None,
                 "updated_at": None,
                 "last_update_id": None,
@@ -2056,6 +2090,9 @@ class DashboardBackend:
         return {
             "available": True,
             "path": str(self.telegram_adapter_state_path),
+            "bindings": bindings,
+            "default_binding_id": str(telegram_cfg.get("default_binding") or "assistant_main").strip() or "assistant_main",
+            "reminder_binding_id": str(telegram_cfg.get("reminder_binding") or "assistant_main").strip() or "assistant_main",
             "focus": {
                 "agent_id": str(focus.get("agent_id") or "assistant").strip() or "assistant",
                 "space_key": str(focus.get("space_key") or "general").strip() or "general",

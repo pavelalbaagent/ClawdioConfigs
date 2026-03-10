@@ -55,17 +55,16 @@ HELP_TEXT = "\n".join(
         "- add review syllabus to my tasks for tomorrow 10am",
         "- what's on my calendar tomorrow?",
         "- note this: test AgentMail later",
-        "- switch to research mode",
-        "- switch back",
-        "- what mode are we in?",
         "- what's my workout today?",
         "- I'm starting my workout",
         "- I did hammer curls 12 reps with 10kg each",
-        "- research: <text> / coding: <text> / [project:slug] <text> still work if you want explicit routing",
+        "- if this chat is a specialist surface, just speak normally there",
+        "- research: <text> / coding: <text> / fitness: <text> / [project:slug] <text> still work if you want explicit routing",
     ]
 )
 
-CONVERSATIONAL_SPECIALISTS = {"assistant", "researcher", "builder"}
+CONVERSATIONAL_SPECIALISTS = {"assistant", "researcher", "builder", "fitness_coach"}
+DEFAULT_ASSISTANT_BINDING_ID = "assistant_main"
 FOCUSABLE_AGENTS = {
     "assistant": {"space_key": "general", "label": "Assistant"},
     "researcher": {"space_key": "research", "label": "Researcher"},
@@ -139,6 +138,19 @@ NATURAL_AGENT_RULES = [
 ]
 
 
+@dataclass(frozen=True)
+class TelegramChatBinding:
+    binding_id: str
+    label: str
+    chat_id: str
+    default_agent: str
+    default_space: str
+    natural_language_services: dict[str, bool]
+
+    def allows(self, capability: str, *, default: bool = False) -> bool:
+        return bool(self.natural_language_services.get(capability, default))
+
+
 def read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -158,6 +170,63 @@ def load_yaml_dict(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return ensure_dict(load_yaml(path))
+
+
+def normalize_binding_services(row: dict[str, Any]) -> dict[str, bool]:
+    services = ensure_dict(row.get("natural_language_services"))
+    return {
+        "reminders": bool(services.get("reminders") is True),
+        "tasks": bool(services.get("tasks") is True),
+        "calendar": bool(services.get("calendar") is True),
+        "braindump": bool(services.get("braindump") is True),
+        "fitness": bool(services.get("fitness") is True),
+        "cross_agent_routing": bool(services.get("cross_agent_routing") is True),
+    }
+
+
+def resolve_chat_bindings(root: Path, env_values: dict[str, str]) -> tuple[dict[str, TelegramChatBinding], str]:
+    channels_cfg = ensure_dict(load_yaml_dict(root / "config" / "channels.yaml").get("channels"))
+    telegram_cfg = ensure_dict(channels_cfg.get("telegram"))
+    configured_bindings = ensure_dict(telegram_cfg.get("chat_bindings"))
+    default_binding_id = str(telegram_cfg.get("default_binding") or DEFAULT_ASSISTANT_BINDING_ID).strip() or DEFAULT_ASSISTANT_BINDING_ID
+    bindings: dict[str, TelegramChatBinding] = {}
+
+    for binding_id, raw in configured_bindings.items():
+        row = ensure_dict(raw)
+        env_key = str(row.get("chat_id_env") or "").strip()
+        chat_id = env_get(env_key, env_values) if env_key else str(row.get("chat_id") or "").strip()
+        if not chat_id and binding_id == DEFAULT_ASSISTANT_BINDING_ID:
+            chat_id = env_get("TELEGRAM_ALLOWED_CHAT_ID", env_values)
+        if not chat_id:
+            continue
+        bindings[chat_id] = TelegramChatBinding(
+            binding_id=str(binding_id).strip() or DEFAULT_ASSISTANT_BINDING_ID,
+            label=str(row.get("label") or binding_id).strip() or str(binding_id),
+            chat_id=str(chat_id).strip(),
+            default_agent=str(row.get("default_agent") or "assistant").strip() or "assistant",
+            default_space=str(row.get("default_space") or "general").strip() or "general",
+            natural_language_services=normalize_binding_services(row),
+        )
+
+    if not bindings:
+        allowed_chat_id = env_get("TELEGRAM_ALLOWED_CHAT_ID", env_values)
+        if allowed_chat_id:
+            bindings[allowed_chat_id] = TelegramChatBinding(
+                binding_id=DEFAULT_ASSISTANT_BINDING_ID,
+                label="Assistant Main",
+                chat_id=allowed_chat_id,
+                default_agent="assistant",
+                default_space="general",
+                natural_language_services={
+                    "reminders": True,
+                    "tasks": True,
+                    "calendar": True,
+                    "braindump": True,
+                    "fitness": True,
+                    "cross_agent_routing": True,
+                },
+            )
+    return bindings, default_binding_id
 
 
 def env_get(name: str, env_values: dict[str, str]) -> str:
@@ -474,7 +543,10 @@ class TelegramAdapter:
         root: Path,
         backend: DashboardBackend,
         client: Any,
-        allowed_chat_id: str,
+        allowed_chat_id: str | None = None,
+        chat_bindings: dict[str, TelegramChatBinding] | None = None,
+        default_binding_id: str | None = None,
+        reminder_binding_id: str | None = None,
         env_values: dict[str, str],
         state_path: Path,
         reminder_state_path: Path,
@@ -483,7 +555,28 @@ class TelegramAdapter:
         self.root = root
         self.backend = backend
         self.client = client
-        self.allowed_chat_id = allowed_chat_id.strip()
+        normalized_bindings = dict(chat_bindings or {})
+        if not normalized_bindings and allowed_chat_id:
+            normalized_bindings = {
+                allowed_chat_id.strip(): TelegramChatBinding(
+                    binding_id=DEFAULT_ASSISTANT_BINDING_ID,
+                    label="Assistant Main",
+                    chat_id=allowed_chat_id.strip(),
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                )
+            }
+        self.chat_bindings = normalized_bindings
+        self.default_binding_id = (default_binding_id or DEFAULT_ASSISTANT_BINDING_ID).strip() or DEFAULT_ASSISTANT_BINDING_ID
+        self.reminder_binding_id = (reminder_binding_id or DEFAULT_ASSISTANT_BINDING_ID).strip() or DEFAULT_ASSISTANT_BINDING_ID
         self.env_values = env_values
         self.state_path = state_path
         self.reminder_state_path = reminder_state_path
@@ -499,6 +592,26 @@ class TelegramAdapter:
         }
         self.assistant_chat = self.agent_chats["assistant"]
         self.fitness_runtime = fitness_runtime.FitnessRuntime(root=root)
+
+    def _binding_for_chat(self, chat_id: str) -> TelegramChatBinding | None:
+        return self.chat_bindings.get(chat_id.strip())
+
+    def _binding_by_id(self, binding_id: str) -> TelegramChatBinding | None:
+        clean = binding_id.strip()
+        for binding in self.chat_bindings.values():
+            if binding.binding_id == clean:
+                return binding
+        return None
+
+    def _assistant_binding(self) -> TelegramChatBinding | None:
+        return self._binding_by_id(self.default_binding_id) or next(iter(self.chat_bindings.values()), None)
+
+    def _reminder_chat_id(self) -> str | None:
+        binding = self._binding_by_id(self.reminder_binding_id)
+        if binding is not None:
+            return binding.chat_id
+        assistant_binding = self._assistant_binding()
+        return assistant_binding.chat_id if assistant_binding is not None else None
 
     def load_adapter_state(self) -> dict[str, Any]:
         data = read_json(self.state_path)
@@ -859,7 +972,7 @@ class TelegramAdapter:
         except Exception:
             return "Personal task provider is not configured yet."
 
-    def _handle_status(self) -> str:
+    def _handle_status(self, *, binding: TelegramChatBinding | None = None) -> str:
         snapshot = self.backend.build_state()
         agent_runtime = ensure_dict(snapshot.get("agent_runtime"))
         activity = ensure_dict(agent_runtime.get("activity"))
@@ -869,7 +982,7 @@ class TelegramAdapter:
         personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
         braindump = ensure_dict(snapshot.get("braindump"))
         workspace = ensure_dict(snapshot.get("workspace"))
-        focus = self._conversation_focus(self.load_adapter_state())
+        active_binding = binding or self._assistant_binding()
         lines = [
             "OpenClaw status",
             f"- Reminders pending: {ensure_dict(reminders.get('counts')).get('pending', 0)}",
@@ -879,7 +992,7 @@ class TelegramAdapter:
             f"- Braindump due: {ensure_dict(braindump.get('counts')).get('due_for_review', 0)}",
             f"- Active projects: {ensure_dict(workspace.get('project_counts')).get('active', 0)}",
             f"- Front door agent: {agent_runtime.get('default_user_facing_agent') or 'assistant'}",
-            f"- Current focus: {self._focus_label(focus)}",
+            f"- Current surface: {(active_binding.label + ' -> ' + active_binding.default_agent + '/' + active_binding.default_space) if active_binding else '-'}",
         ]
         if last_route:
             lines.append(
@@ -887,12 +1000,10 @@ class TelegramAdapter:
             )
         return "\n".join(lines)
 
-    def _route_for_conversation(self, *, text: str, state: dict[str, Any]) -> dict[str, Any]:
+    def _route_for_conversation(self, *, text: str, state: dict[str, Any], binding: TelegramChatBinding) -> dict[str, Any]:
         route = self.backend.route_text_to_space(text=text)
         if route.get("explicit_agent") or route.get("explicit_space"):
             return route
-
-        focus = self._conversation_focus(state)
         registry = self.backend._agent_runtime_snapshot()
         catalog = {
             str(item.get("key")): ensure_dict(item)
@@ -927,21 +1038,32 @@ class TelegramAdapter:
             return updated
 
         if route.get("kind") == "project" and route.get("resolved"):
-            agent_id = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+            agent_id = binding.default_agent
+            if agent_id == "assistant":
+                focus = self._conversation_focus(state)
+                focused_agent = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+                if focused_agent != "assistant":
+                    agent_id = focused_agent
             if agent_id != "assistant":
-                return apply_agent_space(agent_id, str(route.get("space_key") or "general"), "focus_project")
-            inferred = infer_natural_agent(text)
+                route_mode = "focus_project" if binding.default_agent == "assistant" else "bound_project"
+                return apply_agent_space(agent_id, str(route.get("space_key") or "general"), route_mode)
+            inferred = infer_natural_agent(text) if binding.allows("cross_agent_routing") else None
             if inferred is not None:
                 return apply_agent_space(inferred[0], str(route.get("space_key") or "general"), "natural_project")
             return route
 
-        inferred = infer_natural_agent(text)
+        inferred = infer_natural_agent(text) if binding.allows("cross_agent_routing") else None
         if inferred is not None:
             return apply_agent_space(inferred[0], inferred[1], "natural_intent")
 
-        focused_agent = str(focus.get("agent_id") or "assistant").strip() or "assistant"
-        if focused_agent != "assistant":
-            return apply_agent_space(focused_agent, str(focus.get("space_key") or "general"), "focus_mode")
+        if binding.default_agent == "assistant":
+            focus = self._conversation_focus(state)
+            focused_agent = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+            if focused_agent != "assistant":
+                return apply_agent_space(focused_agent, str(focus.get("space_key") or "general"), "focus_mode")
+
+        if binding.default_agent != "assistant":
+            return apply_agent_space(binding.default_agent, binding.default_space, "bound_chat")
         return route
 
     def _handle_fitness_command(self, text: str, *, explicit_context: bool, route_mode: str | None = None) -> str:
@@ -1090,37 +1212,35 @@ class TelegramAdapter:
     def handle_message(self, message: dict[str, Any], *, state: dict[str, Any]) -> list[str]:
         event = normalize_telegram({"message": message})
         chat_id = str(event.get("channel_id") or "").strip()
-        if not chat_id or chat_id != self.allowed_chat_id:
+        binding = self._binding_for_chat(chat_id)
+        if not chat_id or binding is None:
             return []
 
         text = str(event.get("text") or "").strip()
         if not text:
             return []
 
-        focus_instruction = detect_focus_instruction(text)
+        focus_instruction = detect_focus_instruction(text) if binding.default_agent == "assistant" else None
         if focus_instruction is not None:
             return [self._handle_focus_instruction(state, focus_instruction)]
 
-        route = self._route_for_conversation(text=text, state=state)
+        route = self._route_for_conversation(text=text, state=state, binding=binding)
         routed_text = str(route.get("stripped_text") or "").strip() or text.strip()
         explicit_specialist = bool(route.get("explicit_agent")) and str(route.get("agent_id")) != "assistant"
         explicit_assistant_space = bool(route.get("explicit_space")) and str(route.get("agent_id")) == "assistant"
         agent_id = str(route.get("agent_id") or "assistant").strip() or "assistant"
+        route_space = str(route.get("space_key") or "general").strip() or "general"
+        reminders_allowed = binding.allows("reminders") or (explicit_assistant_space and route_space == "reminders")
+        tasks_allowed = binding.allows("tasks") or (explicit_assistant_space and route_space == "tasks")
+        calendar_allowed = binding.allows("calendar") or (explicit_assistant_space and route_space == "calendar")
+        braindump_allowed = binding.allows("braindump") or (explicit_assistant_space and route_space == "braindump")
+        fitness_allowed = binding.allows("fitness") or agent_id == "fitness_coach"
 
         command_name, body = parse_command_text(routed_text)
         reply_to_message_id = message.get("reply_to_message", {}).get("message_id") if isinstance(message.get("reply_to_message"), dict) else None
 
         if command_name in {"start", "help"} or routed_text.strip().lower() == "help":
             return [HELP_TEXT]
-
-        if agent_id == "fitness_coach" and bool(route.get("explicit_agent")):
-            return [
-                self._handle_fitness_command(
-                    routed_text,
-                    explicit_context=True,
-                    route_mode=str(route.get("route_mode") or "explicit_specialist"),
-                )
-            ]
 
         if command_name == "status" or routed_text.strip().lower() == "status":
             self._record_agent_activity(
@@ -1129,26 +1249,38 @@ class TelegramAdapter:
                 action="status",
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
-            return [self._handle_status()]
+            return [self._handle_status(binding=binding)]
 
-        translated_fitness = translate_natural_fitness_text(routed_text)
-        if translated_fitness or fitness_runtime.supports_command_text(routed_text, explicit_context=False):
+        translated_fitness = translate_natural_fitness_text(routed_text) if fitness_allowed else None
+        if fitness_allowed and (translated_fitness or fitness_runtime.supports_command_text(routed_text, explicit_context=False)):
             return [
                 self._handle_fitness_command(
                     translated_fitness or routed_text,
                     explicit_context=False,
-                    route_mode="natural_fitness" if translated_fitness else str(route.get("route_mode") or "command_match"),
+                    route_mode=(
+                        "natural_fitness" if translated_fitness else str(route.get("route_mode") or "command_match")
+                    ),
                 )
             ]
 
         if explicit_specialist:
             if route.get("kind") == "project" and not route.get("resolved"):
                 return [self._format_unknown_project_route(route)]
+            if agent_id == "fitness_coach":
+                if fitness_runtime.supports_command_text(routed_text, explicit_context=True):
+                    return [
+                        self._handle_fitness_command(
+                            routed_text,
+                            explicit_context=True,
+                            route_mode=str(route.get("route_mode") or "explicit_specialist"),
+                        )
+                    ]
+                return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
             if agent_id in CONVERSATIONAL_SPECIALISTS:
                 return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
             return [self._handle_specialist_capture(text, route)]
 
-        if command_name == "calendar":
+        if calendar_allowed and command_name == "calendar":
             if body.lower() in {"", "today"}:
                 self._record_agent_activity(
                     agent_id="assistant",
@@ -1166,7 +1298,7 @@ class TelegramAdapter:
                 )
                 return [self._handle_calendar_next()]
 
-        if is_calendar_today_request(routed_text):
+        if calendar_allowed and is_calendar_today_request(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="calendar",
@@ -1174,7 +1306,7 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_calendar_today()]
-        if is_calendar_tomorrow_request(routed_text):
+        if calendar_allowed and is_calendar_tomorrow_request(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="calendar",
@@ -1182,7 +1314,7 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_calendar_tomorrow()]
-        if is_calendar_next_request(routed_text):
+        if calendar_allowed and is_calendar_next_request(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="calendar",
@@ -1191,7 +1323,7 @@ class TelegramAdapter:
             )
             return [self._handle_calendar_next()]
 
-        if command_name == "tasks" or is_task_list_request(routed_text):
+        if tasks_allowed and (command_name == "tasks" or is_task_list_request(routed_text)):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="tasks",
@@ -1200,7 +1332,7 @@ class TelegramAdapter:
             )
             return [self._handle_tasks_list()]
 
-        if is_reminder_list_request(routed_text):
+        if reminders_allowed and is_reminder_list_request(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="reminders",
@@ -1209,7 +1341,7 @@ class TelegramAdapter:
             )
             return [self._handle_reminders_list()]
 
-        if command_name in {"task", "add-task"}:
+        if tasks_allowed and command_name in {"task", "add-task"}:
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="tasks",
@@ -1219,7 +1351,7 @@ class TelegramAdapter:
             )
             return [self._handle_task_create(f"task {body}")]
 
-        if parse_task_create_text(routed_text):
+        if tasks_allowed and parse_task_create_text(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="tasks",
@@ -1229,7 +1361,7 @@ class TelegramAdapter:
             )
             return [self._handle_task_create(routed_text)]
 
-        natural_braindump = parse_natural_braindump_text(routed_text)
+        natural_braindump = parse_natural_braindump_text(routed_text) if braindump_allowed else None
         if natural_braindump is not None:
             category, body = natural_braindump
             result = self.backend.create_braindump_item(
@@ -1248,6 +1380,8 @@ class TelegramAdapter:
             return [f"Braindump captured: [{item.get('category')}] {item.get('short_text')}"]
 
         try:
+            if not braindump_allowed:
+                raise ValueError("braindump disabled for this chat surface")
             braindump_runtime.parse_capture_text(routed_text)
             result = self.backend.capture_braindump_text(text=text, source="telegram")
             item = ensure_dict(result.get("item"))
@@ -1267,7 +1401,7 @@ class TelegramAdapter:
             pass
 
         reply_candidate = reminder_sm.parse_reply_text(routed_text)
-        if reply_candidate[0] != "ignore":
+        if reminders_allowed and reply_candidate[0] != "ignore":
             reminder_id = self._reply_linked_reminder_id(
                 state,
                 chat_id=chat_id,
@@ -1282,7 +1416,7 @@ class TelegramAdapter:
             )
             return [self._handle_reminder_reply(routed_text, reminder_id=reminder_id)]
 
-        if reminder_sm.parse_create_text(routed_text):
+        if reminders_allowed and reminder_sm.parse_create_text(routed_text):
             _, confirmation = self._create_reminder_from_text(routed_text)
             self._record_agent_activity(
                 agent_id="assistant",
@@ -1301,11 +1435,6 @@ class TelegramAdapter:
         if agent_id != "assistant":
             if agent_id in CONVERSATIONAL_SPECIALISTS:
                 return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
-            if agent_id == "fitness_coach":
-                return [
-                    "Fitness Coach is best used through natural workout messages like "
-                    "`what's my workout today`, `I'm starting my workout`, or `I did hammer curls 12 reps with 10kg each`."
-                ]
             return [self._handle_specialist_capture(text, route)]
 
         if explicit_assistant_space or str(route.get("agent_id") or "assistant") == "assistant":
@@ -1323,7 +1452,7 @@ class TelegramAdapter:
                 continue
             chat = ensure_dict(message.get("chat"))
             chat_id = str(chat.get("id") or "").strip()
-            if chat_id != self.allowed_chat_id:
+            if self._binding_for_chat(chat_id) is None:
                 state["last_update_id"] = max(int(state.get("last_update_id") or 0), update_id)
                 continue
             try:
@@ -1342,7 +1471,8 @@ class TelegramAdapter:
         offset = int(state.get("last_update_id") or 0) + 1
         updates = self.client.get_updates(offset=offset, timeout=timeout)
         processed = self.process_updates(updates, state=state)
-        due_sent = self.scan_and_dispatch_due_reminders(state=state, chat_id=self.allowed_chat_id)
+        reminder_chat_id = self._reminder_chat_id()
+        due_sent = self.scan_and_dispatch_due_reminders(state=state, chat_id=reminder_chat_id) if reminder_chat_id else 0
         self.save_adapter_state(state)
         return {
             "ok": True,
@@ -1413,11 +1543,13 @@ def build_adapter(args: argparse.Namespace) -> TelegramAdapter:
     env_path = resolve_env_path(root, args.env_file)
     env_values = load_env_values(env_path)
     token = env_get("TELEGRAM_BOT_TOKEN", env_values)
-    allowed_chat_id = env_get("TELEGRAM_ALLOWED_CHAT_ID", env_values)
     if not token:
         raise RuntimeError("missing TELEGRAM_BOT_TOKEN")
-    if not allowed_chat_id:
-        raise RuntimeError("missing TELEGRAM_ALLOWED_CHAT_ID")
+    chat_bindings, default_binding_id = resolve_chat_bindings(root, env_values)
+    if not chat_bindings:
+        raise RuntimeError("missing Telegram chat binding configuration")
+    telegram_cfg = ensure_dict(ensure_dict(load_yaml_dict(root / "config" / "channels.yaml").get("channels")).get("telegram"))
+    reminder_binding_id = str(telegram_cfg.get("reminder_binding") or default_binding_id).strip() or default_binding_id
     client = TelegramAPI(token)
     state_path = Path(args.state_file).expanduser().resolve() if args.state_file else (root / "data" / "telegram-adapter-state.json")
     reminder_state_path = resolve_reminder_state_path(
@@ -1430,7 +1562,9 @@ def build_adapter(args: argparse.Namespace) -> TelegramAdapter:
         root=root,
         backend=backend,
         client=client,
-        allowed_chat_id=allowed_chat_id,
+        chat_bindings=chat_bindings,
+        default_binding_id=default_binding_id,
+        reminder_binding_id=reminder_binding_id,
         env_values=env_values,
         state_path=state_path,
         reminder_state_path=reminder_state_path,

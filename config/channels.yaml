@@ -11,6 +11,72 @@ channels:
     telegram: long_polling
     web_dashboard: local_http
     gmail_inbox: scheduled_batch_pull
+  telegram:
+    adapter_mode: long_polling
+    default_binding: assistant_main
+    reminder_binding: assistant_main
+    allow_unbound_chats: false
+    chat_bindings:
+      assistant_main:
+        label: Assistant Main
+        chat_id_env: TELEGRAM_ALLOWED_CHAT_ID
+        default_agent: assistant
+        default_space: general
+        natural_language_services:
+          reminders: true
+          tasks: true
+          calendar: true
+          braindump: true
+          fitness: true
+          cross_agent_routing: true
+      researcher_lab:
+        label: Researcher Lab
+        chat_id_env: TELEGRAM_RESEARCH_CHAT_ID
+        default_agent: researcher
+        default_space: research
+        natural_language_services:
+          reminders: false
+          tasks: false
+          calendar: false
+          braindump: true
+          fitness: false
+          cross_agent_routing: false
+      builder_workbench:
+        label: Builder Workbench
+        chat_id_env: TELEGRAM_BUILDER_CHAT_ID
+        default_agent: builder
+        default_space: coding
+        natural_language_services:
+          reminders: false
+          tasks: false
+          calendar: false
+          braindump: false
+          fitness: false
+          cross_agent_routing: false
+      fitness_coach:
+        label: Fitness Coach
+        chat_id_env: TELEGRAM_FITNESS_CHAT_ID
+        default_agent: fitness_coach
+        default_space: fitness
+        natural_language_services:
+          reminders: false
+          tasks: false
+          calendar: false
+          braindump: false
+          fitness: true
+          cross_agent_routing: false
+      ops_guard:
+        label: Ops Guard
+        chat_id_env: TELEGRAM_OPS_CHAT_ID
+        default_agent: ops_guard
+        default_space: ops
+        natural_language_services:
+          reminders: false
+          tasks: false
+          calendar: false
+          braindump: false
+          fitness: false
+          cross_agent_routing: false
   deferred_candidates:
     - slack
 

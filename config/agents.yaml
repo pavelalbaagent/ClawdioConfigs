@@ -26,6 +26,26 @@ agents:
       - schedule_and_rearrange_items
       - convert_inputs_into_tasks_reminders_or_calendar_actions
       - act_as_default_front_door
+    chat_routing:
+      quick_read_write:
+        preferred_lane: L1_low_cost
+        provider_preference:
+          - google_ai_studio_free
+          - openrouter_free_overflow
+          - openai_subscription_session
+      research_synthesis:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - google_ai_studio_free
+          - openai_subscription_session
+          - openrouter_free_overflow
+          - anthropic_credit_pool
+      architecture_or_high_ambiguity:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - openai_subscription_session
+          - google_ai_studio_free
+          - anthropic_credit_pool
 
   researcher:
     enabled: true
@@ -47,11 +67,31 @@ agents:
       - tool_evaluation
       - recommendation_synthesis
       - job_search_triage
+    chat_routing:
+      quick_read_write:
+        preferred_lane: L1_low_cost
+        provider_preference:
+          - google_ai_studio_free
+          - openrouter_free_overflow
+          - openai_subscription_session
+      research_synthesis:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - openai_subscription_session
+          - anthropic_credit_pool
+          - google_ai_studio_free
+          - openrouter_free_overflow
+      architecture_or_high_ambiguity:
+        preferred_lane: L3_heavy
+        provider_preference:
+          - openai_subscription_session
+          - anthropic_credit_pool
+          - google_ai_studio_free
 
   fitness_coach:
     enabled: true
-    interaction_mode: structured
-    default_lane: L1_low_cost
+    interaction_mode: chat
+    default_lane: L2_balanced
     allowed_tools:
       - fitness_runtime
       - personal_task_runtime
@@ -63,6 +103,26 @@ agents:
       - log_training
       - review_progress
       - manage_program_context
+    chat_routing:
+      quick_read_write:
+        preferred_lane: L1_low_cost
+        provider_preference:
+          - google_ai_studio_free
+          - openai_subscription_session
+          - openrouter_free_overflow
+      research_synthesis:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - openai_subscription_session
+          - google_ai_studio_free
+          - anthropic_credit_pool
+          - openrouter_free_overflow
+      architecture_or_high_ambiguity:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - openai_subscription_session
+          - anthropic_credit_pool
+          - google_ai_studio_free
 
   builder:
     enabled: true
@@ -82,6 +142,26 @@ agents:
       - implement_features
       - debug_and_refactor
       - operate_on_assigned_repos
+    chat_routing:
+      quick_read_write:
+        preferred_lane: L1_low_cost
+        provider_preference:
+          - google_ai_studio_free
+          - openrouter_free_overflow
+          - openai_subscription_session
+      coding_and_integration:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - openai_subscription_session
+          - anthropic_credit_pool
+          - google_ai_studio_free
+          - openrouter_free_overflow
+      architecture_or_high_ambiguity:
+        preferred_lane: L3_heavy
+        provider_preference:
+          - openai_subscription_session
+          - anthropic_credit_pool
+          - google_ai_studio_free
 
   ops_guard:
     enabled: true
@@ -99,6 +179,19 @@ agents:
       - monitor_service_health
       - summarize_failures
       - detect_quota_or_runtime_regressions
+    chat_routing:
+      quick_read_write:
+        preferred_lane: L1_low_cost
+        provider_preference:
+          - google_ai_studio_free
+          - openrouter_free_overflow
+          - anthropic_credit_pool
+      research_synthesis:
+        preferred_lane: L2_balanced
+        provider_preference:
+          - google_ai_studio_free
+          - anthropic_credit_pool
+          - openrouter_free_overflow
 
 internal_roles:
   coordinator:

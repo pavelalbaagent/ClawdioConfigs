@@ -34,6 +34,32 @@ Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.
 5. `codex` and `gemini` CLIs remain supervised tool fallbacks only, not unattended providers.
 6. `openai_subscription_session` is an interactive premium lane, not a background-safe automation provider.
 
+## Agent-Specific Chat Bias
+
+Chat runtimes now honor per-agent provider preferences from [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml) (`agents.*.chat_routing`).
+
+Recommended reading of the current policy:
+
+1. `assistant`
+   - default cheap/fast path for reminders, tasks, calendar, and general organization
+   - stays on Google free first for most everyday conversation
+   - may escalate to the OpenAI subscription lane for harder cross-app planning
+2. `researcher`
+   - prefers `openai_subscription_session` first on `L2/L3`
+   - uses Anthropic as a strong second opinion
+   - falls back to Google/OpenRouter when premium lanes are unavailable
+3. `builder`
+   - prefers `openai_subscription_session` first for coding/integration and hard implementation work
+   - keeps Anthropic as the first reserve lane
+   - uses Google/OpenRouter as cost-aware fallbacks
+4. `fitness_coach`
+   - stays deterministic for workout control/logging
+   - uses chat lanes only for coaching, progression, substitutions, and planning
+   - prefers `openai_subscription_session` for reflective coaching questions and program changes
+5. `ops_guard`
+   - stays cheap by default
+   - uses higher lanes only for RCA or improvement analysis
+
 ## Fallback Rules
 
 1. Retry once with smaller context.
@@ -76,6 +102,7 @@ The `openai_subscription_session` provider is intentionally modeled separately f
 1. It is for premium interactive work where you want bigger limits and stronger quality than the free lane.
 2. It should be used for operator-triggered hard tasks, not cron, reminder delivery, or unattended workflows.
 3. Its readiness depends on the authenticated local `codex` session, so it is suitable for local supervised work and only conditionally suitable on a VPS.
+4. In the current architecture it is the preferred premium lane for `researcher`, `builder`, and conversational `fitness_coach`, and the secondary premium lane for `assistant`.
 
 ## Inspect The Real Wiring
 

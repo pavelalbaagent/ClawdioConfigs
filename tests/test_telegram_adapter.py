@@ -104,6 +104,16 @@ class TelegramAdapterTests(unittest.TestCase):
             message["reply_to_message"] = {"message_id": reply_to_message_id}
         return {"update_id": update_id, "message": message}
 
+    def _update_for_chat(self, update_id: int, text: str, *, chat_id: int) -> dict[str, object]:
+        message: dict[str, object] = {
+            "message_id": update_id * 10,
+            "date": int(datetime.now(timezone.utc).timestamp()),
+            "chat": {"id": chat_id, "type": "private"},
+            "from": {"id": chat_id, "is_bot": False, "first_name": "Pavel"},
+            "text": text,
+        }
+        return {"update_id": update_id, "message": message}
+
     def test_braindump_capture_from_telegram_creates_item(self):
         state = self.adapter.load_adapter_state()
         handled = self.adapter.process_updates([self._update(1, "bd gift perfume sampler")], state=state)
@@ -195,6 +205,142 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["action"], "agent_chat")
         self.assertEqual(last_route["lane"], "L2_balanced")
         self.assertEqual(last_route["provider"], "google_ai_studio_free")
+
+    def test_bound_research_chat_routes_without_prefix(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "22222": telegram_adapter.TelegramChatBinding(
+                    binding_id="researcher_lab",
+                    label="Researcher Lab",
+                    chat_id="22222",
+                    default_agent="researcher",
+                    default_space="research",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": True,
+                        "fitness": False,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        with mock.patch.object(
+            bound_adapter.agent_chats["researcher"],
+            "reply",
+            return_value={
+                "reply_text": "Research chat handled the request.",
+                "space_key": "research",
+                "lane": "L2_balanced",
+                "provider": "openai_subscription_session",
+                "model": "openai-session-premium",
+            },
+        ) as reply:
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(60, "compare Gemini and OpenRouter for cheap fallback", chat_id=22222)],
+                state=state,
+            )
+
+        reply.assert_called_once()
+        self.assertIn("Research chat handled", str(self.client.sent_messages[-1]["text"]))
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "researcher")
+        self.assertEqual(last_route["route_mode"], "bound_chat")
+
+    def test_bound_fitness_chat_uses_conversational_fitness_for_non_command_text(self):
+        bound_adapter = telegram_adapter.TelegramAdapter(
+            root=self.root,
+            backend=self.backend,
+            client=self.client,
+            chat_bindings={
+                "12345": telegram_adapter.TelegramChatBinding(
+                    binding_id="assistant_main",
+                    label="Assistant Main",
+                    chat_id="12345",
+                    default_agent="assistant",
+                    default_space="general",
+                    natural_language_services={
+                        "reminders": True,
+                        "tasks": True,
+                        "calendar": True,
+                        "braindump": True,
+                        "fitness": True,
+                        "cross_agent_routing": True,
+                    },
+                ),
+                "33333": telegram_adapter.TelegramChatBinding(
+                    binding_id="fitness_coach",
+                    label="Fitness Coach",
+                    chat_id="33333",
+                    default_agent="fitness_coach",
+                    default_space="fitness",
+                    natural_language_services={
+                        "reminders": False,
+                        "tasks": False,
+                        "calendar": False,
+                        "braindump": False,
+                        "fitness": True,
+                        "cross_agent_routing": False,
+                    },
+                ),
+            },
+            default_binding_id="assistant_main",
+            reminder_binding_id="assistant_main",
+            env_values={},
+            state_path=self.root / "data" / "telegram-adapter-state.json",
+            reminder_state_path=self.root / "data" / "reminders-state.json",
+            default_timezone="America/Guayaquil",
+        )
+        with mock.patch.object(
+            bound_adapter.agent_chats["fitness_coach"],
+            "reply",
+            return_value={
+                "reply_text": "Keep the planned session and reduce one arm superset if the elbow still feels irritated.",
+                "space_key": "fitness",
+                "lane": "L2_balanced",
+                "provider": "openai_subscription_session",
+                "model": "openai-session-premium",
+            },
+        ) as reply:
+            state = bound_adapter.load_adapter_state()
+            bound_adapter.process_updates(
+                [self._update_for_chat(61, "my elbow feels a bit irritated, should i adjust today's workout?", chat_id=33333)],
+                state=state,
+            )
+
+        reply.assert_called_once()
+        self.assertIn("reduce one arm superset", str(self.client.sent_messages[-1]["text"]))
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "fitness_coach")
+        self.assertEqual(last_route["action"], "agent_chat")
 
     def test_switch_to_research_mode_makes_followup_use_researcher_chat(self):
         with mock.patch.object(

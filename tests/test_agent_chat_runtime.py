@@ -26,8 +26,11 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "config").mkdir(parents=True)
         (self.root / "contracts" / "braindump").mkdir(parents=True)
+        (self.root / "contracts" / "fitness").mkdir(parents=True)
         (self.root / "telemetry").mkdir(parents=True)
         (self.root / "baselines" / "agent_md").mkdir(parents=True)
+        (self.root / "fitness").mkdir(parents=True)
+        (self.root / "fitness" / "logs").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
 
         for name in (
@@ -40,6 +43,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
             "dashboard.yaml",
             "agents.yaml",
             "session_policy.yaml",
+            "fitness_agent.yaml",
         ):
             shutil.copy(ROOT / "config" / name, self.root / "config" / name)
 
@@ -47,6 +51,12 @@ class AgentChatRuntimeTests(unittest.TestCase):
             ROOT / "contracts" / "braindump" / "sqlite_schema.sql",
             self.root / "contracts" / "braindump" / "sqlite_schema.sql",
         )
+        shutil.copy(
+            ROOT / "contracts" / "fitness" / "sqlite_schema.sql",
+            self.root / "contracts" / "fitness" / "sqlite_schema.sql",
+        )
+        for name in ("ATHLETE_PROFILE.md", "PROGRAM.md", "EXERCISE_LIBRARY.md", "RULES.md", "SESSION_QUEUE.md"):
+            shutil.copy(ROOT / "fitness" / name, self.root / "fitness" / name)
         for name in ("MEMORY.md", "USER.md", "SOUL.md", "SESSION.md", "TODO.md"):
             (self.root / "baselines" / "agent_md" / name).write_text(f"# {name}\n\n## Notes\nExisting context for {name}.\n", encoding="utf-8")
 
@@ -160,6 +170,62 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.assertEqual(result["space_key"], "projects/openclaw-v2-rebuild")
         raw = json.loads((self.root / "data" / "builder-chat-state.json").read_text(encoding="utf-8"))
         self.assertIn("projects/openclaw-v2-rebuild", raw["spaces"])
+
+    def test_fitness_chat_uses_dedicated_state_and_provider_preference(self):
+        runtime = AgentChatRuntime(
+            root=self.root,
+            backend=self.backend,
+            env_values={"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": "emb-key"},
+            agent_id="fitness_coach",
+        )
+        route = {"agent_id": "fitness_coach", "space_key": "fitness", "route_mode": "bound_chat"}
+
+        memory_payload = {
+            "mode": "semantic",
+            "results": [
+                {
+                    "source_path": str(self.root / "fitness" / "PROGRAM.md"),
+                    "heading": "Program",
+                    "content": "Recent notes mention arm specialization, incline bias, and no-bench Saturday.",
+                }
+            ],
+        }
+
+        def fake_run(cmd, cwd=None, capture_output=None, text=None, env=None):
+            joined = " ".join(str(part) for part in cmd)
+            if "memory_search.py" in joined:
+                return mock.Mock(returncode=0, stdout=json.dumps(memory_payload), stderr="")
+            return REAL_SUBPROCESS_RUN(cmd, cwd=cwd, capture_output=capture_output, text=text, env=env)
+
+        with mock.patch(
+            "assistant_chat_runtime.resolve_chat_route",
+            return_value={
+                "lane": "L2_balanced",
+                "requested_lane": "L2_balanced",
+                "downgraded_from_lane": None,
+                "provider": "openai_subscription_session",
+                "provider_cfg": {"required_command": "codex"},
+                "model": "openai-session-premium",
+            },
+        ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(
+            "assistant_chat_runtime.invoke_chat_provider",
+            return_value={
+                "text": "Keep today's M1 structure and swap only if elbow discomfort shows up again.",
+                "prompt_tokens": 140,
+                "completion_tokens": 34,
+                "latency_ms": 95,
+            },
+        ):
+            result = runtime.reply(text="Should I keep today's arm work or swap anything because my elbows feel a bit off?", route=route)
+
+        self.assertTrue(
+            any("memory_search.py" in " ".join(str(part) for part in call.args[0]) for call in run_mock.call_args_list),
+            msg=f"memory_search.py not invoked: {run_mock.call_args_list}",
+        )
+        self.assertEqual(result["agent_id"], "fitness_coach")
+        self.assertEqual(result["provider"], "openai_subscription_session")
+        self.assertEqual(result["space_key"], "fitness")
+        self.assertTrue((self.root / "data" / "fitness-coach-chat-state.json").exists())
 
 
 if __name__ == "__main__":

@@ -102,6 +102,9 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertTrue(telegram["available"])
         self.assertEqual(telegram["focus"]["agent_id"], "researcher")
         self.assertEqual(telegram["focus"]["space_key"], "research")
+        binding_ids = [row["binding_id"] for row in telegram["bindings"]]
+        self.assertIn("assistant_main", binding_ids)
+        self.assertIn("fitness_coach", binding_ids)
 
     def test_set_integration_enabled_updates_yaml(self):
         path = self.tmp_path / "config" / "integrations.yaml"

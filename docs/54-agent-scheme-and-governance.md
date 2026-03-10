@@ -178,25 +178,24 @@ Recommended default:
 
 1. the main bot surface enters through `assistant`
 2. requests are rerouted logically when needed
-3. Telegram should default to one main private chat with sticky focus modes, not multiple channels by default
-4. explicit prefixes or UI selection still exist as overrides, not as the primary interaction pattern
+3. Telegram should use one assistant front-door chat plus optional dedicated specialist chats for `researcher`, `builder`, and `fitness_coach`
+4. explicit prefixes still exist as overrides, not as the primary interaction pattern
 
 Examples:
 
-1. `switch to research mode`
-2. `compare OpenRouter vs Gemini for production fallback`
-3. `switch to coding mode`
-4. `review the dashboard auth flow in repo X`
-5. `what reminders do i have?`
-6. `what's on my calendar tomorrow?`
-7. `[project:calendar-cleanup] move tomorrow's block to Friday`
+1. in `assistant_main`: `what reminders do i have?`
+2. in `assistant_main`: `what's on my calendar tomorrow?`
+3. in `researcher_lab`: `compare OpenRouter vs Gemini for production fallback`
+4. in `builder_workbench`: `review the dashboard auth flow in repo X`
+5. in `fitness_coach`: `should i swap anything today if my elbow feels irritated?`
+6. in any surface: `[project:calendar-cleanup] move tomorrow's block to Friday`
 
 Practical rule:
 
-1. one Telegram chat is the transport
-2. the active focus chooses the specialist
-3. spaces choose the context bucket
-4. services still own the state
+1. Telegram chats are bound surfaces
+2. spaces choose the context bucket
+3. services still own the state
+4. focus commands remain only as compatibility fallback inside `assistant_main`
 
 ## Runtime status
 
@@ -205,13 +204,15 @@ Implemented now:
 1. dashboard agent registry and active-route visibility
 2. Telegram specialist routing into agent-owned spaces
 3. local route history persisted outside chat history
-4. sticky Telegram focus persisted outside chat history
+4. Telegram chat-surface bindings for assistant, research, builder, fitness, and ops
 5. natural-language handoff for reminders, tasks, calendar, braindump, and common fitness phrases
+6. hybrid conversational `fitness_coach` layered on deterministic workout state
 
 Still pending:
 
-1. full general chat mode for `assistant`
-2. richer specialist runtimes for `researcher`, `fitness_coach`, and `builder`
+1. richer `ops_guard` conversational/runtime surface if needed
+2. Telegram topic/group support if separate chats become too fragmented
+3. VPS-local `codex` install/auth if the OpenAI subscription lane should be usable there
 
 ## What should not become separate agents
 

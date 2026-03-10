@@ -501,13 +501,18 @@ function renderAgentRuntime(snapshot) {
   );
 
   const telegram = snapshot.telegram_adapter || {};
-  const focus = telegram.focus || null;
-  if (!telegram.available || !focus) {
-    setText("agent-telegram-focus-meta", "No Telegram focus state yet.");
+  const bindings = telegram.bindings || [];
+  if (!bindings.length) {
+    setText("agent-telegram-focus-meta", "No Telegram bindings configured.");
   } else {
     setText(
       "agent-telegram-focus-meta",
-      `${focus.agent_id || "assistant"} | space=${focus.space_key || "general"} | set=${focus.set_at || telegram.updated_at || "-"}`
+      bindings
+        .map((row) => {
+          const state = row.configured ? (row.chat_id_mask || "configured") : "not configured";
+          return `${row.label || row.binding_id || "-"} -> ${row.default_agent || "assistant"}/${row.default_space || "general"} (${state})`;
+        })
+        .join(" | ")
     );
   }
 
