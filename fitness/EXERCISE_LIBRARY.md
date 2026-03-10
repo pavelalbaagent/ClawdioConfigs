@@ -12,13 +12,13 @@ Last updated: 2026-03-06
 1. `incline_dumbbell_press`
    - aliases: `db incline press`, `incline press`
 2. `close_grip_barbell_press`
-   - aliases: `cg bb press`, `close grip press`, `cgbp`
+   - aliases: `cg bb press`, `close grip press`, `close grip bb press`, `close-grip bb press`, `cgbp`
 3. `barbell_curl`
-   - aliases: `bb curl`, `cheat curl`
+   - aliases: `bb curl`, `cheat curl`, `bb curl cheat curl`, `bb curl / cheat curl`
 4. `hammer_curl`
    - aliases: `robot hammer`, `db hammer curl`
 5. `overhead_dumbbell_triceps_extension`
-   - aliases: `oh db ext`, `overhead db ext`, `2h db ext`
+   - aliases: `oh db ext`, `overhead db ext`, `overhead db extension`, `2h db ext`
 6. `dumbbell_lat_row`
    - aliases: `db lat row`, `db row`, `lat row`
 7. `zottman_curl`
@@ -26,7 +26,7 @@ Last updated: 2026-03-06
 8. `lateral_raise`
    - aliases: `db lateral raise`
 9. `barbell_standing_extension`
-   - aliases: `bb standing ext`, `standing bb ext`, `bb ext`
+   - aliases: `bb standing ext`, `bb standing extension`, `standing bb ext`, `bb ext`
 10. `wide_grip_barbell_curl`
    - aliases: `wide grip curl`, `wide curl`
 11. `dumbbell_neutral_floor_press`

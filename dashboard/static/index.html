@@ -480,6 +480,97 @@
 
       <section class="grid">
         <article class="card col-5">
+          <h2>Fitness Coach</h2>
+          <div class="controls" style="margin-bottom: 12px">
+            <div class="control-row">
+              <label for="fitness-command-input">Command</label>
+              <input
+                id="fitness-command-input"
+                type="text"
+                placeholder="workout today, start workout, log ..., finish workout, set barbell empty 20kg"
+              />
+            </div>
+            <div class="control-row">
+              <button id="fitness-today-button" class="secondary">Today</button>
+              <button id="fitness-start-button" class="secondary">Start</button>
+              <button id="fitness-finish-button" class="secondary">Finish</button>
+              <button id="fitness-status-button" class="secondary">Status</button>
+            </div>
+            <div class="control-row">
+              <button id="fitness-run-command-button" class="secondary">Run</button>
+            </div>
+          </div>
+          <p class="footnote" id="fitness-command-status">
+            Fitness Coach is deterministic: use workout control and logging commands here.
+          </p>
+          <div class="list">
+            <div class="list-item">
+              <div>
+                <strong>Summary</strong>
+                <div class="meta" id="fitness-summary-meta">No fitness runtime snapshot yet.</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Active Session</strong>
+                <div class="meta" id="fitness-active-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Weekly Volume</strong>
+                <div class="meta" id="fitness-weekly-volume-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Progression Flags</strong>
+                <div class="meta" id="fitness-progression-flags-meta">-</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div>
+                <strong>Last Snapshot</strong>
+                <div class="meta" id="fitness-generated-meta">-</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card alt col-7">
+          <h2>Workout View</h2>
+          <p class="footnote" id="fitness-plan-summary">No plan loaded yet.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Slot</th>
+                  <th>Exercise</th>
+                  <th>Prescription</th>
+                </tr>
+              </thead>
+              <tbody id="fitness-plan-body"></tbody>
+            </table>
+          </div>
+          <p class="footnote" id="fitness-log-summary">No logged session summary yet.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Exercise</th>
+                  <th>Sets</th>
+                  <th>Best Reps</th>
+                  <th>Top Weight</th>
+                </tr>
+              </thead>
+              <tbody id="fitness-session-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card col-5">
           <h2>Braindump</h2>
           <div class="controls" style="margin-bottom: 12px">
             <div class="control-row">

@@ -1100,6 +1100,19 @@ async function deferPersonalTask(task) {
   await loadState();
 }
 
+async function runFitnessCommand(commandText) {
+  const clean = String(commandText || "").trim();
+  if (!clean) {
+    throw new Error("fitness command is required");
+  }
+  const result = await api("/api/fitness/command", {
+    method: "POST",
+    body: { command_text: clean },
+  });
+  setText("fitness-command-status", (result.result || {}).reply_text || `Fitness command applied: ${clean}`);
+  await loadState();
+}
+
 function renderPersonalTasks(snapshot) {
   const body = byId("personal-task-body");
   body.innerHTML = "";
@@ -1167,6 +1180,111 @@ function renderPersonalTasks(snapshot) {
     actionsTd.appendChild(deferBtn);
     tr.appendChild(actionsTd);
     body.appendChild(tr);
+  }
+}
+
+function renderFitnessRuntime(snapshot) {
+  const fitness = snapshot.fitness_runtime || {};
+  const planBody = byId("fitness-plan-body");
+  const summaryBody = byId("fitness-session-body");
+  planBody.innerHTML = "";
+  summaryBody.innerHTML = "";
+
+  if (!fitness.available) {
+    setText("fitness-summary-meta", "No fitness runtime snapshot yet.");
+    setText("fitness-active-meta", "-");
+    setText("fitness-weekly-volume-meta", "-");
+    setText("fitness-progression-flags-meta", "-");
+    setText("fitness-generated-meta", "-");
+    setText("fitness-plan-summary", "No plan loaded yet.");
+    setText("fitness-log-summary", "No logged session summary yet.");
+    const emptyPlan = document.createElement("tr");
+    appendCells(emptyPlan, ["-", "-", "-"]);
+    planBody.appendChild(emptyPlan);
+    const emptySummary = document.createElement("tr");
+    appendCells(emptySummary, ["-", "-", "-", "-"]);
+    summaryBody.appendChild(emptySummary);
+    return;
+  }
+
+  const todayPlan = fitness.today_plan || {};
+  const plan = todayPlan.plan || {};
+  const exercises = plan.exercises || [];
+  const activeSession = fitness.active_session || null;
+  const activeSummary = fitness.active_session_summary || [];
+  const lastSession = fitness.last_session || null;
+  const lastSummary = fitness.last_session_summary || [];
+  const summaryRows = activeSession ? activeSummary : lastSummary;
+  const weeklyVolume = fitness.weekly_volume || {};
+  const progressionFlags = fitness.progression_flags || [];
+  const settings = fitness.settings || {};
+
+  setText(
+    "fitness-summary-meta",
+    `action=${fitness.action || "-"} | db=${fitness.db_path || "-"} | barbell_empty=${settings.barbell_empty_weight_kg ?? "unset"}`
+  );
+  setText(
+    "fitness-active-meta",
+    activeSession
+      ? `${activeSession.training_day_code || activeSession.training_day_index || "-"} | ${activeSession.session_date || "-"}`
+      : "none"
+  );
+  setText(
+    "fitness-weekly-volume-meta",
+    Object.entries(weeklyVolume)
+      .map(([name, count]) => `${name}=${count}`)
+      .join(", ") || "none"
+  );
+  setText(
+    "fitness-progression-flags-meta",
+    progressionFlags.map((row) => `${row.exercise_name || row.exercise_code}: ${row.flag}`).slice(0, 4).join(" | ") || "none"
+  );
+  setText("fitness-generated-meta", fitness.generated_at || "-");
+  setText(
+    "fitness-plan-summary",
+    `${plan.code || "-"} ${plan.title || ""}`.trim() +
+      (todayPlan.notes && todayPlan.notes.length ? ` | ${todayPlan.notes.join(" | ")}` : "")
+  );
+  setText(
+    "fitness-log-summary",
+    activeSession
+      ? `Active session summary (${activeSession.training_day_code || "-"})`
+      : lastSession
+        ? `Last completed session (${lastSession.training_day_code || "-"})`
+        : "No logged session summary yet."
+  );
+
+  if (!exercises.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-"]);
+    planBody.appendChild(tr);
+  } else {
+    for (const row of exercises) {
+      const tr = document.createElement("tr");
+      appendCells(tr, [
+        row.slot_label || "-",
+        row.display_name || row.exercise_code || "-",
+        row.prescription_text || "-",
+      ]);
+      planBody.appendChild(tr);
+    }
+  }
+
+  if (!summaryRows.length) {
+    const tr = document.createElement("tr");
+    appendCells(tr, ["-", "-", "-", "-"]);
+    summaryBody.appendChild(tr);
+  } else {
+    for (const row of summaryRows.slice(0, 20)) {
+      const tr = document.createElement("tr");
+      appendCells(tr, [
+        row.exercise_name || row.exercise_code || "-",
+        String(row.logged_sets || "-"),
+        row.best_reps == null ? "-" : String(row.best_reps),
+        row.top_weight_kg == null ? "-" : `${row.top_weight_kg}kg`,
+      ]);
+      summaryBody.appendChild(tr);
+    }
   }
 }
 
@@ -2325,6 +2443,7 @@ async function loadState() {
     renderDriveWorkspace(snapshot);
     renderCalendarCandidates(snapshot);
     renderPersonalTasks(snapshot);
+    renderFitnessRuntime(snapshot);
     renderBraindump(snapshot);
     renderProjects(snapshot);
     renderTaskAssignees(snapshot);
@@ -2423,6 +2542,53 @@ function bindEvents() {
   byId("sync-personal-task-button").addEventListener("click", async () => {
     try {
       await syncPersonalTasks();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  byId("fitness-run-command-button").addEventListener("click", async () => {
+    try {
+      await runFitnessCommand(byId("fitness-command-input").value);
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("fitness-command-input").addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    try {
+      await runFitnessCommand(byId("fitness-command-input").value);
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("fitness-today-button").addEventListener("click", async () => {
+    try {
+      await runFitnessCommand("workout today");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("fitness-start-button").addEventListener("click", async () => {
+    try {
+      await runFitnessCommand("start workout");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("fitness-finish-button").addEventListener("click", async () => {
+    try {
+      await runFitnessCommand("finish workout");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  byId("fitness-status-button").addEventListener("click", async () => {
+    try {
+      await runFitnessCommand("fitness status");
     } catch (error) {
       showError(error.message);
     }

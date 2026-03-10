@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   program_id INTEGER NOT NULL,
   session_date TEXT NOT NULL,
   training_day_index INTEGER NOT NULL,
+  training_day_code TEXT,
   status TEXT NOT NULL DEFAULT 'in_progress',
   bodyweight_kg REAL,
   readiness_score INTEGER,
@@ -75,15 +76,23 @@ CREATE TABLE IF NOT EXISTS set_logs (
   set_type TEXT NOT NULL DEFAULT 'straight',
   reps INTEGER,
   weight_kg REAL,
+  weight_mode TEXT,
   rir REAL,
   rest_seconds INTEGER,
   myorep_cluster TEXT,
   superset_label TEXT,
   effort_note TEXT,
+  raw_input_text TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
   FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE,
   UNIQUE(session_id, exercise_id, set_order)
+);
+
+CREATE TABLE IF NOT EXISTS runtime_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(session_date);

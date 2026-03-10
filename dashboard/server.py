@@ -306,6 +306,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "POST /api/personal_tasks/create",
                         "POST /api/personal_tasks/complete",
                         "POST /api/personal_tasks/defer",
+                        "POST /api/fitness/command",
                         "POST /api/runs/update",
                         "POST /api/approvals/create",
                         "POST /api/approvals/decision",
@@ -615,6 +616,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     due_datetime=self._optional_str(payload, "due_datetime"),
                     due_date=self._optional_str(payload, "due_date"),
                     apply=self._optional_bool(payload, "apply") is not False,
+                )
+                self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
+                return
+
+            if path == "/api/fitness/command":
+                result = self.backend.run_fitness_command(
+                    command_text=self._require_string(payload, "command_text"),
                 )
                 self._json_response(HTTPStatus.OK, {"ok": True, "result": result})
                 return

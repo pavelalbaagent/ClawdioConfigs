@@ -26,6 +26,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from validate_configs import load_yaml  # type: ignore  # noqa: E402
 import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
+import fitness_runtime as fitness_runtime  # type: ignore  # noqa: E402
 import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
 import personal_task_runtime as personal_task_runtime  # type: ignore  # noqa: E402
 import provider_smoke_check as provider_smoke_runtime  # type: ignore  # noqa: E402
@@ -300,11 +301,13 @@ class DashboardBackend:
         self.calendar_runtime_status_path = self.root / "data" / "calendar-runtime-status.json"
         self.calendar_candidates_path = self.root / "data" / "calendar-candidates.json"
         self.personal_task_status_path = self.root / "data" / "personal-task-runtime-status.json"
+        self.fitness_runtime_status_path = self.root / "data" / "fitness-runtime-status.json"
         self.drive_workspace_status_path = self.root / "data" / "drive-workspace-status.json"
         self.braindump_snapshot_path = self.root / "data" / "braindump-snapshot.json"
         self.provider_smoke_status_path = self.root / "data" / "provider-smoke-status.json"
         self.gmail_db_path = self.root / ".memory" / "inbox_processing.db"
         self.braindump_db_path = self.root / ".memory" / "braindump.db"
+        self.fitness_db_path = self.root / ".memory" / "fitness.db"
         self.braindump_schema_path = self.root / "contracts" / "braindump" / "sqlite_schema.sql"
         self.set_profiles_script = self.root / "scripts" / "set_active_profiles.py"
 
@@ -1761,6 +1764,64 @@ class DashboardBackend:
             "upcoming_events": upcoming_events[:20],
         }
 
+    def _fitness_runtime(self) -> fitness_runtime.FitnessRuntime:
+        return fitness_runtime.FitnessRuntime(
+            root=self.root,
+            status_path=self.fitness_runtime_status_path,
+        )
+
+    def _fitness_runtime_status(self) -> dict[str, Any]:
+        raw = read_json(self.fitness_runtime_status_path)
+        if not isinstance(raw, dict):
+            try:
+                raw = ensure_dict(self._fitness_runtime().snapshot(action="status"))
+            except Exception:
+                raw = {}
+        if not isinstance(raw, dict) or not raw:
+            return {
+                "available": False,
+                "path": str(self.fitness_runtime_status_path),
+                "db_path": str(self.fitness_db_path),
+                "today_plan": {},
+                "active_session": None,
+                "active_session_summary": [],
+                "last_session": None,
+                "last_session_summary": [],
+                "weekly_volume": {},
+                "progression_flags": [],
+                "recent_results": [],
+                "settings": {},
+            }
+
+        today_plan = ensure_dict(raw.get("today_plan"))
+        active_session_summary = [
+            ensure_dict(item) for item in (raw.get("active_session_summary") or []) if isinstance(item, dict)
+        ]
+        last_session_summary = [
+            ensure_dict(item) for item in (raw.get("last_session_summary") or []) if isinstance(item, dict)
+        ]
+        progression_flags = [
+            ensure_dict(item) for item in (raw.get("progression_flags") or []) if isinstance(item, dict)
+        ]
+        recent_results = [ensure_dict(item) for item in (raw.get("recent_results") or []) if isinstance(item, dict)]
+        return {
+            "available": True,
+            "path": str(self.fitness_runtime_status_path),
+            "generated_at": str(raw.get("generated_at", "")).strip() or None,
+            "db_path": str(raw.get("db_path") or self.fitness_db_path),
+            "action": str(raw.get("action", "")).strip() or None,
+            "timezone": str(raw.get("timezone", "")).strip() or None,
+            "settings": ensure_dict(raw.get("settings")),
+            "today_plan": today_plan,
+            "active_session": ensure_dict(raw.get("active_session")) if isinstance(raw.get("active_session"), dict) else None,
+            "active_session_summary": active_session_summary[:20],
+            "last_session": ensure_dict(raw.get("last_session")) if isinstance(raw.get("last_session"), dict) else None,
+            "last_session_summary": last_session_summary[:20],
+            "weekly_volume": ensure_dict(raw.get("weekly_volume")),
+            "progression_flags": progression_flags[:20],
+            "recent_results": recent_results[:20],
+        }
+
     def _drive_workspace_status(self) -> dict[str, Any]:
         raw = read_json(self.drive_workspace_status_path)
         if not isinstance(raw, dict):
@@ -3180,6 +3241,17 @@ class DashboardBackend:
         )
         return env_values, provider, client
 
+    def run_fitness_command(self, *, command_text: str) -> dict[str, Any]:
+        clean = command_text.strip()
+        if not clean:
+            raise ValueError("fitness command text is required")
+        runtime = self._fitness_runtime()
+        result = ensure_dict(runtime.execute_text(clean))
+        status = ensure_dict(result.get("status"))
+        if status:
+            write_json(self.fitness_runtime_status_path, status)
+        return result
+
     def sync_personal_tasks_runtime(
         self,
         *,
@@ -3915,6 +3987,7 @@ class DashboardBackend:
         calendar_runtime = self._calendar_runtime_status()
         calendar_candidates = self._calendar_candidates()
         personal_tasks = self._personal_task_runtime_status()
+        fitness_runtime_state = self._fitness_runtime_status()
         drive_workspace = self._drive_workspace_status()
         braindump = self._braindump_status()
         provider_health = self._provider_health_status()
@@ -3998,6 +4071,7 @@ class DashboardBackend:
             "calendar_runtime": calendar_runtime,
             "calendar_candidates": calendar_candidates,
             "personal_tasks": personal_tasks,
+            "fitness_runtime": fitness_runtime_state,
             "drive_workspace": drive_workspace,
             "braindump": braindump,
             "provider_health": provider_health,

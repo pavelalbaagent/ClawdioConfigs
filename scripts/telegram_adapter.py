@@ -36,6 +36,7 @@ from backend import DashboardBackend, ensure_dict  # type: ignore  # noqa: E402
 import assistant_chat_runtime  # type: ignore  # noqa: E402
 import braindump_app as braindump_runtime  # type: ignore  # noqa: E402
 from check_env_requirements import load_env_file  # type: ignore  # noqa: E402
+import fitness_runtime as fitness_runtime  # type: ignore  # noqa: E402
 import google_calendar_runtime as calendar_runtime  # type: ignore  # noqa: E402
 from normalize_event import normalize_telegram  # type: ignore  # noqa: E402
 import personal_task_runtime  # type: ignore  # noqa: E402
@@ -52,6 +53,12 @@ HELP_TEXT = "\n".join(
         "- remind me <message> in <duration>",
         "- done",
         "- defer until <time>",
+        "- workout today",
+        "- start workout",
+        "- log <exercise> <reps> reps <weight>kg <mode>",
+        "- log myoreps <exercise> <weight>kg each activation 18 then 5+4+4",
+        "- finish workout",
+        "- set barbell empty <kg>kg",
         "- bd <category> <text> [#tag] [@review_bucket]",
         "- add-task <title> :: <optional due string>",
         "- tasks",
@@ -276,6 +283,7 @@ class TelegramAdapter:
             for agent_id in sorted(CONVERSATIONAL_SPECIALISTS)
         }
         self.assistant_chat = self.agent_chats["assistant"]
+        self.fitness_runtime = fitness_runtime.FitnessRuntime(root=root)
 
     def load_adapter_state(self) -> dict[str, Any]:
         data = read_json(self.state_path)
@@ -590,6 +598,28 @@ class TelegramAdapter:
             )
         return "\n".join(lines)
 
+    def _handle_fitness_command(self, text: str, *, explicit_context: bool) -> str:
+        if not fitness_runtime.supports_command_text(text, explicit_context=explicit_context):
+            return (
+                "Fitness Coach supports `workout today`, `start workout`, `log ...`, `finish workout`, "
+                "and `set barbell empty <kg>kg`."
+            )
+        try:
+            result = self.fitness_runtime.execute_text(text)
+        except Exception as exc:  # noqa: BLE001
+            return f"Fitness Coach failed: {exc}"
+
+        reply_text = str(result.get("reply_text") or "").strip() or "Fitness command applied."
+        self._record_agent_activity(
+            agent_id="fitness_coach",
+            space_key="fitness",
+            action="fitness_command",
+            text=text,
+            route_mode="explicit_specialist" if explicit_context else "command_match",
+            lane="L0_no_model",
+        )
+        return reply_text
+
     def _handle_project_capture(self, text: str) -> str:
         result = self.backend.create_agent_routed_task(text=text, source="telegram")
         route = ensure_dict(result.get("route"))
@@ -705,6 +735,9 @@ class TelegramAdapter:
         if command_name in {"start", "help"} or routed_text.strip().lower() == "help":
             return [HELP_TEXT]
 
+        if agent_id == "fitness_coach" and bool(route.get("explicit_agent")):
+            return [self._handle_fitness_command(routed_text, explicit_context=True)]
+
         if command_name == "status" or routed_text.strip().lower() == "status":
             self._record_agent_activity(
                 agent_id="assistant",
@@ -713,6 +746,9 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_status()]
+
+        if fitness_runtime.supports_command_text(routed_text, explicit_context=False):
+            return [self._handle_fitness_command(routed_text, explicit_context=False)]
 
         if explicit_specialist:
             if route.get("kind") == "project" and not route.get("resolved"):

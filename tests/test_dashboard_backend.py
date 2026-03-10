@@ -23,6 +23,9 @@ class DashboardBackendTests(unittest.TestCase):
 
         (self.tmp_path / "config").mkdir(parents=True)
         (self.tmp_path / "contracts" / "braindump").mkdir(parents=True)
+        (self.tmp_path / "contracts" / "fitness").mkdir(parents=True)
+        (self.tmp_path / "fitness").mkdir(parents=True)
+        (self.tmp_path / "fitness" / "logs").mkdir(parents=True)
         (self.tmp_path / "telemetry").mkdir(parents=True)
         (self.tmp_path / "scripts").mkdir(parents=True)
 
@@ -35,6 +38,7 @@ class DashboardBackendTests(unittest.TestCase):
             "reminders.yaml",
             "dashboard.yaml",
             "agents.yaml",
+            "fitness_agent.yaml",
         ):
             shutil.copy(ROOT / "config" / name, self.tmp_path / "config" / name)
 
@@ -42,8 +46,14 @@ class DashboardBackendTests(unittest.TestCase):
             ROOT / "contracts" / "braindump" / "sqlite_schema.sql",
             self.tmp_path / "contracts" / "braindump" / "sqlite_schema.sql",
         )
+        shutil.copy(
+            ROOT / "contracts" / "fitness" / "sqlite_schema.sql",
+            self.tmp_path / "contracts" / "fitness" / "sqlite_schema.sql",
+        )
         shutil.copy(ROOT / "scripts" / "set_active_profiles.py", self.tmp_path / "scripts" / "set_active_profiles.py")
         shutil.copy(ROOT / "telemetry" / "model-calls.example.ndjson", self.tmp_path / "telemetry" / "model-calls.example.ndjson")
+        for name in ("ATHLETE_PROFILE.md", "PROGRAM.md", "EXERCISE_LIBRARY.md", "RULES.md", "SESSION_QUEUE.md"):
+            shutil.copy(ROOT / "fitness" / name, self.tmp_path / "fitness" / name)
 
         self.backend = DashboardBackend(root=self.tmp_path)
 
@@ -476,6 +486,28 @@ class DashboardBackendTests(unittest.TestCase):
         state = self.backend.build_state()
         self.assertTrue(state["personal_tasks"]["available"])
         self.assertEqual(state["personal_tasks"]["provider"], "todoist")
+
+    def test_run_fitness_command_updates_status_and_summary(self):
+        start_result = self.backend.run_fitness_command(command_text="start workout")
+        self.assertIn("Workout started", start_result["reply_text"])
+
+        log_result = self.backend.run_fitness_command(command_text="log bb curl 8 reps 20kg bb total")
+        self.assertEqual(len(log_result["created_sets"]), 1)
+
+        finish_result = self.backend.run_fitness_command(command_text="finish workout")
+        self.assertIn("Finished workout", finish_result["reply_text"])
+
+        state = self.backend.build_state()
+        self.assertTrue(state["fitness_runtime"]["available"])
+        self.assertEqual(state["fitness_runtime"]["last_session"]["training_day_code"], "M1")
+        self.assertTrue(state["fitness_runtime"]["last_session_summary"])
+        self.assertTrue((self.tmp_path / "fitness" / "logs").exists())
+
+    def test_build_state_exposes_fitness_runtime(self):
+        state = self.backend.build_state()
+        self.assertIn("fitness_runtime", state)
+        self.assertTrue(state["fitness_runtime"]["available"])
+        self.assertEqual(state["fitness_runtime"]["today_plan"]["plan"]["code"], "M1")
 
     def test_create_task_from_template(self):
         project = self.backend.create_project(name="Template Project")

@@ -33,7 +33,8 @@ Current responsibilities:
 9. convert `[project:slug] ...` text into local project tasks
 10. route specialist-prefixed requests into agent-owned spaces
 11. hand `assistant`, `researcher`, and `builder` requests to conversational runtimes
-12. fall back to structured capture for non-conversational specialists
+12. execute the deterministic `fitness_coach` runtime directly
+13. fall back to structured capture for non-conversational specialists that still have no live runtime
 
 ## Supported Commands
 
@@ -54,6 +55,11 @@ Current responsibilities:
 15. `fitness: <text>`
 16. `coding: <text>`
 17. `ops: <text>`
+18. `workout today`
+19. `start workout`
+20. `log ...`
+21. `finish workout`
+22. `set barbell empty <kg>kg`
 
 ## Specialist Routing
 
@@ -70,8 +76,9 @@ Current behavior:
 
 1. supported deterministic commands still execute directly
 2. `assistant`, `researcher`, and `builder` prefixes open bounded conversational runtimes
-3. `fitness` and `ops` remain structured routes for now
-4. project hints still work and can be combined with specialist prefixes, for example:
+3. `fitness` executes its own deterministic workout runtime
+4. `ops` remains a structured route for now
+5. project hints still work and can be combined with specialist prefixes, for example:
    - `coding: [project:calendar-cleanup] tighten dashboard route view`
 
 ## State Files
@@ -125,7 +132,8 @@ systemctl --user status openclaw-telegram-adapter.service --no-pager
 4. if Calendar or personal-task providers are not configured yet, the adapter returns a clear unavailable message instead of failing
 5. personal-task support is simple create/list, not the full dashboard surface
 6. reminder/task/calendar linkage is still separate work
-7. `fitness_coach` and `ops_guard` are not conversational yet
+7. `fitness_coach` is runtime-backed but not conversational yet
+8. `ops_guard` is still not conversational
 
 ## Why this shape
 

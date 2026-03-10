@@ -44,6 +44,9 @@ class TelegramAdapterTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "config").mkdir(parents=True)
         (self.root / "contracts" / "braindump").mkdir(parents=True)
+        (self.root / "contracts" / "fitness").mkdir(parents=True)
+        (self.root / "fitness").mkdir(parents=True)
+        (self.root / "fitness" / "logs").mkdir(parents=True)
         (self.root / "telemetry").mkdir(parents=True)
         (self.root / "scripts").mkdir(parents=True)
 
@@ -57,6 +60,7 @@ class TelegramAdapterTests(unittest.TestCase):
             "dashboard.yaml",
             "agents.yaml",
             "session_policy.yaml",
+            "fitness_agent.yaml",
         ):
             shutil.copy(ROOT / "config" / name, self.root / "config" / name)
 
@@ -64,7 +68,13 @@ class TelegramAdapterTests(unittest.TestCase):
             ROOT / "contracts" / "braindump" / "sqlite_schema.sql",
             self.root / "contracts" / "braindump" / "sqlite_schema.sql",
         )
+        shutil.copy(
+            ROOT / "contracts" / "fitness" / "sqlite_schema.sql",
+            self.root / "contracts" / "fitness" / "sqlite_schema.sql",
+        )
         shutil.copy(ROOT / "scripts" / "set_active_profiles.py", self.root / "scripts" / "set_active_profiles.py")
+        for name in ("ATHLETE_PROFILE.md", "PROGRAM.md", "EXERCISE_LIBRARY.md", "RULES.md", "SESSION_QUEUE.md"):
+            shutil.copy(ROOT / "fitness" / name, self.root / "fitness" / name)
 
         self.backend = DashboardBackend(root=self.root)
         self.client = FakeTelegramClient()
@@ -268,6 +278,27 @@ class TelegramAdapterTests(unittest.TestCase):
             str(self.client.sent_messages[-1]["text"]),
             "Personal task provider is not configured yet.",
         )
+
+    def test_fitness_prefix_executes_runtime(self):
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(8, "fitness: workout today")], state=state)
+
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Today's workout plan", response)
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "fitness_coach")
+        self.assertEqual(last_route["space_key"], "fitness")
+        self.assertEqual(last_route["action"], "fitness_command")
+
+    def test_unprefixed_workout_commands_execute_fitness_runtime(self):
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(9, "start workout")], state=state)
+        self.assertIn("Workout started", str(self.client.sent_messages[-1]["text"]))
+
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(10, "log bb curl 8 reps 20kg bb total")], state=state)
+        self.assertIn("Logged 1 set(s).", str(self.client.sent_messages[-1]["text"]))
 
 
 if __name__ == "__main__":
