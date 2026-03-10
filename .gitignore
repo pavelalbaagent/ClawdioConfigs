@@ -22,6 +22,7 @@ data/calendar-runtime-status.json
 data/calendar-candidates.json
 data/personal-task-runtime-status.json
 data/drive-workspace-status.json
+data/fitness-runtime-status.json
 data/braindump-snapshot.json
 data/provider-smoke-status.json
 data/ai-tools-digest-status.json
@@ -37,10 +38,13 @@ data/job-search-daily-summary.json
 data/job-search-discovery-status.json
 data/job-search-discovery-state.json
 data/job-search/inbox/
+data/researchflow/
 docs/reviews/*.md
 !docs/reviews/README.md
 fitness/logs/*.md
 !fitness/logs/README.md
+output/jobs/
+output/research/
 output/spreadsheet/*
 tmp/
 telemetry/model-calls.ndjson
