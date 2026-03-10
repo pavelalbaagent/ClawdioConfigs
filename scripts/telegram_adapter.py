@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -48,35 +49,94 @@ DEFAULT_ENV = Path("/etc/openclaw/openclaw.env")
 DEFAULT_STATE = ROOT / "data" / "telegram-adapter-state.json"
 HELP_TEXT = "\n".join(
     [
-        "Commands:",
-        "- remind me <message> at <time>",
-        "- remind me <message> in <duration>",
-        "- done",
-        "- defer until <time>",
-        "- workout today",
-        "- start workout",
-        "- log <exercise> <reps> reps <weight>kg <mode>",
-        "- log myoreps <exercise> <weight>kg each activation 18 then 5+4+4",
-        "- finish workout",
-        "- set barbell empty <kg>kg",
-        "- bd <category> <text> [#tag] [@review_bucket]",
-        "- add-task <title> :: <optional due string>",
-        "- tasks",
-        "- calendar today",
-        "- calendar next",
-        "- status",
-        "- assistant: <text>",
-        "- any other plain text -> assistant general chat",
-        "- reminders: <text>",
-        "- research: <text>   -> Researcher chat",
-        "- fitness: <text>",
-        "- coding: <text>     -> Builder chat",
-        "- ops: <text>",
-        "- [project:slug] <text>  -> capture as project task",
+        "Examples:",
+        "- remind me to review grades in 1 hour",
+        "- what reminders do i have?",
+        "- add review syllabus to my tasks for tomorrow 10am",
+        "- what's on my calendar tomorrow?",
+        "- note this: test AgentMail later",
+        "- switch to research mode",
+        "- switch back",
+        "- what mode are we in?",
+        "- what's my workout today?",
+        "- I'm starting my workout",
+        "- I did hammer curls 12 reps with 10kg each",
+        "- research: <text> / coding: <text> / [project:slug] <text> still work if you want explicit routing",
     ]
 )
 
 CONVERSATIONAL_SPECIALISTS = {"assistant", "researcher", "builder"}
+FOCUSABLE_AGENTS = {
+    "assistant": {"space_key": "general", "label": "Assistant"},
+    "researcher": {"space_key": "research", "label": "Researcher"},
+    "fitness_coach": {"space_key": "fitness", "label": "Fitness Coach"},
+    "builder": {"space_key": "coding", "label": "Builder"},
+    "ops_guard": {"space_key": "ops", "label": "Ops Guard"},
+}
+AGENT_FOCUS_ALIASES = {
+    "assistant": ["assistant", "general", "normal", "default", "front door"],
+    "researcher": ["research", "researcher", "job search", "analysis"],
+    "fitness_coach": ["fitness", "fitness coach", "workout", "training", "coach"],
+    "builder": ["builder", "coding", "coding agent", "developer", "code"],
+    "ops_guard": ["ops", "ops guard", "operations", "system health"],
+}
+
+REMINDER_LIST_PHRASES = {
+    "what reminders do i have",
+    "show reminders",
+    "show my reminders",
+    "list reminders",
+    "what should you remind me about",
+    "what am i waiting on",
+}
+TASK_LIST_PHRASES = {
+    "what tasks do i have",
+    "show my tasks",
+    "list my tasks",
+    "show tasks",
+    "what is on my todo list",
+    "what's on my todo list",
+    "what is on my task list",
+}
+
+BRAINDUMP_NATURAL_PATTERNS = [
+    (re.compile(r"^(?:note this|save this|save this idea|remember this for later)\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "personal_note"),
+    (re.compile(r"^gift idea(?:\s+for\s+(?:my\s+)?wife)?\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "gift_idea_wife"),
+    (re.compile(r"^tool to test\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "tool_to_test"),
+    (re.compile(r"^kid idea\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "kid_idea"),
+    (re.compile(r"^project idea\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "project_idea"),
+    (re.compile(r"^research topic\s*[:,-]?\s*(?P<body>.+)$", re.IGNORECASE), "research_topic"),
+]
+
+FITNESS_NATURAL_PATTERNS = [
+    (re.compile(r"^(?:what(?: am i| are we)?(?: training)? today|what(?:'s| is) my workout today|what exercises today)\??$", re.IGNORECASE), "workout today"),
+    (re.compile(r"^(?:i'?m\s+)?starting\s+(?:my\s+)?workout$", re.IGNORECASE), "start workout"),
+    (re.compile(r"^(?:i'?m\s+)?done\s+with\s+(?:my\s+)?workout$", re.IGNORECASE), "finish workout"),
+    (re.compile(r"^(?:i\s+did|did)\s+(?P<exercise>.+?)\s+(?P<reps>\d+)\s+reps?(?:\s+(?:with|at))?\s+(?P<weight>\d+(?:\.\d+)?)\s*kg(?:\s+(?P<mode>each|bb total|bb side|total))?$", re.IGNORECASE), None),
+]
+
+NATURAL_AGENT_RULES = [
+    {
+        "agent_id": "researcher",
+        "space_key": "job-search",
+        "keywords": ["job search", "resume", "cv", "interview", "apply", "application", "salary"],
+    },
+    {
+        "agent_id": "researcher",
+        "space_key": "research",
+        "keywords": ["research", "compare", "evaluate", "pros and cons", "which tool", "should i use", "recommend", "tradeoff"],
+    },
+    {
+        "agent_id": "builder",
+        "space_key": "coding",
+        "keywords": ["code", "coding", "debug", "fix", "implement", "refactor", "repo", "repository", "test", "bug", "pr", "pull request"],
+    },
+    {
+        "agent_id": "ops_guard",
+        "space_key": "ops",
+        "keywords": ["service", "logs", "down", "incident", "outage", "health", "quota", "provider issue", "restart", "failing"],
+    },
+]
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -122,37 +182,192 @@ def parse_command_text(text: str) -> tuple[str, str]:
     return "", clean
 
 
+def normalize_phrase(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower().rstrip("?.!"))
+
+
+def resolve_agent_alias(text: str) -> str | None:
+    lowered = normalize_phrase(text)
+    for agent_id, aliases in AGENT_FOCUS_ALIASES.items():
+        for alias in aliases:
+            if re.search(rf"(^|\b){re.escape(alias)}(\b|$)", lowered):
+                return agent_id
+    return None
+
+
+def detect_focus_instruction(text: str) -> dict[str, str] | None:
+    lowered = normalize_phrase(text)
+    if lowered in {
+        "who am i talking to",
+        "which agent am i talking to",
+        "what mode are we in",
+        "what focus are we in",
+        "what are you focused on",
+    }:
+        return {"action": "status"}
+
+    if any(
+        phrase in lowered
+        for phrase in {
+            "back to assistant",
+            "back to general",
+            "switch back",
+            "general mode",
+            "normal mode",
+            "clear mode",
+            "clear focus",
+            "exit current mode",
+        }
+    ):
+        return {"action": "clear"}
+
+    alias = resolve_agent_alias(lowered)
+    if not alias:
+        return None
+    if any(
+        trigger in lowered
+        for trigger in {
+            "switch to",
+            "use the",
+            "use ",
+            "talk to",
+            "work with",
+            "be my",
+            "act as",
+            "stay in",
+            "go into",
+            "enter ",
+            "focus on",
+        }
+    ) or " mode" in lowered or " agent" in lowered or " chat" in lowered:
+        return {"action": "set", "agent_id": alias}
+    return None
+
+
+def is_reminder_list_request(text: str) -> bool:
+    lowered = normalize_phrase(text)
+    return lowered in REMINDER_LIST_PHRASES
+
+
+def infer_natural_agent(text: str) -> tuple[str, str] | None:
+    lowered = normalize_phrase(text)
+    for rule in NATURAL_AGENT_RULES:
+        for keyword in rule["keywords"]:
+            if re.search(rf"(^|\b){re.escape(keyword)}(\b|$)", lowered):
+                return str(rule["agent_id"]), str(rule["space_key"])
+    return None
+
+
+def parse_natural_braindump_text(text: str) -> tuple[str, str] | None:
+    clean = text.strip()
+    for pattern, category in BRAINDUMP_NATURAL_PATTERNS:
+        match = pattern.match(clean)
+        if match:
+            body = str(match.group("body") or "").strip()
+            if body:
+                return category, body
+    return None
+
+
+def translate_natural_fitness_text(text: str) -> str | None:
+    clean = text.strip()
+    for pattern, replacement in FITNESS_NATURAL_PATTERNS:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        if replacement is not None:
+            return replacement
+        exercise = str(match.group("exercise") or "").strip()
+        reps = str(match.group("reps") or "").strip()
+        weight = str(match.group("weight") or "").strip()
+        mode = str(match.group("mode") or "each").strip().lower()
+        if mode == "total":
+            mode = "bb total"
+        return f"log {exercise} {reps} reps {weight}kg {mode}"
+    return None
+
+
 def is_calendar_today_request(text: str) -> bool:
-    clean = text.strip().lower()
-    return clean in {"calendar today", "today calendar", "calendar", "today"} or clean.startswith("/calendar")
+    clean = normalize_phrase(text)
+    return clean in {
+        "calendar today",
+        "today calendar",
+        "calendar",
+        "today",
+        "what is on my calendar today",
+        "what's on my calendar today",
+        "what do i have today",
+        "what is on today",
+        "what's on today",
+    } or clean.startswith("/calendar")
 
 
 def is_calendar_next_request(text: str) -> bool:
-    clean = text.strip().lower()
-    return clean in {"calendar next", "calendar upcoming", "upcoming calendar", "next calendar"}
+    clean = normalize_phrase(text)
+    return clean in {
+        "calendar next",
+        "calendar upcoming",
+        "upcoming calendar",
+        "next calendar",
+        "what is coming up",
+        "what's coming up",
+        "what is on my calendar next",
+        "what's on my calendar next",
+    }
+
+
+def is_calendar_tomorrow_request(text: str) -> bool:
+    clean = normalize_phrase(text)
+    return clean in {
+        "calendar tomorrow",
+        "what do i have tomorrow",
+        "what is on my calendar tomorrow",
+        "what's on my calendar tomorrow",
+        "what is tomorrow on my calendar",
+    }
 
 
 def parse_task_create_text(text: str) -> tuple[str, str | None] | None:
     clean = text.strip()
-    lowered = clean.lower()
+    lowered = normalize_phrase(clean)
     prefixes = ("add-task ", "task ", "todo ")
     body = None
     for prefix in prefixes:
         if lowered.startswith(prefix):
             body = clean[len(prefix) :].strip()
             break
-    if body is None:
-        return None
-    if not body:
-        return None
-    if "::" in body:
-        title, due = body.split("::", 1)
-        return title.strip(), due.strip() or None
-    return body, None
+    if body is not None:
+        if not body:
+            return None
+        if "::" in body:
+            title, due = body.split("::", 1)
+            return title.strip(), due.strip() or None
+        return body, None
+    natural_patterns = [
+        re.compile(
+            r"^(?:please\s+)?(?:add|put)\s+(?P<title>.+?)\s+to\s+(?:my\s+)?(?:tasks|task list|todo(?: list)?)"
+            r"(?:\s+(?:for|by|due)\s+(?P<due>.+))?$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?:please\s+)?create\s+(?:a\s+)?(?:task|todo)(?:\s+for\s+me)?\s+(?:to\s+)?(?P<title>.+?)"
+            r"(?:\s+(?:for|by|due)\s+(?P<due>.+))?$",
+            re.IGNORECASE,
+        ),
+    ]
+    for pattern in natural_patterns:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        title = str(match.group("title") or "").strip(" .")
+        due = str(match.group("due") or "").strip(" .") or None
+        if title:
+            return title, due
+    return None
 
 
 def is_task_list_request(text: str) -> bool:
-    return text.strip().lower() in {"tasks", "task list", "todo list", "/tasks"}
+    return normalize_phrase(text) in TASK_LIST_PHRASES | {"tasks", "task list", "todo list", "/tasks"}
 
 
 def short_now_iso() -> str:
@@ -291,6 +506,12 @@ class TelegramAdapter:
         data["reminder_message_links"] = {
             str(chat_id): ensure_dict(value) for chat_id, value in links.items()
         }
+        focus = ensure_dict(data.get("conversation_focus"))
+        data["conversation_focus"] = {
+            "agent_id": str(focus.get("agent_id") or "assistant").strip() or "assistant",
+            "space_key": str(focus.get("space_key") or "general").strip() or "general",
+            "set_at": str(focus.get("set_at") or "").strip() or None,
+        }
         if "last_update_id" not in data:
             data["last_update_id"] = 0
         return data
@@ -298,6 +519,56 @@ class TelegramAdapter:
     def save_adapter_state(self, state: dict[str, Any]) -> None:
         state["updated_at"] = short_now_iso()
         write_json(self.state_path, state)
+
+    def _set_conversation_focus(self, state: dict[str, Any], *, agent_id: str) -> dict[str, Any]:
+        focus_cfg = ensure_dict(FOCUSABLE_AGENTS.get(agent_id))
+        focus = {
+            "agent_id": agent_id,
+            "space_key": str(focus_cfg.get("space_key") or "general"),
+            "set_at": short_now_iso(),
+        }
+        state["conversation_focus"] = focus
+        return focus
+
+    def _clear_conversation_focus(self, state: dict[str, Any]) -> dict[str, Any]:
+        return self._set_conversation_focus(state, agent_id="assistant")
+
+    def _conversation_focus(self, state: dict[str, Any]) -> dict[str, Any]:
+        focus = ensure_dict(state.get("conversation_focus"))
+        if not focus:
+            return self._clear_conversation_focus(state)
+        agent_id = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+        if agent_id not in FOCUSABLE_AGENTS:
+            return self._clear_conversation_focus(state)
+        return {
+            "agent_id": agent_id,
+            "space_key": str(focus.get("space_key") or FOCUSABLE_AGENTS[agent_id]["space_key"]).strip()
+            or str(FOCUSABLE_AGENTS[agent_id]["space_key"]),
+            "set_at": str(focus.get("set_at") or "").strip() or None,
+        }
+
+    def _focus_label(self, focus: dict[str, Any]) -> str:
+        agent_id = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+        cfg = ensure_dict(FOCUSABLE_AGENTS.get(agent_id))
+        label = str(cfg.get("label") or agent_id).strip() or agent_id
+        space_key = str(focus.get("space_key") or cfg.get("space_key") or "general").strip() or "general"
+        return f"{label} ({space_key})"
+
+    def _handle_focus_instruction(self, state: dict[str, Any], instruction: dict[str, str]) -> str:
+        action = str(instruction.get("action") or "").strip()
+        if action == "status":
+            focus = self._conversation_focus(state)
+            return f"Current conversation focus: {self._focus_label(focus)}"
+        if action == "clear":
+            focus = self._clear_conversation_focus(state)
+            return f"Switched back to {self._focus_label(focus)}"
+        if action == "set":
+            agent_id = str(instruction.get("agent_id") or "assistant").strip() or "assistant"
+            if agent_id not in FOCUSABLE_AGENTS:
+                return "I do not recognize that agent."
+            focus = self._set_conversation_focus(state, agent_id=agent_id)
+            return f"Conversation focus set to {self._focus_label(focus)}"
+        return "Could not update conversation focus."
 
     def _remember_reminder_message(
         self,
@@ -510,6 +781,12 @@ class TelegramAdapter:
         return provider, client
 
     def _handle_calendar_today(self) -> str:
+        return self._handle_calendar_day(day_offset=0, heading="Calendar today")
+
+    def _handle_calendar_tomorrow(self) -> str:
+        return self._handle_calendar_day(day_offset=1, heading="Calendar tomorrow")
+
+    def _handle_calendar_day(self, *, day_offset: int, heading: str) -> str:
         try:
             client, timezone_name = self._calendar_client()
             calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
@@ -520,9 +797,9 @@ class TelegramAdapter:
                 limit=12,
                 window_days=7,
             )
-            today_local = datetime.now(ZoneInfo(timezone_name)).date()
-            today_events = [row for row in events if event_local_date(row, timezone_name) == today_local]
-            return format_calendar_lines(today_events, timezone_name, heading="Calendar today")
+            target_day = datetime.now(ZoneInfo(timezone_name)).date() + timedelta(days=day_offset)
+            day_events = [row for row in events if event_local_date(row, timezone_name) == target_day]
+            return format_calendar_lines(day_events, timezone_name, heading=heading)
         except Exception:
             return "Calendar is not configured yet."
 
@@ -555,6 +832,16 @@ class TelegramAdapter:
         except Exception:
             return "Personal task provider is not configured yet."
 
+    def _handle_reminders_list(self) -> str:
+        rows = self.backend._pending_reminders()
+        if not rows:
+            return "Pending reminders\n- none"
+        lines = ["Pending reminders"]
+        for row in rows[:8]:
+            due = format_dt(str(row.get("remind_at") or ""), self.default_timezone)
+            lines.append(f"- {row.get('message')} | {row.get('status')} | {due}")
+        return "\n".join(lines)
+
     def _handle_task_create(self, text: str) -> str:
         parsed = parse_task_create_text(text)
         if not parsed:
@@ -582,6 +869,7 @@ class TelegramAdapter:
         personal_tasks = ensure_dict(snapshot.get("personal_tasks"))
         braindump = ensure_dict(snapshot.get("braindump"))
         workspace = ensure_dict(snapshot.get("workspace"))
+        focus = self._conversation_focus(self.load_adapter_state())
         lines = [
             "OpenClaw status",
             f"- Reminders pending: {ensure_dict(reminders.get('counts')).get('pending', 0)}",
@@ -591,6 +879,7 @@ class TelegramAdapter:
             f"- Braindump due: {ensure_dict(braindump.get('counts')).get('due_for_review', 0)}",
             f"- Active projects: {ensure_dict(workspace.get('project_counts')).get('active', 0)}",
             f"- Front door agent: {agent_runtime.get('default_user_facing_agent') or 'assistant'}",
+            f"- Current focus: {self._focus_label(focus)}",
         ]
         if last_route:
             lines.append(
@@ -598,14 +887,73 @@ class TelegramAdapter:
             )
         return "\n".join(lines)
 
-    def _handle_fitness_command(self, text: str, *, explicit_context: bool) -> str:
-        if not fitness_runtime.supports_command_text(text, explicit_context=explicit_context):
+    def _route_for_conversation(self, *, text: str, state: dict[str, Any]) -> dict[str, Any]:
+        route = self.backend.route_text_to_space(text=text)
+        if route.get("explicit_agent") or route.get("explicit_space"):
+            return route
+
+        focus = self._conversation_focus(state)
+        registry = self.backend._agent_runtime_snapshot()
+        catalog = {
+            str(item.get("key")): ensure_dict(item)
+            for item in ensure_dict(registry.get("space_registry")).get("catalog", [])
+            if isinstance(item, dict)
+        }
+        role_lookup = {
+            str(item.get("id")): ensure_dict(item)
+            for item in registry.get("visible_agents", []) + registry.get("internal_roles", [])
+            if isinstance(item, dict)
+        }
+
+        def apply_agent_space(agent_id: str, space_key: str, route_mode: str) -> dict[str, Any]:
+            updated = dict(route)
+            updated["agent_id"] = agent_id
+            updated["agent"] = ensure_dict(role_lookup.get(agent_id)) or None
+            updated["space_key"] = space_key
+            updated["route_mode"] = route_mode
+            if updated.get("kind") != "project":
+                catalog_row = ensure_dict(catalog.get(space_key))
+                updated["space"] = {
+                    "id": None,
+                    "key": space_key,
+                    "kind": "core",
+                    "project_id": None,
+                    "name": catalog_row.get("name") or self.backend._display_label(space_key),
+                    "session_strategy": catalog_row.get("session_strategy") or "shared_session",
+                    "agent_strategy": catalog_row.get("agent_strategy") or "coordinator_only",
+                    "entry_command_hint": catalog_row.get("entry_command_hint")
+                    or self.backend._space_entry_command_hint(space_key),
+                }
+            return updated
+
+        if route.get("kind") == "project" and route.get("resolved"):
+            agent_id = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+            if agent_id != "assistant":
+                return apply_agent_space(agent_id, str(route.get("space_key") or "general"), "focus_project")
+            inferred = infer_natural_agent(text)
+            if inferred is not None:
+                return apply_agent_space(inferred[0], str(route.get("space_key") or "general"), "natural_project")
+            return route
+
+        inferred = infer_natural_agent(text)
+        if inferred is not None:
+            return apply_agent_space(inferred[0], inferred[1], "natural_intent")
+
+        focused_agent = str(focus.get("agent_id") or "assistant").strip() or "assistant"
+        if focused_agent != "assistant":
+            return apply_agent_space(focused_agent, str(focus.get("space_key") or "general"), "focus_mode")
+        return route
+
+    def _handle_fitness_command(self, text: str, *, explicit_context: bool, route_mode: str | None = None) -> str:
+        translated = translate_natural_fitness_text(text)
+        command_text = translated or text
+        if not fitness_runtime.supports_command_text(command_text, explicit_context=explicit_context):
             return (
                 "Fitness Coach supports `workout today`, `start workout`, `log ...`, `finish workout`, "
                 "and `set barbell empty <kg>kg`."
             )
         try:
-            result = self.fitness_runtime.execute_text(text)
+            result = self.fitness_runtime.execute_text(command_text)
         except Exception as exc:  # noqa: BLE001
             return f"Fitness Coach failed: {exc}"
 
@@ -615,15 +963,13 @@ class TelegramAdapter:
             space_key="fitness",
             action="fitness_command",
             text=text,
-            route_mode="explicit_specialist" if explicit_context else "command_match",
+            route_mode=route_mode or ("explicit_specialist" if explicit_context else "command_match"),
             lane="L0_no_model",
         )
         return reply_text
 
-    def _handle_project_capture(self, text: str) -> str:
-        result = self.backend.create_agent_routed_task(text=text, source="telegram")
-        route = ensure_dict(result.get("route"))
-        task = ensure_dict(result.get("task"))
+    def _handle_project_capture(self, text: str, route: dict[str, Any]) -> str:
+        task = self._create_task_from_route(text=text, route=route)
         agent_label = str(ensure_dict(route.get("agent")).get("label", route.get("agent_id", "assistant"))).strip()
         return f"Project task captured for {agent_label}: {task.get('title')}"
 
@@ -647,21 +993,49 @@ class TelegramAdapter:
             lane=lane,
         )
 
+    def _create_task_from_route(self, *, text: str, route: dict[str, Any]) -> dict[str, Any]:
+        stripped = str(route.get("stripped_text") or text).strip()
+        if not stripped:
+            raise ValueError("routed task text is required")
+        agent_id = str(route.get("agent_id") or "assistant").strip().lower() or "assistant"
+        notes_parts = [
+            "Captured from telegram",
+            f"agent={agent_id}",
+            f"space={route.get('space_key')}",
+        ]
+        if route.get("project_name"):
+            notes_parts.append(f"project={route.get('project_name')}")
+        task = self.backend.create_task(
+            title=stripped,
+            assignees=[agent_id],
+            project_id=str(route.get("project_id") or "").strip() or None,
+            notes=" | ".join(notes_parts),
+            source="telegram",
+            assign_default_project=False,
+        )
+        self._record_agent_activity(
+            agent_id=agent_id,
+            space_key=str(route.get("space_key") or "general"),
+            action="captured_request",
+            text=stripped,
+            route_mode=str(route.get("route_mode") or "default_front_door"),
+            lane=str(ensure_dict(route.get("agent")).get("default_lane") or "").strip() or None,
+        )
+        return task
+
     def _handle_specialist_capture(self, text: str, route: dict[str, Any]) -> str:
         try:
-            result = self.backend.create_agent_routed_task(text=text, source="telegram")
+            task = self._create_task_from_route(text=text, route=route)
         except ValueError as exc:
             if route.get("kind") == "project" and route.get("matched") and not route.get("resolved"):
                 return self._format_unknown_project_route(route)
             raise exc
-        task = ensure_dict(result.get("task"))
-        resolved_route = ensure_dict(result.get("route"))
-        agent = ensure_dict(resolved_route.get("agent"))
-        label = str(agent.get("label", resolved_route.get("agent_id", "assistant"))).strip() or "assistant"
-        space_key = str(resolved_route.get("space_key") or "general").strip()
+        agent = ensure_dict(route.get("agent"))
+        label = str(agent.get("label", route.get("agent_id", "assistant"))).strip() or "assistant"
+        space_key = str(route.get("space_key") or "general").strip()
         project_note = (
-            f" in project {resolved_route.get('project_name')}"
-            if str(resolved_route.get("project_name") or "").strip()
+            f" in project {route.get('project_name')}"
+            if str(route.get("project_name") or "").strip()
             else ""
         )
         return f"Routed to {label} in {space_key}{project_note}. Task created: {task.get('title')}"
@@ -723,7 +1097,11 @@ class TelegramAdapter:
         if not text:
             return []
 
-        route = self.backend.route_text_to_space(text=text)
+        focus_instruction = detect_focus_instruction(text)
+        if focus_instruction is not None:
+            return [self._handle_focus_instruction(state, focus_instruction)]
+
+        route = self._route_for_conversation(text=text, state=state)
         routed_text = str(route.get("stripped_text") or "").strip() or text.strip()
         explicit_specialist = bool(route.get("explicit_agent")) and str(route.get("agent_id")) != "assistant"
         explicit_assistant_space = bool(route.get("explicit_space")) and str(route.get("agent_id")) == "assistant"
@@ -736,7 +1114,13 @@ class TelegramAdapter:
             return [HELP_TEXT]
 
         if agent_id == "fitness_coach" and bool(route.get("explicit_agent")):
-            return [self._handle_fitness_command(routed_text, explicit_context=True)]
+            return [
+                self._handle_fitness_command(
+                    routed_text,
+                    explicit_context=True,
+                    route_mode=str(route.get("route_mode") or "explicit_specialist"),
+                )
+            ]
 
         if command_name == "status" or routed_text.strip().lower() == "status":
             self._record_agent_activity(
@@ -747,8 +1131,15 @@ class TelegramAdapter:
             )
             return [self._handle_status()]
 
-        if fitness_runtime.supports_command_text(routed_text, explicit_context=False):
-            return [self._handle_fitness_command(routed_text, explicit_context=False)]
+        translated_fitness = translate_natural_fitness_text(routed_text)
+        if translated_fitness or fitness_runtime.supports_command_text(routed_text, explicit_context=False):
+            return [
+                self._handle_fitness_command(
+                    translated_fitness or routed_text,
+                    explicit_context=False,
+                    route_mode="natural_fitness" if translated_fitness else str(route.get("route_mode") or "command_match"),
+                )
+            ]
 
         if explicit_specialist:
             if route.get("kind") == "project" and not route.get("resolved"):
@@ -783,6 +1174,14 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_calendar_today()]
+        if is_calendar_tomorrow_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="calendar",
+                action="calendar_tomorrow",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_calendar_tomorrow()]
         if is_calendar_next_request(routed_text):
             self._record_agent_activity(
                 agent_id="assistant",
@@ -800,6 +1199,15 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_tasks_list()]
+
+        if is_reminder_list_request(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="reminders",
+                action="reminders_list",
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_reminders_list()]
 
         if command_name in {"task", "add-task"}:
             self._record_agent_activity(
@@ -820,6 +1228,24 @@ class TelegramAdapter:
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
             return [self._handle_task_create(routed_text)]
+
+        natural_braindump = parse_natural_braindump_text(routed_text)
+        if natural_braindump is not None:
+            category, body = natural_braindump
+            result = self.backend.create_braindump_item(
+                category=category,
+                text=body,
+                source="telegram",
+            )
+            item = ensure_dict(result.get("item"))
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="braindump",
+                action="braindump_capture",
+                text=body,
+                route_mode="natural_braindump",
+            )
+            return [f"Braindump captured: [{item.get('category')}] {item.get('short_text')}"]
 
         try:
             braindump_runtime.parse_capture_text(routed_text)
@@ -870,7 +1296,17 @@ class TelegramAdapter:
         if route.get("kind") == "project":
             if not route.get("resolved"):
                 return [self._format_unknown_project_route(route)]
-            return [self._handle_project_capture(text)]
+            return [self._handle_project_capture(text, route)]
+
+        if agent_id != "assistant":
+            if agent_id in CONVERSATIONAL_SPECIALISTS:
+                return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
+            if agent_id == "fitness_coach":
+                return [
+                    "Fitness Coach is best used through natural workout messages like "
+                    "`what's my workout today`, `I'm starting my workout`, or `I did hammer curls 12 reps with 10kg each`."
+                ]
+            return [self._handle_specialist_capture(text, route)]
 
         if explicit_assistant_space or str(route.get("agent_id") or "assistant") == "assistant":
             return [self._handle_agent_chat(agent_id="assistant", text=routed_text, route=route)]

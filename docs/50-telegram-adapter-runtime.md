@@ -6,13 +6,14 @@ Last updated: 2026-03-09
 
 Provide the first real human channel for the rebuilt stack without reintroducing WhatsApp dependency.
 
-The adapter is intentionally thin:
+The adapter is intentionally thin, but it is no longer command-only:
 
 1. Telegram long polling only
 2. one allowed private chat
 3. route into existing runtimes and backend handlers
 4. no chat-history-as-memory behavior
 5. degrade cleanly when staged providers such as Google Calendar or Todoist are still disabled
+6. keep a small persistent conversation focus so Pavel can stay in one specialist mode without prefixes on every message
 
 ## Runtime
 
@@ -35,8 +36,33 @@ Current responsibilities:
 11. hand `assistant`, `researcher`, and `builder` requests to conversational runtimes
 12. execute the deterministic `fitness_coach` runtime directly
 13. fall back to structured capture for non-conversational specialists that still have no live runtime
+14. persist a current Telegram focus such as `researcher`, `builder`, or `fitness_coach`
+15. infer common natural-language requests for reminders, tasks, calendar, braindump, and workout logging before sending text to chat runtimes
 
-## Supported Commands
+## Supported Interaction Model
+
+Recommended default:
+
+1. use one main private Telegram chat
+2. talk naturally for reminders, tasks, calendar, and assistant questions
+3. switch focus when you want a specialist to own the next part of the conversation
+4. keep explicit prefixes only as an override, not as the main interface
+
+Natural phrases now supported:
+
+1. `what reminders do i have?`
+2. `add review syllabus to my tasks for tomorrow 10am`
+3. `what's on my calendar tomorrow?`
+4. `note this: test AgentMail later`
+5. `switch to research mode`
+6. `switch to coding mode`
+7. `switch back`
+8. `what mode are we in?`
+9. `what's my workout today?`
+10. `I'm starting my workout`
+11. `I did hammer curls 12 reps with 10kg each`
+
+Explicit grammar that still works:
 
 1. `remind me <message> at <time>`
 2. `remind me <message> in <duration>`
@@ -65,12 +91,13 @@ Current responsibilities:
 
 Current runtime contract:
 
-1. no prefix -> default `assistant` front door
+1. no prefix -> default `assistant` front door, unless a sticky focus is active or a clear natural specialist intent is detected
 2. `research: ...` -> `researcher` in `research`
 3. `fitness: ...` -> `fitness_coach` in `fitness`
 4. `coding: ...` -> `builder` in `coding`
 5. `ops: ...` -> `ops_guard` in `ops`
 6. `reminders: ...`, `calendar: ...`, `tasks: ...`, `braindump: ...` stay under `assistant` but route into narrower spaces
+7. project hints still work, and a sticky specialist focus can apply on top of a project space
 
 Current behavior:
 
@@ -80,12 +107,14 @@ Current behavior:
 4. `ops` remains a structured route for now
 5. project hints still work and can be combined with specialist prefixes, for example:
    - `coding: [project:calendar-cleanup] tighten dashboard route view`
+6. sticky focus survives across turns in Telegram until Pavel switches back or selects another agent
 
 ## State Files
 
 1. Telegram adapter offset/state:
    - local default: `data/telegram-adapter-state.json`
    - VPS target: `/var/lib/openclaw/telegram-adapter-state.json`
+   - includes the current `conversation_focus`
 2. Reminder state:
    - config-driven via [reminders.yaml](/Users/palba/Projects/Clawdio/config/reminders.yaml)
    - VPS target: `/var/lib/openclaw/reminders-state.json`
@@ -132,8 +161,9 @@ systemctl --user status openclaw-telegram-adapter.service --no-pager
 4. if Calendar or personal-task providers are not configured yet, the adapter returns a clear unavailable message instead of failing
 5. personal-task support is simple create/list, not the full dashboard surface
 6. reminder/task/calendar linkage is still separate work
-7. `fitness_coach` is runtime-backed but not conversational yet
+7. `fitness_coach` is runtime-backed and supports common natural workout phrases, but it is still not a freeform chat coach
 8. `ops_guard` is still not conversational
+9. sticky focus is chat-local, not yet split across Telegram topics or multiple human channels
 
 ## Why this shape
 

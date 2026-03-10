@@ -196,6 +196,51 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["lane"], "L2_balanced")
         self.assertEqual(last_route["provider"], "google_ai_studio_free")
 
+    def test_switch_to_research_mode_makes_followup_use_researcher_chat(self):
+        with mock.patch.object(
+            self.adapter.agent_chats["researcher"],
+            "reply",
+            return_value={
+                "reply_text": "Research follow-up handled.",
+                "space_key": "research",
+                "lane": "L2_balanced",
+                "provider": "google_ai_studio_free",
+                "model": "gemini-2.5-flash",
+            },
+        ) as reply:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(24, "switch to research mode")], state=state)
+            self.adapter.process_updates([self._update(25, "what should we do next?")], state=state)
+
+        self.assertIn("Conversation focus set", str(self.client.sent_messages[-2]["text"]))
+        self.assertIn("Research follow-up handled.", str(self.client.sent_messages[-1]["text"]))
+        reply.assert_called_once()
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["agent_id"], "researcher")
+        self.assertEqual(last_route["route_mode"], "focus_mode")
+
+    def test_switch_back_returns_to_assistant(self):
+        with mock.patch.object(
+            self.adapter.assistant_chat,
+            "reply",
+            return_value={
+                "reply_text": "Assistant took over again.",
+                "space_key": "general",
+                "lane": "L1_low_cost",
+                "provider": "google_ai_studio_free",
+                "model": "gemini-2.5-flash-lite",
+            },
+        ) as reply:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(26, "switch to coding mode")], state=state)
+            self.adapter.process_updates([self._update(27, "switch back")], state=state)
+            self.adapter.process_updates([self._update(28, "what can you help me with?")], state=state)
+
+        self.assertIn("Switched back", str(self.client.sent_messages[-2]["text"]))
+        self.assertIn("Assistant took over again.", str(self.client.sent_messages[-1]["text"]))
+        reply.assert_called_once()
+
     def test_due_reminder_dispatch_and_reply_done(self):
         _, confirmation = self.adapter._create_reminder_from_text("remind me stretch in 1 hour")
         self.assertIn("Reminder created", confirmation)
@@ -240,6 +285,20 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(kwargs["due_string"], "tomorrow 5pm")
         self.assertIn("Created personal task", str(self.client.sent_messages[-1]["text"]))
 
+    def test_natural_task_request_routes_to_personal_task_runtime(self):
+        with mock.patch.object(
+            self.backend,
+            "create_personal_task_runtime",
+            return_value={"status": {"recent_results": [{"title": "Review syllabus"}]}},
+        ) as create_task:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(41, "add review syllabus to my tasks for tomorrow 10am")], state=state)
+
+        kwargs = create_task.call_args.kwargs
+        self.assertEqual(kwargs["title"], "review syllabus")
+        self.assertEqual(kwargs["due_string"], "tomorrow 10am")
+        self.assertIn("Created personal task", str(self.client.sent_messages[-1]["text"]))
+
     def test_calendar_today_command_uses_calendar_handler(self):
         with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
             state = self.adapter.load_adapter_state()
@@ -247,6 +306,14 @@ class TelegramAdapterTests(unittest.TestCase):
 
         handler.assert_called_once()
         self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar today\n- none")
+
+    def test_natural_calendar_tomorrow_request_uses_calendar_handler(self):
+        with mock.patch.object(self.adapter, "_handle_calendar_tomorrow", return_value="Calendar tomorrow\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(42, "what do i have tomorrow?")], state=state)
+
+        handler.assert_called_once()
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar tomorrow\n- none")
 
     def test_assistant_space_prefix_still_runs_supported_command(self):
         with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
@@ -299,6 +366,19 @@ class TelegramAdapterTests(unittest.TestCase):
         state = self.adapter.load_adapter_state()
         self.adapter.process_updates([self._update(10, "log bb curl 8 reps 20kg bb total")], state=state)
         self.assertIn("Logged 1 set(s).", str(self.client.sent_messages[-1]["text"]))
+
+    def test_natural_workout_phrases_execute_fitness_runtime(self):
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(43, "what's my workout today?")], state=state)
+        self.assertIn("Today's workout plan", str(self.client.sent_messages[-1]["text"]))
+
+    def test_natural_reminder_list_request(self):
+        _, _ = self.adapter._create_reminder_from_text("remind me review grades in 2 hours")
+        state = self.adapter.load_adapter_state()
+        self.adapter.process_updates([self._update(44, "what reminders do i have?")], state=state)
+        response = str(self.client.sent_messages[-1]["text"])
+        self.assertIn("Pending reminders", response)
+        self.assertIn("review grades", response)
 
 
 if __name__ == "__main__":

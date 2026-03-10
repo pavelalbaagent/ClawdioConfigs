@@ -73,6 +73,7 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertIn("personal_tasks", state)
         self.assertIn("provider_health", state)
         self.assertIn("agent_runtime", state)
+        self.assertIn("telegram_adapter", state)
         self.assertIn("agent_chats", state)
         self.assertIn("continuous_improvement_status", state)
         self.assertIn("memory_sync_status", state)
@@ -81,6 +82,26 @@ class DashboardBackendTests(unittest.TestCase):
         self.assertEqual(state["profiles"]["memory"]["active"], "hybrid_124")
         self.assertEqual(state["routing"]["active_mode"], "balanced_default")
         self.assertEqual(state["agent_runtime"]["default_user_facing_agent"], "assistant")
+
+    def test_build_state_exposes_telegram_focus(self):
+        (self.tmp_path / "data").mkdir(parents=True, exist_ok=True)
+        (self.tmp_path / "data" / "telegram-adapter-state.json").write_text(
+            json.dumps(
+                {
+                    "conversation_focus": {"agent_id": "researcher", "space_key": "research", "set_at": "2026-03-09T12:00:00+00:00"},
+                    "last_update_id": 42,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        state = self.backend.build_state()
+        telegram = state["telegram_adapter"]
+        self.assertTrue(telegram["available"])
+        self.assertEqual(telegram["focus"]["agent_id"], "researcher")
+        self.assertEqual(telegram["focus"]["space_key"], "research")
 
     def test_set_integration_enabled_updates_yaml(self):
         path = self.tmp_path / "config" / "integrations.yaml"

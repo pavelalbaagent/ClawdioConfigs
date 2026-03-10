@@ -500,6 +500,17 @@ function renderAgentRuntime(snapshot) {
       .join(" | ") || "no routed activity yet"
   );
 
+  const telegram = snapshot.telegram_adapter || {};
+  const focus = telegram.focus || null;
+  if (!telegram.available || !focus) {
+    setText("agent-telegram-focus-meta", "No Telegram focus state yet.");
+  } else {
+    setText(
+      "agent-telegram-focus-meta",
+      `${focus.agent_id || "assistant"} | space=${focus.space_key || "general"} | set=${focus.set_at || telegram.updated_at || "-"}`
+    );
+  }
+
   if (!visibleAgents.length) {
     const tr = document.createElement("tr");
     appendCells(tr, ["none", "-", "-", "-", "-"]);

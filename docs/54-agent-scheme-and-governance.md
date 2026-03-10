@@ -178,15 +178,25 @@ Recommended default:
 
 1. the main bot surface enters through `assistant`
 2. requests are rerouted logically when needed
-3. explicit prefixes or UI selection can switch to specialist agents
+3. Telegram should default to one main private chat with sticky focus modes, not multiple channels by default
+4. explicit prefixes or UI selection still exist as overrides, not as the primary interaction pattern
 
 Examples:
 
-1. `research: compare OpenRouter vs Gemini for production fallback`
-2. `fitness: start today`
-3. `coding: review the dashboard auth flow in repo X`
-4. `reminders: remind me to send grades in 1 hour`
-5. `[project:calendar-cleanup] move tomorrow's block to Friday`
+1. `switch to research mode`
+2. `compare OpenRouter vs Gemini for production fallback`
+3. `switch to coding mode`
+4. `review the dashboard auth flow in repo X`
+5. `what reminders do i have?`
+6. `what's on my calendar tomorrow?`
+7. `[project:calendar-cleanup] move tomorrow's block to Friday`
+
+Practical rule:
+
+1. one Telegram chat is the transport
+2. the active focus chooses the specialist
+3. spaces choose the context bucket
+4. services still own the state
 
 ## Runtime status
 
@@ -195,6 +205,8 @@ Implemented now:
 1. dashboard agent registry and active-route visibility
 2. Telegram specialist routing into agent-owned spaces
 3. local route history persisted outside chat history
+4. sticky Telegram focus persisted outside chat history
+5. natural-language handoff for reminders, tasks, calendar, braindump, and common fitness phrases
 
 Still pending:
 

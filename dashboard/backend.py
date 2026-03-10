@@ -285,6 +285,7 @@ class DashboardBackend:
         self.dashboard_path = self.config_dir / "dashboard.yaml"
         self.workspace_path = self.root / "data" / "dashboard-workspace.json"
         self.agent_runtime_state_path = self.root / "data" / "agent-runtime-state.json"
+        self.telegram_adapter_state_path = self._resolve_telegram_adapter_state_path()
         self.assistant_chat_state_path = self.root / "data" / "assistant-chat-state.json"
         self.continuous_improvement_status_path = self.root / "data" / "continuous-improvement-status.json"
         self.memory_sync_status_path = self.root / "data" / "memory-sync-status.json"
@@ -326,6 +327,12 @@ class DashboardBackend:
         if prefer_configured or configured_path.exists():
             return configured_path
         return fallback
+
+    def _resolve_telegram_adapter_state_path(self) -> Path:
+        configured = Path("/var/lib/openclaw/telegram-adapter-state.json")
+        if configured.exists():
+            return configured
+        return self.root / "data" / "telegram-adapter-state.json"
 
     def _integration_env_file_path(self) -> Path | None:
         local_env = self.root / "secrets" / "openclaw.env"
@@ -2031,6 +2038,31 @@ class DashboardBackend:
         return {
             "available": any(bool(row.get("available")) for row in rows),
             "agents": rows,
+        }
+
+    def _telegram_adapter_status(self) -> dict[str, Any]:
+        raw = read_json(self.telegram_adapter_state_path)
+        if not isinstance(raw, dict) or not raw:
+            return {
+                "available": False,
+                "path": str(self.telegram_adapter_state_path),
+                "focus": None,
+                "updated_at": None,
+                "last_update_id": None,
+            }
+        focus = ensure_dict(raw.get("conversation_focus"))
+        if not focus:
+            focus = {"agent_id": "assistant", "space_key": "general"}
+        return {
+            "available": True,
+            "path": str(self.telegram_adapter_state_path),
+            "focus": {
+                "agent_id": str(focus.get("agent_id") or "assistant").strip() or "assistant",
+                "space_key": str(focus.get("space_key") or "general").strip() or "general",
+                "set_at": str(focus.get("set_at") or "").strip() or None,
+            },
+            "updated_at": str(raw.get("updated_at") or "").strip() or None,
+            "last_update_id": raw.get("last_update_id"),
         }
 
     def _continuous_improvement_status(self) -> dict[str, Any]:
@@ -3991,6 +4023,7 @@ class DashboardBackend:
         drive_workspace = self._drive_workspace_status()
         braindump = self._braindump_status()
         provider_health = self._provider_health_status()
+        telegram_adapter = self._telegram_adapter_status()
         assistant_chat = self._assistant_chat_status()
         agent_chats = self._agent_chats_status()
         agent_runtime = self._agent_runtime_snapshot()
@@ -4075,6 +4108,7 @@ class DashboardBackend:
             "drive_workspace": drive_workspace,
             "braindump": braindump,
             "provider_health": provider_health,
+            "telegram_adapter": telegram_adapter,
             "assistant_chat": assistant_chat,
             "agent_chats": agent_chats,
             "agent_runtime": agent_runtime,
