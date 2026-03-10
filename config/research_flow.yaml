@@ -20,6 +20,7 @@ research_flow:
         delivery_time_local: "18:30"
       command:
         script: scripts/job_search_assistant.py
+        supports_json_flag: false
         args:
           - publish-report
 
@@ -35,4 +36,5 @@ research_flow:
         delivery_time_local: "20:00"
       command:
         script: scripts/ai_tools_digest.py
+        supports_json_flag: true
         args: []

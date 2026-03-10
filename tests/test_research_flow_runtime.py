@@ -229,6 +229,80 @@ class ResearchFlowRuntimeTests(unittest.TestCase):
             self.assertEqual(results[0]["workflow"], "job_search_digest")
             self.assertTrue(aggregate_status.exists())
 
+    def test_run_workflow_skips_json_flag_when_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            aggregate_status = tmp_path / "research-flow-status.json"
+
+            fake_job = tmp_path / "fake_job_no_json.py"
+            fake_job.write_text(
+                textwrap.dedent(
+                    """\
+                    import argparse
+                    import json
+
+                    parser = argparse.ArgumentParser()
+                    parser.add_argument("--env-file")
+                    parser.add_argument("--apply", action="store_true")
+                    parser.add_argument("args", nargs="*")
+                    parsed = parser.parse_args()
+                    print(json.dumps({
+                        "generated_at": "2026-03-10T05:00:00+00:00",
+                        "processed_count": 2,
+                        "delivered": parsed.apply,
+                        "args": parsed.args,
+                    }))
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            config_path = tmp_path / "research_flow.yaml"
+            config_path.write_text(
+                textwrap.dedent(
+                    f"""\
+                    research_flow:
+                      enabled: true
+                      owner_agent: researcher
+                      default_space: research
+                      delivery_chat_env: TELEGRAM_RESEARCH_CHAT_ID
+                      shared_dropzones: []
+                      workflows:
+                        job_search_digest:
+                          enabled: true
+                          kind: scheduled_digest
+                          status_file: {tmp_path / "job-status.json"}
+                          output_label: Job search digest
+                          schedule:
+                            enabled: true
+                            timezone: America/Guayaquil
+                            delivery_time_local: "18:30"
+                          command:
+                            script: {fake_job}
+                            supports_json_flag: false
+                            args:
+                              - publish-report
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            proc = self.run_script(
+                [
+                    "--config",
+                    str(config_path),
+                    "--status-file",
+                    str(aggregate_status),
+                    "--json",
+                    "run",
+                    "--workflow",
+                    "job_search_digest",
+                ]
+            )
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertTrue(payload["last_run"]["results"][0]["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

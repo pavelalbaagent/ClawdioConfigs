@@ -909,6 +909,13 @@ def validate_research_flow(data: dict[str, Any], errors: list[str], warnings: li
             errors,
             allow_empty=True,
         )
+        supports_json_flag = command.get("supports_json_flag")
+        if supports_json_flag is not None and not isinstance(supports_json_flag, bool):
+            add_error(
+                errors,
+                "TYPE",
+                f"research_flow.research_flow.workflows.{workflow_name}.command.supports_json_flag must be boolean",
+            )
         schedule = require_dict(row.get("schedule"), errors, f"research_flow.research_flow.workflows.{workflow_name}.schedule")
         if schedule.get("enabled") is not True and schedule.get("enabled") is not False:
             add_error(errors, "TYPE", f"research_flow.research_flow.workflows.{workflow_name}.schedule.enabled must be boolean")

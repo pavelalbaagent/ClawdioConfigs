@@ -134,7 +134,8 @@ def execute_workflow(
         cmd.extend(["--env-file", str(env_file)])
     if apply:
         cmd.append("--apply")
-    cmd.append("--json")
+    if command.get("supports_json_flag") is not False:
+        cmd.append("--json")
 
     proc = subprocess.run(
         cmd,
