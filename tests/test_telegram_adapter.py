@@ -476,13 +476,13 @@ class TelegramAdapterTests(unittest.TestCase):
         ) as create_task:
             state = self.adapter.load_adapter_state()
             self.adapter.process_updates(
-                [self._update(412, "Can you set a task called check google integrations for tonight in todoist")],
+                [self._update(412, "Can you set a task called check google integrations for tonight at 8pm in todoist")],
                 state=state,
             )
 
         kwargs = create_task.call_args.kwargs
         self.assertEqual(kwargs["title"], "check google integrations")
-        self.assertEqual(kwargs["due_string"], "tonight")
+        self.assertEqual(kwargs["due_string"], "today 8pm")
         self.assertIn("Created personal task", str(self.client.sent_messages[-1]["text"]))
 
     def test_calendar_today_command_uses_calendar_handler(self):
@@ -569,6 +569,16 @@ class TelegramAdapterTests(unittest.TestCase):
 
         self.assertEqual(when["kind"], "timed")
         self.assertIn("2026-03-10T13:15:00+00:00", when["start_at"])
+
+    def test_parse_calendar_create_text_supports_time_range(self):
+        parsed = telegram_adapter.parse_calendar_create_text(
+            "Can you schedule a family board game night for Thursday 6pm to 7pm in my calendar"
+        )
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["title"], "a family board game night")
+        self.assertEqual(parsed["when_text"], "Thursday 6pm")
+        self.assertEqual(parsed["duration"], timedelta(hours=1))
 
     def test_natural_calendar_move_request_uses_move_handler(self):
         with mock.patch.object(

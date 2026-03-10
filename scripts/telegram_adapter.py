@@ -499,6 +499,17 @@ def parse_duration_text(text: str | None) -> timedelta | None:
     return timedelta(minutes=qty)
 
 
+def normalize_task_due_text(text: str | None) -> str | None:
+    clean = str(text or "").strip()
+    if not clean:
+        return None
+    lowered = normalize_phrase(clean)
+    match = re.fullmatch(r"tonight(?: at)?\s+(.+)", lowered)
+    if match:
+        return f"today {str(match.group(1) or '').strip()}".strip()
+    return clean
+
+
 def parse_time_component(text: str) -> tuple[int, int] | None:
     clean = str(text or "").strip().lower()
     match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", clean)
@@ -519,6 +530,35 @@ def parse_time_component(text: str) -> tuple[int, int] | None:
     if minute > 59:
         return None
     return hour, minute
+
+
+def extract_calendar_time_range(when_text: str) -> tuple[str, timedelta | None]:
+    clean = str(when_text or "").strip()
+    if not clean:
+        return "", None
+    time_pattern = r"\d{1,2}(?::\d{2})?\s*(?:am|pm)?"
+    day_pattern = r"(?:today|tomorrow|(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{4}-\d{2}-\d{2})"
+    patterns = [
+        re.compile(rf"^(?P<day>{day_pattern})\s+(?P<start>{time_pattern})\s*(?:to|-)\s*(?P<end>{time_pattern})$", re.IGNORECASE),
+        re.compile(rf"^(?P<start>{time_pattern})\s*(?:to|-)\s*(?P<end>{time_pattern})\s+(?P<day>{day_pattern})$", re.IGNORECASE),
+    ]
+    for pattern in patterns:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        day_text = str(match.group("day") or "").strip()
+        start_text = str(match.group("start") or "").strip()
+        end_text = str(match.group("end") or "").strip()
+        start_clock = parse_time_component(start_text)
+        end_clock = parse_time_component(end_text)
+        if start_clock is None or end_clock is None:
+            continue
+        start_minutes = start_clock[0] * 60 + start_clock[1]
+        end_minutes = end_clock[0] * 60 + end_clock[1]
+        if end_minutes <= start_minutes:
+            continue
+        return f"{day_text} {start_text}".strip(), timedelta(minutes=end_minutes - start_minutes)
+    return clean, None
 
 
 def parse_human_calendar_when(
@@ -663,10 +703,11 @@ def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
         if split is None:
             continue
         title, when_text = split
+        when_text, inferred_duration = extract_calendar_time_range(when_text)
         return {
             "title": title,
             "when_text": when_text,
-            "duration": None,
+            "duration": inferred_duration,
         }
 
     patterns = [
@@ -690,11 +731,12 @@ def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
         title = str(match.group("title") or "").strip(" .")
         when_text = str(match.group("when") or "").strip(" .")
         duration_text = str(match.group("duration") or "").strip()
+        when_text, inferred_duration = extract_calendar_time_range(when_text)
         if title and when_text:
             return {
                 "title": title,
                 "when_text": when_text,
-                "duration": parse_duration_text(duration_text),
+                "duration": parse_duration_text(duration_text) or inferred_duration,
             }
     return None
 
@@ -718,11 +760,12 @@ def parse_calendar_move_text(text: str) -> dict[str, Any] | None:
         title = str(match.group("title") or "").strip(" .")
         when_text = str(match.group("when") or "").strip(" .")
         duration_text = str(match.group("duration") or "").strip()
+        when_text, inferred_duration = extract_calendar_time_range(when_text)
         if title and when_text:
             return {
                 "title": title,
                 "when_text": when_text,
-                "duration": parse_duration_text(duration_text),
+                "duration": parse_duration_text(duration_text) or inferred_duration,
             }
     return None
 
@@ -1604,17 +1647,24 @@ class TelegramAdapter:
         if not parsed:
             raise ValueError("invalid task create text")
         title, due_string = parsed
+        normalized_due = normalize_task_due_text(due_string)
         try:
             result = self.backend.create_personal_task_runtime(
                 title=title,
-                due_string=due_string,
+                due_string=normalized_due,
                 apply=True,
             )
             recent = ensure_dict(ensure_dict(result.get("status")).get("recent_results", [{}])[0])
-            due_note = f" | due={due_string}" if due_string else ""
+            due_note = f" | due={normalized_due}" if normalized_due else ""
             return f"Created personal task: {recent.get('title') or title}{due_note}"
-        except Exception:
-            return "Personal task provider is not configured yet."
+        except RuntimeError as exc:
+            text = str(exc)
+            lowered = text.lower()
+            if "missing required personal task env" in lowered or "missing task provider" in lowered:
+                return "Personal task provider is not configured yet."
+            return f"Task request failed: {text}"
+        except Exception as exc:  # noqa: BLE001
+            return f"Task request failed: {exc}"
 
     def _handle_status(self, *, binding: TelegramChatBinding | None = None) -> str:
         snapshot = self.backend.build_state()
