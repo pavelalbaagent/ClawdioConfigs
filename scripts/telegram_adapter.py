@@ -98,6 +98,16 @@ TASK_LIST_PHRASES = {
     "what is on my todo list",
     "what's on my todo list",
     "what is on my task list",
+    "personal tasks",
+    "todoist tasks",
+    "do i have any tasks pending",
+    "do i have any pending tasks",
+    "what tasks are pending",
+    "what tasks are open",
+    "show pending tasks",
+    "list pending tasks",
+    "due tasks",
+    "tasks due today",
 }
 
 BRAINDUMP_NATURAL_PATTERNS = [
@@ -380,7 +390,12 @@ def is_calendar_today_request(text: str) -> bool:
         "what do i have today",
         "what is on today",
         "what's on today",
-    } or clean.startswith("/calendar")
+    } or clean.startswith("/calendar") or bool(
+        re.fullmatch(
+            r"(?:do i have(?: anything)?|what do i have|show(?: me)?|anything(?: on)?)(?: scheduled)?(?: on| for)? today",
+            clean,
+        )
+    )
 
 
 def is_calendar_next_request(text: str) -> bool:
@@ -394,7 +409,20 @@ def is_calendar_next_request(text: str) -> bool:
         "what's coming up",
         "what is on my calendar next",
         "what's on my calendar next",
-    }
+        "how is my calendar looking",
+        "show my calendar",
+        "calendar overview",
+    } or bool(
+        re.fullmatch(
+            r"(?:how is|how's|show(?: me)?|what(?: is| what's|s)?|give me)(?: my)? calendar(?: looking)?(?: (?:this week|upcoming|overview))?",
+            clean,
+        )
+    ) or bool(
+        re.fullmatch(
+            r"(?:what do i have|do i have anything)(?: scheduled)?(?: on)? (?:this week|coming up|upcoming)",
+            clean,
+        )
+    )
 
 
 def is_calendar_tomorrow_request(text: str) -> bool:
@@ -405,7 +433,12 @@ def is_calendar_tomorrow_request(text: str) -> bool:
         "what is on my calendar tomorrow",
         "what's on my calendar tomorrow",
         "what is tomorrow on my calendar",
-    }
+    } or bool(
+        re.fullmatch(
+            r"(?:do i have(?: anything)?|what do i have|show(?: me)?|anything(?: on)?)(?: scheduled)?(?: on| for)? tomorrow",
+            clean,
+        )
+    )
 
 
 def parse_task_create_text(text: str) -> tuple[str, str | None] | None:
@@ -426,13 +459,18 @@ def parse_task_create_text(text: str) -> tuple[str, str | None] | None:
         return body, None
     natural_patterns = [
         re.compile(
-            r"^(?:please\s+)?(?:add|put)\s+(?P<title>.+?)\s+to\s+(?:my\s+)?(?:tasks|task list|todo(?: list)?)"
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?(?:add|put)\s+(?P<title>.+?)\s+to\s+(?:my\s+)?(?:tasks|task list|todo(?: list)?|todoist)"
             r"(?:\s+(?:for|by|due)\s+(?P<due>.+))?$",
             re.IGNORECASE,
         ),
         re.compile(
-            r"^(?:please\s+)?create\s+(?:a\s+)?(?:task|todo)(?:\s+for\s+me)?\s+(?:to\s+)?(?P<title>.+?)"
-            r"(?:\s+(?:for|by|due)\s+(?P<due>.+))?$",
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?create\s+(?:a\s+)?(?:task|todo)(?:\s+for\s+me)?\s+(?:to\s+)?(?P<title>.+?)"
+            r"(?:\s+(?:for|by|due)\s+(?P<due>.+?))?(?:\s+in\s+(?:todoist|my\s+tasks|my\s+todo(?: list)?))?$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?(?:set|make)\s+(?:a\s+)?(?:task|todo)(?:\s+(?:called|named))?\s+(?P<title>.+?)"
+            r"(?:\s+(?:for|by|due)\s+(?P<due>.+?))?(?:\s+in\s+(?:todoist|my\s+tasks|my\s+todo(?: list)?))?$",
             re.IGNORECASE,
         ),
     ]
@@ -501,6 +539,18 @@ def parse_human_calendar_when(
         start_utc = reminder_sm.parse_when(clean, timezone_name, reference_utc)
         return {"kind": "timed", "start_at": start_utc.isoformat(timespec="seconds")}
 
+    trailing_day_match = re.fullmatch(r"(.+?)\s+(today|tomorrow)", lowered)
+    if trailing_day_match:
+        time_text = str(trailing_day_match.group(1) or "").strip()
+        day_keyword = str(trailing_day_match.group(2) or "").strip()
+        target_day = reference_local.date() + timedelta(days=1 if day_keyword == "tomorrow" else 0)
+        clock = parse_time_component(time_text)
+        if clock is not None:
+            start_local = datetime.combine(target_day, datetime.min.time(), tzinfo=zone).replace(
+                hour=clock[0], minute=clock[1]
+            )
+            return {"kind": "timed", "start_at": start_local.astimezone(timezone.utc).isoformat(timespec="seconds")}
+
     day_match = re.fullmatch(r"(today|tomorrow)(?:\s+at\s+|\s+)?(.+)?", lowered)
     if day_match:
         day_keyword = day_match.group(1)
@@ -565,15 +615,71 @@ def parse_human_calendar_when(
         raise ValueError(f"unsupported calendar time: {clean}") from exc
 
 
+def looks_like_calendar_when_text(text: str) -> bool:
+    clean = normalize_phrase(text)
+    if not clean:
+        return False
+    if clean.startswith("in "):
+        return True
+    if re.fullmatch(r"(today|tomorrow)(?:\s+at\s+|\s+)?(.+)?", clean):
+        return True
+    if re.fullmatch(r"(.+?)\s+(today|tomorrow)", clean):
+        return True
+    if re.fullmatch(r"(next\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+|\s+)?(.+)?", clean):
+        return True
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:\s+at\s+|\s+)?(.+)?", clean):
+        return True
+    return bool(re.search(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", clean))
+
+
+def split_calendar_title_when(body: str) -> tuple[str, str] | None:
+    clean = str(body or "").strip(" .")
+    if not clean:
+        return None
+    separators = (" at ", " on ", " for ")
+    for separator in separators:
+        positions = [match.start() for match in re.finditer(re.escape(separator), clean, flags=re.IGNORECASE)]
+        for start in reversed(positions):
+            title = clean[:start].strip(" .,:-")
+            when_text = clean[start + len(separator) :].strip(" .,:-")
+            if title and when_text and looks_like_calendar_when_text(when_text):
+                return title, when_text
+    return None
+
+
 def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
     clean = str(text or "").strip()
+    heuristic_patterns = [
+        re.compile(
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?schedule\s+(?P<body>.+?)(?:\s+in\s+(?:my\s+)?calendar)?$",
+            re.IGNORECASE,
+        ),
+    ]
+    for pattern in heuristic_patterns:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        split = split_calendar_title_when(str(match.group("body") or ""))
+        if split is None:
+            continue
+        title, when_text = split
+        return {
+            "title": title,
+            "when_text": when_text,
+            "duration": None,
+        }
+
     patterns = [
         re.compile(
-            r"^(?:please\s+)?schedule\s+(?P<title>.+?)\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?schedule\s+(?P<title>.+?)\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+in\s+(?:my\s+)?calendar)?(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
             re.IGNORECASE,
         ),
         re.compile(
-            r"^(?:please\s+)?(?:add|put|create)\s+(?P<title>.+?)\s+(?:to|on|in)\s+(?:my\s+)?calendar\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?(?:add|put|create|set)\s+(?P<title>.+?)\s+(?:to|on|in)\s+(?:my\s+)?calendar\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?:(?:can|could|would)\s+you\s+|please\s+)?(?:add|put|create|set)\s+(?P<title>.+?)\s+(?:for|at|on)\s+(?P<when>.+?)\s+(?:to|on|in)\s+(?:my\s+)?calendar(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
             re.IGNORECASE,
         ),
     ]
@@ -621,8 +727,51 @@ def parse_calendar_move_text(text: str) -> dict[str, Any] | None:
     return None
 
 
-def is_task_list_request(text: str) -> bool:
-    return normalize_phrase(text) in TASK_LIST_PHRASES | {"tasks", "task list", "todo list", "/tasks"}
+def classify_task_list_request(text: str) -> str | None:
+    clean = normalize_phrase(text)
+    if clean in {"tasks", "task list", "todo list", "/tasks"} | TASK_LIST_PHRASES:
+        if "today" in clean:
+            return "today"
+        if "overdue" in clean:
+            return "overdue"
+        if "due" in clean:
+            return "due"
+        return "open"
+    if re.fullmatch(
+        r"(?:do i have|what do i have|show(?: me)?|list)(?: any)? (?:(?:pending|open|due|overdue|personal)\s+)?(?:tasks|task list|todo list|todos)",
+        clean,
+    ):
+        if "overdue" in clean:
+            return "overdue"
+        if "due" in clean:
+            return "due"
+        return "open"
+    if re.fullmatch(r"(?:tasks|todos) due today", clean):
+        return "today"
+    if re.fullmatch(r"(?:tasks|todos) due tomorrow", clean):
+        return "tomorrow"
+    return None
+
+
+def task_due_local_date(task: dict[str, Any], timezone_name: str) -> date | None:
+    due_value = str(task.get("due_value") or "").strip()
+    due_mode = str(task.get("due_mode") or "").strip()
+    if not due_value:
+        return None
+    if due_mode == "date":
+        try:
+            return date.fromisoformat(due_value)
+        except ValueError:
+            return None
+    if due_mode == "datetime":
+        try:
+            dt = datetime.fromisoformat(due_value.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(ZoneInfo(timezone_name)).date()
+        except ValueError:
+            return None
+    return None
 
 
 def short_now_iso() -> str:
@@ -1399,14 +1548,41 @@ class TelegramAdapter:
         suffix = f"\n{link}" if link else ""
         return f"Calendar event moved: {format_calendar_event_brief(event, timezone_name)}{suffix}"
 
-    def _handle_tasks_list(self) -> str:
+    def _handle_tasks_list(self, *, filter_kind: str | None = None) -> str:
         try:
             _, client = self._personal_task_client()
-            tasks = personal_task_runtime.list_personal_tasks(client, limit=8, filter_text=None)
-            if not tasks:
-                return "Open tasks\n- none"
-            lines = ["Open tasks"]
-            for task in tasks[:8]:
+            tasks = personal_task_runtime.list_personal_tasks(client, limit=50, filter_text=None)
+            today_local = datetime.now(ZoneInfo(self.default_timezone)).date()
+            heading = "Open tasks"
+            filtered = tasks
+            if filter_kind == "due":
+                heading = "Tasks with due dates"
+                filtered = [task for task in tasks if str(task.get("due_value") or "").strip()]
+            elif filter_kind == "today":
+                heading = "Tasks due today"
+                filtered = [
+                    task
+                    for task in tasks
+                    if task_due_local_date(task, self.default_timezone) == today_local
+                ]
+            elif filter_kind == "tomorrow":
+                heading = "Tasks due tomorrow"
+                filtered = [
+                    task
+                    for task in tasks
+                    if task_due_local_date(task, self.default_timezone) == (today_local + timedelta(days=1))
+                ]
+            elif filter_kind == "overdue":
+                heading = "Overdue tasks"
+                filtered = [
+                    task
+                    for task in tasks
+                    if (due_date := task_due_local_date(task, self.default_timezone)) is not None and due_date < today_local
+                ]
+            if not filtered:
+                return f"{heading}\n- none"
+            lines = [heading]
+            for task in filtered[:8]:
                 due = str(task.get("due_value") or "").strip() or "-"
                 lines.append(f"- {task.get('title')} | due={due}")
             return "\n".join(lines)
@@ -1811,14 +1987,15 @@ class TelegramAdapter:
             )
             return [self._handle_calendar_next()]
 
-        if tasks_allowed and (command_name == "tasks" or is_task_list_request(routed_text)):
+        task_list_kind = classify_task_list_request(routed_text) if tasks_allowed else None
+        if tasks_allowed and (command_name == "tasks" or task_list_kind is not None):
             self._record_agent_activity(
                 agent_id="assistant",
                 space_key="tasks",
                 action="tasks_list",
                 route_mode=str(route.get("route_mode") or "default_front_door"),
             )
-            return [self._handle_tasks_list()]
+            return [self._handle_tasks_list(filter_kind=task_list_kind)]
 
         if reminders_allowed and is_reminder_list_request(routed_text):
             self._record_agent_activity(

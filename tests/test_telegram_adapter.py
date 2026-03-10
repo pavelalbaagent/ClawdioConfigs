@@ -468,6 +468,23 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(kwargs["due_string"], "tomorrow 10am")
         self.assertIn("Created personal task", str(self.client.sent_messages[-1]["text"]))
 
+    def test_natural_task_request_with_todoist_suffix_routes_to_personal_task_runtime(self):
+        with mock.patch.object(
+            self.backend,
+            "create_personal_task_runtime",
+            return_value={"status": {"recent_results": [{"title": "check google integrations"}]}},
+        ) as create_task:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(412, "Can you set a task called check google integrations for tonight in todoist")],
+                state=state,
+            )
+
+        kwargs = create_task.call_args.kwargs
+        self.assertEqual(kwargs["title"], "check google integrations")
+        self.assertEqual(kwargs["due_string"], "tonight")
+        self.assertIn("Created personal task", str(self.client.sent_messages[-1]["text"]))
+
     def test_calendar_today_command_uses_calendar_handler(self):
         with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
             state = self.adapter.load_adapter_state()
@@ -480,6 +497,22 @@ class TelegramAdapterTests(unittest.TestCase):
         with mock.patch.object(self.adapter, "_handle_calendar_tomorrow", return_value="Calendar tomorrow\n- none") as handler:
             state = self.adapter.load_adapter_state()
             self.adapter.process_updates([self._update(42, "what do i have tomorrow?")], state=state)
+
+        handler.assert_called_once()
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar tomorrow\n- none")
+
+    def test_calendar_overview_request_routes_to_next_handler(self):
+        with mock.patch.object(self.adapter, "_handle_calendar_next", return_value="Upcoming calendar\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(421, "How is my calendar looking?")], state=state)
+
+        handler.assert_called_once()
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Upcoming calendar\n- none")
+
+    def test_scheduled_tomorrow_request_routes_to_calendar_tomorrow_handler(self):
+        with mock.patch.object(self.adapter, "_handle_calendar_tomorrow", return_value="Calendar tomorrow\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(422, "Do I have anything scheduled for tomorrow")], state=state)
 
         handler.assert_called_once()
         self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar tomorrow\n- none")
@@ -503,6 +536,40 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["space_key"], "calendar")
         self.assertEqual(last_route["action"], "calendar_create")
 
+    def test_calendar_create_with_calendar_suffix_routes_to_create_handler(self):
+        with mock.patch.object(
+            self.adapter,
+            "_handle_calendar_create_from_text",
+            return_value="Calendar event created: 2026-03-10 08:15 | medical appointment for Pali",
+        ) as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(523, "Can you schedule a medical appointment for Pali at 8:15 today in my calendar")],
+                state=state,
+            )
+
+        handler.assert_called_once()
+        self.assertIn("Calendar event created", str(self.client.sent_messages[-1]["text"]))
+
+    def test_parse_calendar_create_text_preserves_title_with_for_clause(self):
+        parsed = telegram_adapter.parse_calendar_create_text(
+            "Can you schedule a medical appointment for Pali at 8:15 today in my calendar"
+        )
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["title"], "a medical appointment for Pali")
+        self.assertEqual(parsed["when_text"], "8:15 today")
+
+    def test_parse_human_calendar_when_supports_time_before_today(self):
+        when = telegram_adapter.parse_human_calendar_when(
+            "8:15 today",
+            timezone_name="America/Guayaquil",
+            reference_utc=datetime(2026, 3, 10, 12, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(when["kind"], "timed")
+        self.assertIn("2026-03-10T13:15:00+00:00", when["start_at"])
+
     def test_natural_calendar_move_request_uses_move_handler(self):
         with mock.patch.object(
             self.adapter,
@@ -521,6 +588,22 @@ class TelegramAdapterTests(unittest.TestCase):
         last_route = snapshot["agent_runtime"]["activity"]["last_route"]
         self.assertEqual(last_route["space_key"], "calendar")
         self.assertEqual(last_route["action"], "calendar_move")
+
+    def test_natural_task_list_pending_request_routes_to_tasks_handler(self):
+        with mock.patch.object(self.adapter, "_handle_tasks_list", return_value="Open tasks\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(611, "Do I have any tasks pending?")], state=state)
+
+        handler.assert_called_once_with(filter_kind="open")
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Open tasks\n- none")
+
+    def test_due_tasks_today_request_routes_to_filtered_tasks_handler(self):
+        with mock.patch.object(self.adapter, "_handle_tasks_list", return_value="Tasks due today\n- none") as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates([self._update(612, "Tasks due today")], state=state)
+
+        handler.assert_called_once_with(filter_kind="today")
+        self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Tasks due today\n- none")
 
     def test_assistant_space_prefix_still_runs_supported_command(self):
         with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
