@@ -22,6 +22,7 @@ Default source:
 
 1. `ai_tools_db`
 2. root candidates:
+   - `/opt/clawdio/external/AIToolsDB/corpus/ai_tools`
    - `/opt/aitoolsdb/corpus/ai_tools`
    - `/Users/palba/Projects/AIToolsDB/corpus/ai_tools`
 
@@ -78,6 +79,6 @@ Systemd units:
 
 To use this on the VPS, sync the corpus to:
 
-1. `/opt/aitoolsdb/corpus/ai_tools`
+1. `/opt/clawdio/external/AIToolsDB/corpus/ai_tools`
 
 That keeps the OpenClaw app repo separate from the larger research corpus while still allowing local retrieval.

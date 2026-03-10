@@ -10,6 +10,7 @@ knowledge_sources:
       enabled: true
       kind: local_markdown_corpus
       root_candidates:
+        - /opt/clawdio/external/AIToolsDB/corpus/ai_tools
         - /opt/aitoolsdb/corpus/ai_tools
         - /Users/palba/Projects/AIToolsDB/corpus/ai_tools
       allowed_agents:
