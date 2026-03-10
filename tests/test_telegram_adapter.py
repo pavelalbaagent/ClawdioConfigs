@@ -206,6 +206,29 @@ class TelegramAdapterTests(unittest.TestCase):
         self.assertEqual(last_route["lane"], "L2_balanced")
         self.assertEqual(last_route["provider"], "google_ai_studio_free")
 
+    def test_long_agent_reply_is_split_into_multiple_telegram_messages(self):
+        long_text = ("Section line\n" * 700).strip()
+        with mock.patch.object(
+            self.adapter.assistant_chat,
+            "reply",
+            return_value={
+                "reply_text": long_text,
+                "space_key": "general",
+                "lane": "L2_balanced",
+                "provider": "google_ai_studio_free",
+                "model": "gemini-2.5-flash",
+            },
+        ):
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(29, "give me a detailed breakdown of the whole system")],
+                state=state,
+            )
+
+        self.assertGreater(len(self.client.sent_messages), 1)
+        for row in self.client.sent_messages:
+            self.assertLessEqual(len(str(row["text"])), telegram_adapter.TELEGRAM_MESSAGE_CHUNK_LIMIT)
+
     def test_bound_research_chat_routes_without_prefix(self):
         bound_adapter = telegram_adapter.TelegramAdapter(
             root=self.root,

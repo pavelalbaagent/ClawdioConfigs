@@ -47,6 +47,7 @@ from validate_configs import load_yaml  # type: ignore  # noqa: E402
 
 DEFAULT_ENV = Path("/etc/openclaw/openclaw.env")
 DEFAULT_STATE = ROOT / "data" / "telegram-adapter-state.json"
+TELEGRAM_MESSAGE_CHUNK_LIMIT = 3500
 HELP_TEXT = "\n".join(
     [
         "Examples:",
@@ -489,6 +490,35 @@ def format_calendar_lines(events: list[dict[str, Any]], timezone_name: str, *, h
     return "\n".join(lines)
 
 
+def split_telegram_text(text: str, *, limit: int = TELEGRAM_MESSAGE_CHUNK_LIMIT) -> list[str]:
+    clean = str(text or "").strip()
+    if not clean:
+        return [""]
+    if len(clean) <= limit:
+        return [clean]
+
+    parts: list[str] = []
+    remaining = clean
+    while len(remaining) > limit:
+        window = remaining[:limit]
+        cut = max(
+            window.rfind("\n\n"),
+            window.rfind("\n"),
+            window.rfind(" "),
+        )
+        if cut < max(200, limit // 4):
+            cut = limit
+        chunk = remaining[:cut].strip()
+        if not chunk:
+            chunk = remaining[:limit].strip()
+            cut = len(chunk)
+        parts.append(chunk)
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        parts.append(remaining)
+    return parts
+
+
 class TelegramAPI:
     def __init__(self, token: str) -> None:
         self.base_url = f"https://api.telegram.org/bot{token}"
@@ -592,6 +622,24 @@ class TelegramAdapter:
         }
         self.assistant_chat = self.agent_chats["assistant"]
         self.fitness_runtime = fitness_runtime.FitnessRuntime(root=root)
+
+    def _send_text(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        reply_to_message_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        responses: list[dict[str, Any]] = []
+        chunks = split_telegram_text(text)
+        for index, chunk in enumerate(chunks):
+            response = self.client.send_message(
+                chat_id=chat_id,
+                text=chunk,
+                reply_to_message_id=reply_to_message_id if index == 0 else None,
+            )
+            responses.append(ensure_dict(response))
+        return responses
 
     def _binding_for_chat(self, chat_id: str) -> TelegramChatBinding | None:
         return self.chat_bindings.get(chat_id.strip())
@@ -860,7 +908,8 @@ class TelegramAdapter:
         if not dispatches:
             return sent
         for item in dispatches:
-            response = self.client.send_message(chat_id=chat_id, text=item.outbound_text)
+            responses = self._send_text(chat_id=chat_id, text=item.outbound_text)
+            response = responses[0] if responses else {}
             self._remember_reminder_message(
                 state,
                 chat_id=chat_id,
@@ -1460,7 +1509,7 @@ class TelegramAdapter:
             except Exception as exc:  # noqa: BLE001
                 responses = [f"Request failed: {exc}"]
             for response in responses:
-                self.client.send_message(chat_id=chat_id, text=response)
+                self._send_text(chat_id=chat_id, text=response)
             state["last_update_id"] = max(int(state.get("last_update_id") or 0), update_id)
             handled += 1
         self.save_adapter_state(state)
