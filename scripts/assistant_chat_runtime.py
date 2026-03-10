@@ -325,6 +325,7 @@ def resolve_chat_route(
                     "provider": provider_name,
                     "provider_cfg": provider_cfg,
                     "model": model or str(provider_cfg.get("default_model", "")).strip() or None,
+                    "max_output_tokens": int(lane_cfg.get("max_output_tokens", 900) or 900),
                     "approval_required": requested_approval,
                     "route_attempts": route_attempts,
                 }
@@ -365,7 +366,14 @@ def request_json(
     return ensure_dict(data)
 
 
-def call_google(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+def call_google(
+    *,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_output_tokens: int,
+) -> dict[str, Any]:
     contents = []
     for row in messages:
         role = "model" if row["role"] == "assistant" else "user"
@@ -376,7 +384,7 @@ def call_google(*, api_key: str, model: str, system_prompt: str, messages: list[
         payload={
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
-            "generationConfig": {"temperature": 0.35, "maxOutputTokens": 900},
+            "generationConfig": {"temperature": 0.35, "maxOutputTokens": int(max_output_tokens)},
         },
     )
     latency_ms = int((time.perf_counter() - started) * 1000)
@@ -399,7 +407,14 @@ def call_google(*, api_key: str, model: str, system_prompt: str, messages: list[
     }
 
 
-def call_openrouter(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+def call_openrouter(
+    *,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_output_tokens: int,
+) -> dict[str, Any]:
     chat_messages = [{"role": "system", "content": system_prompt}, *messages]
     started = time.perf_counter()
     data = request_json(
@@ -409,7 +424,7 @@ def call_openrouter(*, api_key: str, model: str, system_prompt: str, messages: l
             "model": model,
             "messages": chat_messages,
             "temperature": 0.35,
-            "max_tokens": 900,
+            "max_tokens": int(max_output_tokens),
         },
     )
     latency_ms = int((time.perf_counter() - started) * 1000)
@@ -429,7 +444,14 @@ def call_openrouter(*, api_key: str, model: str, system_prompt: str, messages: l
     }
 
 
-def call_anthropic(*, api_key: str, model: str, system_prompt: str, messages: list[dict[str, str]]) -> dict[str, Any]:
+def call_anthropic(
+    *,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_output_tokens: int,
+) -> dict[str, Any]:
     started = time.perf_counter()
     data = request_json(
         "https://api.anthropic.com/v1/messages",
@@ -442,7 +464,7 @@ def call_anthropic(*, api_key: str, model: str, system_prompt: str, messages: li
             "system": system_prompt,
             "messages": messages,
             "temperature": 0.35,
-            "max_tokens": 900,
+            "max_tokens": int(max_output_tokens),
         },
     )
     latency_ms = int((time.perf_counter() - started) * 1000)
@@ -469,6 +491,7 @@ def invoke_chat_provider(
     env_values: dict[str, str],
     system_prompt: str,
     messages: list[dict[str, str]],
+    max_output_tokens: int,
 ) -> dict[str, Any]:
     transport = str(provider_cfg.get("transport", "")).strip()
     if transport == "google_generative_language":
@@ -477,6 +500,7 @@ def invoke_chat_provider(
             model=model,
             system_prompt=system_prompt,
             messages=messages,
+            max_output_tokens=max_output_tokens,
         )
     if transport == "openrouter_chat_completions":
         return call_openrouter(
@@ -484,6 +508,7 @@ def invoke_chat_provider(
             model=model,
             system_prompt=system_prompt,
             messages=messages,
+            max_output_tokens=max_output_tokens,
         )
     if transport == "anthropic_messages":
         return call_anthropic(
@@ -491,6 +516,7 @@ def invoke_chat_provider(
             model=model,
             system_prompt=system_prompt,
             messages=messages,
+            max_output_tokens=max_output_tokens,
         )
     raise RuntimeError(f"unsupported chat transport: {transport or provider_name}")
 
@@ -1113,6 +1139,7 @@ class AgentChatRuntime:
                 env_values=self.env_values,
                 system_prompt=system_prompt,
                 messages=messages,
+                max_output_tokens=int(plan.get("max_output_tokens", 900) or 900),
             )
         except Exception:
             self._log_call(

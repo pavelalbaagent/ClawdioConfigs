@@ -206,6 +206,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
                 "provider": "openai_subscription_session",
                 "provider_cfg": {"required_command": "codex"},
                 "model": "openai-session-premium",
+                "max_output_tokens": 2000,
             },
         ), mock.patch("assistant_chat_runtime.subprocess.run", side_effect=fake_run) as run_mock, mock.patch(
             "assistant_chat_runtime.invoke_chat_provider",
@@ -228,6 +229,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.assertTrue((self.root / "data" / "fitness-coach-chat-state.json").exists())
         provider_kwargs = provider_mock.call_args.kwargs
         system_prompt = provider_kwargs["system_prompt"]
+        self.assertEqual(provider_kwargs["max_output_tokens"], 2000)
         self.assertIn("Canonical fitness program context:", system_prompt)
         self.assertIn("M1: Mon (Bench 1)", system_prompt)
         self.assertIn("A1 DB Incline Press: 4 x 10-15", system_prompt)
