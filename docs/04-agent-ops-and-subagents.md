@@ -1,4 +1,4 @@
-# Agent Operations and Sub-Agent Rules
+# Agent Operations and Fixed-Agent Rules
 
 ## Two task systems by design
 
@@ -45,15 +45,13 @@ Agents should not become the source of truth for those systems.
 1. `coordinator`: hidden routing role that decides which visible agent or space should handle a request.
 2. `knowledge_librarian`: hidden compression role for summaries, checkpoints, and memory promotion suggestions.
 
-## Sub-agent spawn rules
+## Fixed agent set
 
-1. Spawn sub-agent only when task exceeds 30 minutes of focused work.
-2. Spawn when task requires isolated context or specialized toolchain.
-3. Do not spawn for quick edits, small summaries, or single-call operations.
-4. Every sub-agent must include objective, allowed tools, max runtime, output schema, and stop conditions.
-5. Coding, debugging, and deep investigation should default to sub-agent execution.
-6. Before spawning, announce in one line which sub-agent role and model lane will be used.
-7. On failure, report failure reason and fallback path in one line.
+1. Do not spawn sub-agents in the live OpenClaw runtime.
+2. Keep the visible agent set fixed: `assistant`, `researcher`, `fitness_coach`, `builder`, `ops_guard`.
+3. Use spaces and deterministic services to isolate work instead of hidden workers.
+4. Use project spaces to keep context clean, not to create new runtime agents.
+5. If a task needs specialist handling, route it to an existing agent surface or queue it as an assigned task.
 
 ## Spaces
 
@@ -78,22 +76,8 @@ Agents operate inside spaces. Transport channels are not the same thing as space
 2. Default for a new project space is a new assistant session, not a new dedicated agent.
 3. Keep one coordinator session per active project objective or milestone.
 4. Start a new session inside the same project space when milestone, toolchain, or objective shifts materially.
-5. Create a dedicated project agent only when the project repeatedly needs:
-   - the same specialized toolchain
-   - the same narrow domain context
-   - autonomous background work across multiple sessions
-6. Do not create one always-on agent per project by default. That raises maintenance cost and context drift.
-7. Project spaces own checkpoints; agents are temporary workers unless proven otherwise.
-
-## Dedicated sub-agents worth keeping always-on
-
-Only if repeated use proves the value:
-
-1. `ops_monitor_agent`: uptime checks, alerts, and quota alarms.
-2. `job_search_digest_worker`: daily job-search report generation.
-3. `inbox_processor`: scheduled email triage.
-
-Do not create always-on specialist agents just because a domain exists.
+5. Do not create a dedicated project agent by default. Reuse the existing specialist surfaces.
+6. Project spaces own checkpoints; agents remain stable roles rather than temporary workers.
 
 ## Approval gates
 
@@ -102,11 +86,11 @@ Do not create always-on specialist agents just because a domain exists.
 3. Human approval is required for credential scope changes.
 4. Human approval is required for destructive operations.
 
-## Delegation Message Format
+## Assignment Message Format
 
-1. Spawn notice: `Delegating to <role> on <lane> for <objective>.`
-2. Completion notice: `Sub-agent completed <objective>. Key result: <result>.`
-3. Failure notice: `Sub-agent failed <objective>. Cause: <cause>. Next: <fallback>.`
+1. Assignment notice: `Routing to <role> in <space> for <objective>.`
+2. Completion notice: `Completed <objective>. Key result: <result>.`
+3. Failure notice: `Failed <objective>. Cause: <cause>. Next: <fallback>.`
 
 ## Communication policy
 

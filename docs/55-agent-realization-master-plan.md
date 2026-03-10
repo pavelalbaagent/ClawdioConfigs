@@ -285,23 +285,19 @@ Rule:
 3. promote only durable facts and reusable summaries
 4. keep raw transient chatter out of durable memory
 
-## Session Spawning And Cleanup
+## Session Cleanup And Assignment
 
-### Recommended spawn rules
+### Assignment rules
 
-Spawn only when one of these is true:
+Use the fixed runtime agents and spaces instead of spawning hidden workers:
 
-1. specialist toolchain required
-2. objective large enough to justify isolation
-3. background monitoring/retries needed
-4. project-specific narrow context is cheaper than polluting main space
+1. `assistant` for orchestration and personal system actions
+2. `researcher` for research and job-search synthesis
+3. `builder` for coding and implementation work
+4. `fitness_coach` for training guidance and logging
+5. `ops_guard` for reviews and runtime health
 
-Do not spawn for:
-
-1. one-step scheduling
-2. simple status checks
-3. quick transformations
-4. straightforward app-backed commands
+Project-specific work should move into `project:<slug>` spaces, not new agent instances.
 
 ### Cleanup rules
 

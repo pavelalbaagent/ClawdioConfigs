@@ -11,7 +11,7 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
 1. Keep one active session per main objective and space.
 2. Summarize before context exceeds threshold.
 3. Restart session when auth or tool-state changes make previous context unreliable.
-4. Spawn sub-agents only for scoped specialist work and fold results back into compact summaries.
+4. Do not spawn sub-agents in the live runtime; route to existing agent surfaces and fold results into compact summaries.
 5. Treat channels as transport only; context should come from the selected space plus compact summaries.
 
 ## When to Continue the Same Session
@@ -22,7 +22,7 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
 
 ## When to Summarize
 
-1. Before sub-agent spawn.
+1. Before major handoff or session end.
 2. Before ending work block.
 3. After major topic switch.
 4. After repeated rate-limit errors.
@@ -34,12 +34,11 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
 3. Unresolved error loop.
 4. Manual reset requested by you.
 
-## Spawn Discipline
+## Agent Discipline
 
-1. Require objective, allowed tools, lane, output schema, stop condition, and TTL.
-2. Default TTL 45 minutes, max 180 minutes.
-3. Max parallel sub-agents kept low to avoid cost fan-out.
-4. Collapse all sub-agent output into compact handoff summary.
+1. Keep the runtime agent set fixed.
+2. Route work into existing agent surfaces or project spaces.
+3. Collapse multi-step work into compact handoff summaries instead of creating hidden workers.
 
 ## Practical Daily Pattern
 
@@ -56,7 +55,7 @@ Session behavior is defined in [config/session_policy.yaml](/Users/palba/Project
    - milestone changes
    - toolchain/integration state changes materially
    - the existing session has been compacted enough that a fresh checkpoint is cheaper than replay
-5. Spawn a dedicated agent from a project space only when the same specialist role is needed across repeated sessions or background loops.
+5. Reuse the existing specialist surfaces from a project space instead of spawning new agents.
 
 ## Agent/Space defaults
 

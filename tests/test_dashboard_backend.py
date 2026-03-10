@@ -198,7 +198,7 @@ class DashboardBackendTests(unittest.TestCase):
         project_space = next((row for row in spaces if row.get("project_id") == created["id"]), None)
         self.assertIsNotNone(project_space)
         self.assertEqual(project_space["session_strategy"], "separate_session")
-        self.assertEqual(project_space["agent_strategy"], "spawn_on_demand")
+        self.assertEqual(project_space["agent_strategy"], "existing_surface_only")
 
         updated = self.backend.update_project(project_id=created["id"], status="paused", progress_pct=35)
         self.assertEqual(updated["status"], "paused")

@@ -41,7 +41,7 @@ APPROVAL_STATUSES = {"pending", "approved", "rejected", "cancelled"}
 CALENDAR_CANDIDATE_STATUSES = {"proposed", "needs_details", "ready", "approved", "scheduled", "archived", "error"}
 SPACE_KINDS = {"project"}
 SPACE_SESSION_STRATEGIES = {"shared_session", "separate_session", "checkpointed_session"}
-SPACE_AGENT_STRATEGIES = {"coordinator_only", "spawn_on_demand", "dedicated_specialist"}
+SPACE_AGENT_STRATEGIES = {"coordinator_only", "existing_surface_only", "dedicated_specialist"}
 
 
 @dataclass
@@ -486,7 +486,7 @@ class DashboardBackend:
                 "default_agent": space_defaults.get(key),
                 "entry_command_hint": self._space_entry_command_hint(key),
                 "session_strategy": "shared_session",
-                "agent_strategy": "coordinator_only" if space_defaults.get(key) == "assistant" else "spawn_on_demand",
+                "agent_strategy": "coordinator_only" if space_defaults.get(key) == "assistant" else "existing_surface_only",
             }
             for key in core_spaces
         ]
@@ -789,9 +789,9 @@ class DashboardBackend:
         if session_strategy not in SPACE_SESSION_STRATEGIES:
             session_strategy = "separate_session"
 
-        agent_strategy = str(row.get("agent_strategy", "spawn_on_demand")).strip().lower()
+        agent_strategy = str(row.get("agent_strategy", "existing_surface_only")).strip().lower()
         if agent_strategy not in SPACE_AGENT_STRATEGIES:
-            agent_strategy = "spawn_on_demand"
+            agent_strategy = "existing_surface_only"
 
         return {
             "id": space_id,
@@ -834,7 +834,7 @@ class DashboardBackend:
                 "target_channel": "projects",
                 "entry_command_hint": f"[project:{slug}]",
                 "session_strategy": "separate_session",
-                "agent_strategy": "spawn_on_demand",
+                "agent_strategy": "existing_surface_only",
                 "compaction_strategy": "milestone_summary",
                 "template_version": "project_space_v1",
                 "source_task_id": source_task_id,

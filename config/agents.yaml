@@ -3,7 +3,7 @@ agents:
     enabled: true
     interaction_mode: chat
     default_lane: L1_low_cost
-    can_spawn_subagents: true
+    can_spawn_subagents: false
     allowed_tools:
       - task_router
       - model_router
@@ -119,9 +119,11 @@ agents:
       quick_read_write:
         preferred_lane: L1_low_cost
         provider_preference:
-          - google_ai_studio_free
           - openai_subscription_session
+          - google_ai_studio_free
           - openrouter_free_overflow
+        provider_models:
+          openai_subscription_session: gpt-5.3-codex-spark
       research_synthesis:
         preferred_lane: L2_balanced
         provider_preference:
@@ -311,16 +313,12 @@ routing_overrides:
       action: require_human_approval
 
 spawn_policy:
-  max_active_subagents: 2
-  default_ttl_minutes: 45
-  spawn_when:
-    - task_estimate_over_30_minutes
-    - specialized_tooling_required
-    - isolation_required
+  enabled: false
+  max_active_subagents: 0
+  default_ttl_minutes: 0
+  spawn_when: []
   never_spawn_when:
-    - quick_edit
-    - single_prompt_summary
-    - simple_status_query
+    - all_runtime_work_uses_fixed_agent_set
 
 approval_required:
   - L3_heavy
@@ -352,7 +350,7 @@ continuous_improvement:
     - do_not_auto_change_credentials
     - do_not_auto_change_provider_order_without_approval
     - do_not_auto_enable_new_integrations
-    - do_not_auto_spawn_new_persistent_agents
+    - do_not_auto_create_new_agent_roles_without_approval
     - all_structural_changes_require_human_approval
   review_focus:
     - failing_or_noisy_routes

@@ -6,7 +6,6 @@ session_lifecycle:
   idle_reset_minutes: 120
   summarize_when:
     - topic_switch_major
-    - before_subagent_spawn
     - before_session_end
     - repeated_rate_limit_errors
   restart_when:
@@ -22,18 +21,13 @@ session_lifecycle:
     - active_space
 
 spawn_controls:
-  max_parallel_subagents: 2
-  ttl_minutes_default: 45
-  ttl_minutes_max: 180
-  checkpoint_before_spawn: true
+  enabled: false
+  max_parallel_subagents: 0
+  ttl_minutes_default: 0
+  ttl_minutes_max: 0
+  checkpoint_before_spawn: false
   collapse_results_into_summary: true
-  spawn_requires:
-    - objective
-    - allowed_tools
-    - lane
-    - output_schema
-    - stop_condition
-    - ttl_minutes
+  spawn_requires: []
 
 handoff:
   write_checkpoints_to: telemetry/session-checkpoints.ndjson
@@ -47,16 +41,15 @@ handoff:
 project_spaces:
   create_separate_space_per_project: true
   default_session_strategy: separate_session
-  default_agent_strategy: spawn_on_demand
+  default_agent_strategy: existing_surface_only
   start_new_session_when:
     - milestone_changed
     - toolchain_changed
     - long_idle_gap
     - checkpoint_cheaper_than_replay
-  use_dedicated_agent_when:
+  use_existing_agent_surface_when:
     - repeated_specialist_role
     - persistent_narrow_domain_context
-    - background_monitoring_or_retries
     - isolated_toolchain_boundary
 
 space_registry:

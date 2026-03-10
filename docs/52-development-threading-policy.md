@@ -70,7 +70,7 @@ This should match the project-space policy in [docs/47-project-spaces-and-sessio
 
 1. new ongoing project -> new project space
 2. project space -> usually a separate session/thread
-3. dedicated agent -> only when repeated specialist work or background monitoring is justified
+3. runtime agents stay fixed; route project work to the right existing surface
 
 ## Practical rule of thumb
 

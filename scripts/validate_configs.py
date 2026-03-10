@@ -583,9 +583,21 @@ def validate_agents(data: dict[str, Any], model_lanes: set[str], errors: list[st
             add_error(errors, "LANE", f"agent {agent_name} references unknown lane {lane}")
 
     spawn_policy = require_dict(data.get("spawn_policy"), errors, "agents.spawn_policy")
+    spawn_enabled = spawn_policy.get("enabled", True)
+    if not isinstance(spawn_enabled, bool):
+        add_error(errors, "TYPE", "agents.spawn_policy.enabled must be boolean")
+        spawn_enabled = True
     max_active = spawn_policy.get("max_active_subagents")
-    if not isinstance(max_active, int) or max_active < 1:
-        add_error(errors, "RANGE", "agents.spawn_policy.max_active_subagents must be integer >= 1")
+    if spawn_enabled:
+        if not isinstance(max_active, int) or max_active < 1:
+            add_error(errors, "RANGE", "agents.spawn_policy.max_active_subagents must be integer >= 1 when enabled")
+    else:
+        if not isinstance(max_active, int) or max_active != 0:
+            add_error(errors, "RANGE", "agents.spawn_policy.max_active_subagents must be 0 when disabled")
+        for agent_name, agent_data in agents.items():
+            row = require_dict(agent_data, errors, f"agents.agents.{agent_name}")
+            if row.get("can_spawn_subagents") is True:
+                add_error(errors, "SPAWN", f"agent {agent_name} cannot allow subagents when agents.spawn_policy.enabled is false")
 
 
 def validate_tasks(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
@@ -925,25 +937,41 @@ def validate_session_policy(data: dict[str, Any], errors: list[str], warnings: l
     )
 
     spawn = require_dict(data.get("spawn_controls"), errors, "session_policy.spawn_controls")
+    spawn_enabled = spawn.get("enabled", True)
+    if not isinstance(spawn_enabled, bool):
+        add_error(errors, "TYPE", "session_policy.spawn_controls.enabled must be boolean")
+        spawn_enabled = True
     max_parallel = spawn.get("max_parallel_subagents")
-    if not isinstance(max_parallel, int) or max_parallel < 1:
-        add_error(errors, "RANGE", "session_policy.spawn_controls.max_parallel_subagents must be integer >= 1")
-
     ttl_default = spawn.get("ttl_minutes_default")
     ttl_max = spawn.get("ttl_minutes_max")
-    if not isinstance(ttl_default, int) or ttl_default <= 0:
-        add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_default must be integer > 0")
-    if not isinstance(ttl_max, int) or ttl_max <= 0:
-        add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_max must be integer > 0")
-    if isinstance(ttl_default, int) and isinstance(ttl_max, int) and ttl_default > ttl_max:
-        add_error(errors, "RANGE", "session_policy ttl_minutes_default cannot exceed ttl_minutes_max")
-
-    validate_string_list(
-        spawn.get("spawn_requires"),
-        "session_policy.spawn_controls.spawn_requires",
-        errors,
-        allow_empty=False,
-    )
+    if spawn_enabled:
+        if not isinstance(max_parallel, int) or max_parallel < 1:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.max_parallel_subagents must be integer >= 1 when enabled")
+        if not isinstance(ttl_default, int) or ttl_default <= 0:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_default must be integer > 0 when enabled")
+        if not isinstance(ttl_max, int) or ttl_max <= 0:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_max must be integer > 0 when enabled")
+        if isinstance(ttl_default, int) and isinstance(ttl_max, int) and ttl_default > ttl_max:
+            add_error(errors, "RANGE", "session_policy ttl_minutes_default cannot exceed ttl_minutes_max")
+        validate_string_list(
+            spawn.get("spawn_requires"),
+            "session_policy.spawn_controls.spawn_requires",
+            errors,
+            allow_empty=False,
+        )
+    else:
+        if not isinstance(max_parallel, int) or max_parallel != 0:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.max_parallel_subagents must be 0 when disabled")
+        if not isinstance(ttl_default, int) or ttl_default != 0:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_default must be 0 when disabled")
+        if not isinstance(ttl_max, int) or ttl_max != 0:
+            add_error(errors, "RANGE", "session_policy.spawn_controls.ttl_minutes_max must be 0 when disabled")
+        validate_string_list(
+            spawn.get("spawn_requires"),
+            "session_policy.spawn_controls.spawn_requires",
+            errors,
+            allow_empty=True,
+        )
 
     handoff = require_dict(data.get("handoff"), errors, "session_policy.handoff")
     if not is_non_empty_str(handoff.get("write_checkpoints_to")):
@@ -1215,6 +1243,9 @@ def validate_spawn_alignment(
 ) -> None:
     agents_spawn = require_dict(agents_data.get("spawn_policy"), errors, "agents.spawn_policy")
     session_spawn = require_dict(session_policy_data.get("spawn_controls"), errors, "session_policy.spawn_controls")
+
+    if agents_spawn.get("enabled", True) is False or session_spawn.get("enabled", True) is False:
+        return
 
     agents_max = agents_spawn.get("max_active_subagents")
     session_max = session_spawn.get("max_parallel_subagents")

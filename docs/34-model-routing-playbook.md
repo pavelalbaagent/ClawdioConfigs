@@ -108,14 +108,14 @@ The `openai_subscription_session` provider is intentionally modeled separately f
 
 ## OpenAI model notes
 
-The current OpenAI pins follow supported names surfaced in the official OpenAI docs:
+The current OpenAI pins are the names currently configured for your authenticated Codex session lane:
 
 1. `gpt-5.3-codex-spark` for fast premium conversational work
 2. `gpt-5.1` for stronger research synthesis
 3. `gpt-5.1-codex-mini` for normal coding/build work
 4. `gpt-5.4` for the heaviest reasoning lane
 
-Older OpenClaw backups used names like `gpt-5.3-codex-spark`. Those are treated as legacy naming, not current source-of-truth route targets in this rebuild.
+These route targets are controlled by this repo configuration, not inferred from old OpenClaw backups.
 
 ## Inspect The Real Wiring
 

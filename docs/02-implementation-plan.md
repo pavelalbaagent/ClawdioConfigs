@@ -54,13 +54,13 @@
 5. Treat Codex CLI and Gemini CLI as supervised local tools, not unattended background providers.
 6. Exit criteria: predictable cost and graceful degradation when quotas are hit.
 
-## Phase 7: Sub-agent policy rollout
+## Phase 7: Fixed-agent routing rollout
 
-1. Implement spawn rules from `docs/04-agent-ops-and-subagents.md`.
+1. Lock the runtime to the fixed visible agent set from `docs/04-agent-ops-and-subagents.md`.
 2. Apply session lifecycle controls from `config/session_policy.yaml`.
-3. Enforce TTL and result schema for all sub-agent runs.
+3. Route specialist work into existing agent surfaces and project spaces.
 4. Keep high-cost tasks approval-gated.
-5. Exit criteria: no uncontrolled fan-out, no silent cost explosions.
+5. Exit criteria: no hidden worker fan-out, no silent cost explosions.
 
 ## Phase 8: Validation and go-live
 
