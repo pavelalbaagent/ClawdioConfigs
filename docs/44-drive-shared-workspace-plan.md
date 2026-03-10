@@ -26,6 +26,18 @@ Use `GOOGLE_DRIVE_ROOT_FOLDER_ID` as the ID of the shared root folder.
 4. `03_reference`
 5. `04_archive`
 6. `10_projects`
+7. `11_agents`
+8. `12_shared_sources`
+
+Recommended nested structure:
+
+1. `11_agents/assistant`
+2. `11_agents/researcher`
+3. `11_agents/builder`
+4. `11_agents/fitness_coach`
+5. `11_agents/ops_guard`
+6. `12_shared_sources/inbox_attachments`
+7. `12_shared_sources/ai_tools_reference`
 
 ## Recommended collaboration rules
 
@@ -33,6 +45,8 @@ Use `GOOGLE_DRIVE_ROOT_FOLDER_ID` as the ID of the shared root folder.
 2. The agent can create project subfolders inside `10_projects` and working artifacts inside `01_working`.
 3. The agent should not write outside the shared root.
 4. Folder-sharing changes should stay approval-gated.
+5. Per-agent folders should be used for bounded working material, not as separate roots.
+6. Shared sources should hold durable docs multiple agents may need.
 
 ## Scope choice
 
@@ -94,3 +108,4 @@ The runtime also writes the latest summary to:
 1. Sharing changes are still manual/approval-gated outside this script.
 2. The runtime manages only the top-level contract layout under the configured root.
 3. It does not yet create per-project subfolders automatically.
+4. Nested agent/shared-source subfolders are now scaffolded by the bootstrap runtime when `--apply` is used.

@@ -31,6 +31,7 @@ job_search:
     include_pass_section: false
     telegram:
       enabled: true
+      chat_id_env: TELEGRAM_RESEARCH_CHAT_ID
       max_entries_per_section: 3
       include_output_paths: true
       max_message_chars: 3200

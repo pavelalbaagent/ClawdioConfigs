@@ -14,6 +14,7 @@ Scope:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import sys
@@ -137,6 +138,16 @@ NATURAL_AGENT_RULES = [
         "keywords": ["service", "logs", "down", "incident", "outage", "health", "quota", "provider issue", "restart", "failing"],
     },
 ]
+
+WEEKDAY_TO_INDEX = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
 
 
 @dataclass(frozen=True)
@@ -436,6 +447,180 @@ def parse_task_create_text(text: str) -> tuple[str, str | None] | None:
     return None
 
 
+def parse_duration_text(text: str | None) -> timedelta | None:
+    clean = str(text or "").strip().lower()
+    if not clean:
+        return None
+    match = re.fullmatch(r"(\d+)\s*(m|mins?|minutes?|h|hrs?|hours?)", clean)
+    if not match:
+        return None
+    qty = int(match.group(1))
+    unit = match.group(2)
+    if unit.startswith("h"):
+        return timedelta(hours=qty)
+    return timedelta(minutes=qty)
+
+
+def parse_time_component(text: str) -> tuple[int, int] | None:
+    clean = str(text or "").strip().lower()
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", clean)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    marker = match.group(3)
+    if marker:
+        if hour < 1 or hour > 12:
+            return None
+        if marker == "am":
+            hour = 0 if hour == 12 else hour
+        else:
+            hour = 12 if hour == 12 else hour + 12
+    elif hour > 23 or minute > 59:
+        return None
+    if minute > 59:
+        return None
+    return hour, minute
+
+
+def parse_human_calendar_when(
+    text: str,
+    *,
+    timezone_name: str,
+    reference_utc: datetime,
+) -> dict[str, str]:
+    clean = str(text or "").strip()
+    if not clean:
+        raise ValueError("calendar time is required")
+
+    zone = ZoneInfo(timezone_name)
+    reference_local = reference_utc.astimezone(zone)
+    lowered = normalize_phrase(clean)
+
+    if lowered.startswith("in "):
+        start_utc = reminder_sm.parse_when(clean, timezone_name, reference_utc)
+        return {"kind": "timed", "start_at": start_utc.isoformat(timespec="seconds")}
+
+    day_match = re.fullmatch(r"(today|tomorrow)(?:\s+at\s+|\s+)?(.+)?", lowered)
+    if day_match:
+        day_keyword = day_match.group(1)
+        time_text = str(day_match.group(2) or "").strip()
+        target_day = reference_local.date() + timedelta(days=1 if day_keyword == "tomorrow" else 0)
+        if not time_text:
+            return {"kind": "all_day", "start_date": target_day.isoformat()}
+        clock = parse_time_component(time_text)
+        if clock is None:
+            raise ValueError(f"unsupported calendar time: {clean}")
+        start_local = datetime.combine(target_day, datetime.min.time(), tzinfo=zone).replace(
+            hour=clock[0], minute=clock[1]
+        )
+        return {"kind": "timed", "start_at": start_local.astimezone(timezone.utc).isoformat(timespec="seconds")}
+
+    weekday_match = re.fullmatch(r"(next\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+|\s+)?(.+)?", lowered)
+    if weekday_match:
+        force_next = bool(weekday_match.group(1))
+        weekday = WEEKDAY_TO_INDEX[str(weekday_match.group(2))]
+        time_text = str(weekday_match.group(3) or "").strip()
+        days_ahead = (weekday - reference_local.weekday()) % 7
+        if days_ahead == 0 or force_next:
+            days_ahead = days_ahead or 7
+        target_day = reference_local.date() + timedelta(days=days_ahead)
+        if not time_text:
+            return {"kind": "all_day", "start_date": target_day.isoformat()}
+        clock = parse_time_component(time_text)
+        if clock is None:
+            raise ValueError(f"unsupported calendar time: {clean}")
+        start_local = datetime.combine(target_day, datetime.min.time(), tzinfo=zone).replace(
+            hour=clock[0], minute=clock[1]
+        )
+        return {"kind": "timed", "start_at": start_local.astimezone(timezone.utc).isoformat(timespec="seconds")}
+
+    iso_day_match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:\s+at\s+|\s+)?(.+)?", clean, flags=re.IGNORECASE)
+    if iso_day_match:
+        target_day = date.fromisoformat(iso_day_match.group(1))
+        time_text = str(iso_day_match.group(2) or "").strip()
+        if not time_text:
+            return {"kind": "all_day", "start_date": target_day.isoformat()}
+        clock = parse_time_component(time_text)
+        if clock is None:
+            raise ValueError(f"unsupported calendar time: {clean}")
+        start_local = datetime.combine(target_day, datetime.min.time(), tzinfo=zone).replace(
+            hour=clock[0], minute=clock[1]
+        )
+        return {"kind": "timed", "start_at": start_local.astimezone(timezone.utc).isoformat(timespec="seconds")}
+
+    clock = parse_time_component(clean)
+    if clock is not None:
+        start_local = datetime.combine(reference_local.date(), datetime.min.time(), tzinfo=zone).replace(
+            hour=clock[0], minute=clock[1]
+        )
+        if start_local <= reference_local:
+            start_local = start_local + timedelta(days=1)
+        return {"kind": "timed", "start_at": start_local.astimezone(timezone.utc).isoformat(timespec="seconds")}
+
+    try:
+        start_utc = reminder_sm.parse_when(clean, timezone_name, reference_utc)
+        return {"kind": "timed", "start_at": start_utc.isoformat(timespec="seconds")}
+    except Exception as exc:
+        raise ValueError(f"unsupported calendar time: {clean}") from exc
+
+
+def parse_calendar_create_text(text: str) -> dict[str, Any] | None:
+    clean = str(text or "").strip()
+    patterns = [
+        re.compile(
+            r"^(?:please\s+)?schedule\s+(?P<title>.+?)\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?:please\s+)?(?:add|put|create)\s+(?P<title>.+?)\s+(?:to|on|in)\s+(?:my\s+)?calendar\s+(?:for|at|on)\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            re.IGNORECASE,
+        ),
+    ]
+    for pattern in patterns:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        title = str(match.group("title") or "").strip(" .")
+        when_text = str(match.group("when") or "").strip(" .")
+        duration_text = str(match.group("duration") or "").strip()
+        if title and when_text:
+            return {
+                "title": title,
+                "when_text": when_text,
+                "duration": parse_duration_text(duration_text),
+            }
+    return None
+
+
+def parse_calendar_move_text(text: str) -> dict[str, Any] | None:
+    clean = str(text or "").strip()
+    patterns = [
+        re.compile(
+            r"^(?:please\s+)?(?:move|reschedule)\s+(?P<title>.+?)\s+on\s+(?:my\s+)?calendar\s+to\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?:please\s+)?calendar\s+(?:move|reschedule)\s+(?P<title>.+?)\s+to\s+(?P<when>.+?)(?:\s+for\s+(?P<duration>\d+\s*(?:m|mins?|minutes?|h|hrs?|hours?)))?$",
+            re.IGNORECASE,
+        ),
+    ]
+    for pattern in patterns:
+        match = pattern.match(clean)
+        if not match:
+            continue
+        title = str(match.group("title") or "").strip(" .")
+        when_text = str(match.group("when") or "").strip(" .")
+        duration_text = str(match.group("duration") or "").strip()
+        if title and when_text:
+            return {
+                "title": title,
+                "when_text": when_text,
+                "duration": parse_duration_text(duration_text),
+            }
+    return None
+
+
 def is_task_list_request(text: str) -> bool:
     return normalize_phrase(text) in TASK_LIST_PHRASES | {"tasks", "task list", "todo list", "/tasks"}
 
@@ -488,6 +673,29 @@ def format_calendar_lines(events: list[dict[str, Any]], timezone_name: str, *, h
             when = format_dt(str(event.get("start_value") or ""), timezone_name)
         lines.append(f"- {when} | {summary}")
     return "\n".join(lines)
+
+
+def format_calendar_event_brief(event: dict[str, Any], timezone_name: str) -> str:
+    summary = str(event.get("summary") or "(untitled event)")
+    if event.get("all_day"):
+        when = str(event.get("start_value") or "")
+    else:
+        when = format_dt(str(event.get("start_value") or ""), timezone_name)
+    return f"{when} | {summary}"
+
+
+def calendar_event_match_score(query: str, summary: str) -> float:
+    clean_query = normalize_phrase(query)
+    clean_summary = normalize_phrase(summary)
+    if not clean_query or not clean_summary:
+        return 0.0
+    if clean_query == clean_summary:
+        return 1.0
+    if clean_query in clean_summary:
+        return 0.95
+    if clean_summary in clean_query:
+        return 0.9
+    return difflib.SequenceMatcher(a=clean_query, b=clean_summary).ratio()
 
 
 def split_telegram_text(text: str, *, limit: int = TELEGRAM_MESSAGE_CHUNK_LIMIT) -> list[str]:
@@ -980,6 +1188,217 @@ class TelegramAdapter:
         except Exception:
             return "Calendar is not configured yet."
 
+    def _refresh_calendar_runtime_status(
+        self,
+        *,
+        client: Any,
+        calendar_id: str,
+        timezone_name: str,
+        action: str,
+        recent_results: list[dict[str, Any]],
+        created_count: int = 0,
+        updated_count: int = 0,
+    ) -> None:
+        upcoming_events = calendar_runtime.list_upcoming(
+            client,
+            calendar_id=calendar_id,
+            default_timezone=timezone_name,
+            limit=20,
+            window_days=14,
+        )
+        payload = calendar_runtime.build_status_payload(
+            calendar_id=calendar_id,
+            action=action,
+            dry_run=False,
+            upcoming_events=upcoming_events,
+            recent_results=recent_results,
+            window_days=14,
+            created_count=created_count,
+            updated_count=updated_count,
+        )
+        calendar_runtime.write_json(self.root / "data" / "calendar-runtime-status.json", payload)
+
+    def _timed_event_end(
+        self,
+        *,
+        start_at: str,
+        duration: timedelta | None,
+        default_timezone: str,
+    ) -> str:
+        start_dt = calendar_runtime.parse_datetime_text(start_at, default_timezone)
+        end_dt = start_dt + (duration or timedelta(hours=1))
+        return end_dt.isoformat(timespec="seconds")
+
+    def _match_calendar_event(
+        self,
+        *,
+        title: str,
+        events: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for event in events:
+            score = calendar_event_match_score(title, str(event.get("summary") or ""))
+            if score >= 0.62:
+                scored.append((score, event))
+        if not scored:
+            return None, []
+        scored.sort(key=lambda item: item[0], reverse=True)
+        top_score = scored[0][0]
+        top = [row for score, row in scored if score >= max(0.9, top_score - 0.03)]
+        if len(top) == 1:
+            return top[0], top
+        exact = [row for row in top if normalize_phrase(str(row.get("summary") or "")) == normalize_phrase(title)]
+        if len(exact) == 1:
+            return exact[0], exact
+        return None, top[:3]
+
+    def _handle_calendar_create_from_text(self, text: str) -> str:
+        parsed = parse_calendar_create_text(text)
+        if not parsed:
+            raise ValueError("invalid calendar create request")
+        client, timezone_name = self._calendar_client()
+        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+        when_spec = parse_human_calendar_when(
+            str(parsed.get("when_text") or ""),
+            timezone_name=timezone_name,
+            reference_utc=datetime.now(timezone.utc),
+        )
+        if when_spec["kind"] == "all_day":
+            event_spec = calendar_runtime.build_event_payload(
+                title=str(parsed["title"]),
+                description=None,
+                location=None,
+                attendees=None,
+                start_at=None,
+                end_at=None,
+                start_date=when_spec["start_date"],
+                end_date=None,
+                timezone_name=timezone_name,
+            )
+        else:
+            start_at = when_spec["start_at"]
+            end_at = self._timed_event_end(
+                start_at=start_at,
+                duration=parsed.get("duration"),
+                default_timezone=timezone_name,
+            )
+            event_spec = calendar_runtime.build_event_payload(
+                title=str(parsed["title"]),
+                description=None,
+                location=None,
+                attendees=None,
+                start_at=start_at,
+                end_at=end_at,
+                start_date=None,
+                end_date=None,
+                timezone_name=timezone_name,
+            )
+        event = calendar_runtime.normalize_event(client.create_event(calendar_id, event_spec.payload))
+        result = {
+            "action": "create_event",
+            "status": "scheduled",
+            "event_id": event.get("id"),
+            "event_html_link": event.get("html_link"),
+            "title": event.get("summary"),
+        }
+        self._refresh_calendar_runtime_status(
+            client=client,
+            calendar_id=calendar_id,
+            timezone_name=timezone_name,
+            action="create_event",
+            recent_results=[result],
+            created_count=1,
+        )
+        link = str(event.get("html_link") or "").strip()
+        suffix = f"\n{link}" if link else ""
+        return f"Calendar event created: {format_calendar_event_brief(event, timezone_name)}{suffix}"
+
+    def _handle_calendar_move_from_text(self, text: str) -> str:
+        parsed = parse_calendar_move_text(text)
+        if not parsed:
+            raise ValueError("invalid calendar move request")
+        client, timezone_name = self._calendar_client()
+        calendar_id = calendar_runtime.resolve_calendar_id(env_file_values=self.env_values, override=None)
+        events = calendar_runtime.list_upcoming(
+            client,
+            calendar_id=calendar_id,
+            default_timezone=timezone_name,
+            limit=30,
+            window_days=45,
+        )
+        matched, candidates = self._match_calendar_event(title=str(parsed["title"]), events=events)
+        if matched is None:
+            if candidates:
+                options = " | ".join(format_calendar_event_brief(item, timezone_name) for item in candidates)
+                return f"Multiple calendar matches found. Be more specific: {options}"
+            return f"Could not find a future calendar event matching: {parsed['title']}"
+
+        when_spec = parse_human_calendar_when(
+            str(parsed.get("when_text") or ""),
+            timezone_name=timezone_name,
+            reference_utc=datetime.now(timezone.utc),
+        )
+        payload: dict[str, Any] = {"summary": str(matched.get("summary") or "").strip()}
+        if when_spec["kind"] == "all_day":
+            payload.update(
+                calendar_runtime.build_event_times(
+                    start_at=None,
+                    end_at=None,
+                    start_date=when_spec["start_date"],
+                    end_date=None,
+                    timezone_name=timezone_name,
+                ).payload
+            )
+        else:
+            start_at = when_spec["start_at"]
+            duration = parsed.get("duration")
+            if duration is None and not matched.get("all_day"):
+                start_value = str(matched.get("start_value") or "").strip()
+                end_value = str(matched.get("end_value") or "").strip()
+                if start_value and end_value:
+                    try:
+                        duration = calendar_runtime.parse_datetime_text(end_value, timezone_name) - calendar_runtime.parse_datetime_text(
+                            start_value, timezone_name
+                        )
+                    except Exception:
+                        duration = None
+            end_at = self._timed_event_end(
+                start_at=start_at,
+                duration=duration,
+                default_timezone=timezone_name,
+            )
+            payload.update(
+                calendar_runtime.build_event_times(
+                    start_at=start_at,
+                    end_at=end_at,
+                    start_date=None,
+                    end_date=None,
+                    timezone_name=timezone_name,
+                ).payload
+            )
+
+        event = calendar_runtime.normalize_event(
+            client.update_event(calendar_id, str(matched.get("id") or ""), payload)
+        )
+        result = {
+            "action": "update_event",
+            "status": "scheduled",
+            "event_id": event.get("id"),
+            "event_html_link": event.get("html_link"),
+            "title": event.get("summary"),
+        }
+        self._refresh_calendar_runtime_status(
+            client=client,
+            calendar_id=calendar_id,
+            timezone_name=timezone_name,
+            action="update_event",
+            recent_results=[result],
+            updated_count=1,
+        )
+        link = str(event.get("html_link") or "").strip()
+        suffix = f"\n{link}" if link else ""
+        return f"Calendar event moved: {format_calendar_event_brief(event, timezone_name)}{suffix}"
+
     def _handle_tasks_list(self) -> str:
         try:
             _, client = self._personal_task_client()
@@ -1328,6 +1747,26 @@ class TelegramAdapter:
             if agent_id in CONVERSATIONAL_SPECIALISTS:
                 return [self._handle_agent_chat(agent_id=agent_id, text=routed_text, route=route)]
             return [self._handle_specialist_capture(text, route)]
+
+        if calendar_allowed and parse_calendar_move_text(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="calendar",
+                action="calendar_move",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_calendar_move_from_text(routed_text)]
+
+        if calendar_allowed and parse_calendar_create_text(routed_text):
+            self._record_agent_activity(
+                agent_id="assistant",
+                space_key="calendar",
+                action="calendar_create",
+                text=routed_text,
+                route_mode=str(route.get("route_mode") or "default_front_door"),
+            )
+            return [self._handle_calendar_create_from_text(routed_text)]
 
         if calendar_allowed and command_name == "calendar":
             if body.lower() in {"", "today"}:

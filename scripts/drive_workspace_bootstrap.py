@@ -80,7 +80,15 @@ class DriveClient:
 class FixtureDriveClient:
     def __init__(self, *, root: dict[str, Any], children: list[dict[str, Any]]):
         self.root = ensure_dict(root)
-        self.children = [ensure_dict(item) for item in children]
+        self.children_by_parent: dict[str, list[dict[str, Any]]] = {str(self.root.get("id") or ""): []}
+        for item in children:
+            row = ensure_dict(item)
+            parents = row.get("parents")
+            if isinstance(parents, list) and parents:
+                parent_id = str(parents[0] or "").strip() or str(self.root.get("id") or "")
+            else:
+                parent_id = str(self.root.get("id") or "")
+            self.children_by_parent.setdefault(parent_id, []).append(row)
         self.created: list[dict[str, Any]] = []
 
     def get_item(self, file_id: str) -> dict[str, Any]:
@@ -89,14 +97,12 @@ class FixtureDriveClient:
         return self.root
 
     def list_child_folders(self, parent_id: str) -> list[dict[str, Any]]:
-        if str(self.root.get("id") or "") != parent_id:
-            return []
-        return list(self.children)
+        return list(self.children_by_parent.get(parent_id, []))
 
     def create_folder(self, name: str, parent_id: str) -> dict[str, Any]:
         item = {"id": f"created-{len(self.created) + 1}", "name": name, "mimeType": FOLDER_MIME, "parents": [parent_id]}
         self.created.append(item)
-        self.children.append(item)
+        self.children_by_parent.setdefault(parent_id, []).append(item)
         return item
 
 
@@ -154,12 +160,37 @@ def expected_folder_names(contract: dict[str, Any]) -> list[str]:
     return names
 
 
+def expected_folder_tree(contract: dict[str, Any]) -> dict[str, list[str]]:
+    rows = contract.get("folder_layout")
+    if not isinstance(rows, list):
+        return {}
+    tree: dict[str, list[str]] = {}
+    for item in rows:
+        row = ensure_dict(item)
+        parent_name = str(row.get("name") or "").strip()
+        if not parent_name:
+            continue
+        children = row.get("children")
+        if not isinstance(children, list):
+            continue
+        child_names: list[str] = []
+        for child in children:
+            child_row = ensure_dict(child)
+            child_name = str(child_row.get("name") or "").strip()
+            if child_name:
+                child_names.append(child_name)
+        if child_names:
+            tree[parent_name] = child_names
+    return tree
+
+
 def inspect_workspace(client: Any, *, root_folder_id: str, contract: dict[str, Any], apply: bool) -> dict[str, Any]:
     root = client.get_item(root_folder_id)
     if str(root.get("mimeType") or "") != FOLDER_MIME:
         raise RuntimeError("configured root folder is not a folder")
 
     expected_names = expected_folder_names(contract)
+    expected_tree = expected_folder_tree(contract)
     existing_children = client.list_child_folders(root_folder_id)
     existing_by_name = {str(item.get("name") or "").strip(): ensure_dict(item) for item in existing_children if str(item.get("name") or "").strip()}
 
@@ -175,8 +206,48 @@ def inspect_workspace(client: Any, *, root_folder_id: str, contract: dict[str, A
         missing = [name for name in expected_names if name not in existing_by_name]
         extra = [name for name in sorted(existing_by_name) if name not in expected_names]
 
+    nested: dict[str, Any] = {}
+    for parent_name, child_names in expected_tree.items():
+        parent = existing_by_name.get(parent_name)
+        nested_row: dict[str, Any] = {
+            "expected_names": child_names,
+            "existing_names": [],
+            "missing": list(child_names),
+            "extra": [],
+            "created": [],
+        }
+        if parent:
+            parent_id = str(parent.get("id") or "").strip()
+            child_rows = client.list_child_folders(parent_id)
+            child_by_name = {
+                str(item.get("name") or "").strip(): ensure_dict(item)
+                for item in child_rows
+                if str(item.get("name") or "").strip()
+            }
+            nested_row["existing_names"] = sorted(child_by_name.keys())
+            nested_row["missing"] = [name for name in child_names if name not in child_by_name]
+            nested_row["extra"] = [name for name in sorted(child_by_name) if name not in child_names]
+            if apply and nested_row["missing"]:
+                created_children: list[dict[str, Any]] = []
+                for name in list(nested_row["missing"]):
+                    created_children.append(client.create_folder(name, parent_id))
+                child_rows = client.list_child_folders(parent_id)
+                child_by_name = {
+                    str(item.get("name") or "").strip(): ensure_dict(item)
+                    for item in child_rows
+                    if str(item.get("name") or "").strip()
+                }
+                nested_row["existing_names"] = sorted(child_by_name.keys())
+                nested_row["missing"] = [name for name in child_names if name not in child_by_name]
+                nested_row["extra"] = [name for name in sorted(child_by_name) if name not in child_names]
+                nested_row["created"] = [
+                    {"id": str(item.get("id") or ""), "name": str(item.get("name") or "")}
+                    for item in created_children
+                ]
+        nested[parent_name] = nested_row
+
     return {
-        "ok": not missing,
+        "ok": not missing and all(not ensure_dict(row).get("missing") for row in nested.values()),
         "root": {
             "id": str(root.get("id") or ""),
             "name": str(root.get("name") or ""),
@@ -188,6 +259,7 @@ def inspect_workspace(client: Any, *, root_folder_id: str, contract: dict[str, A
         "missing": missing,
         "extra": extra,
         "created": [{"id": str(item.get("id") or ""), "name": str(item.get("name") or "")} for item in created],
+        "nested": nested,
     }
 
 
@@ -215,6 +287,12 @@ def human_output(summary: dict[str, Any], apply: bool) -> str:
         lines.append(
             "- Created: " + ", ".join(f"{item['name']} ({item['id']})" for item in summary["created"])
         )
+    nested = ensure_dict(summary.get("nested"))
+    for parent_name, row in nested.items():
+        nested_row = ensure_dict(row)
+        lines.append(f"- Nested {parent_name}: existing={', '.join(nested_row.get('existing_names', [])) or '(none)'}")
+        if nested_row.get("missing"):
+            lines.append(f"  missing={', '.join(nested_row['missing'])}")
     return "\n".join(lines)
 
 

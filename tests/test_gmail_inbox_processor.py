@@ -182,10 +182,13 @@ class GmailInboxProcessorTests(unittest.TestCase):
             tasks = workspace["tasks"]
             self.assertEqual(len(tasks), 1)
             self.assertEqual(tasks[0]["source"], "gmail_inbox")
+            self.assertEqual(tasks[0]["assignees"], ["assistant"])
+            self.assertEqual(tasks[0]["owner_agent"], "assistant")
 
             calendar = json.loads(calendar_path.read_text(encoding="utf-8"))
             self.assertEqual(len(calendar["items"]), 1)
             self.assertEqual(calendar["items"][0]["status"], "proposed")
+            self.assertEqual(calendar["items"][0]["owner_agent"], "assistant")
 
             status = json.loads(status_path.read_text(encoding="utf-8"))
             self.assertIn("summary", status)

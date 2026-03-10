@@ -484,6 +484,44 @@ class TelegramAdapterTests(unittest.TestCase):
         handler.assert_called_once()
         self.assertEqual(str(self.client.sent_messages[-1]["text"]), "Calendar tomorrow\n- none")
 
+    def test_natural_calendar_create_request_uses_create_handler(self):
+        with mock.patch.object(
+            self.adapter,
+            "_handle_calendar_create_from_text",
+            return_value="Calendar event created: 2026-03-10 15:00 | dentist",
+        ) as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(52, "add dentist appointment to my calendar for tomorrow 3pm")],
+                state=state,
+            )
+
+        handler.assert_called_once()
+        self.assertIn("Calendar event created", str(self.client.sent_messages[-1]["text"]))
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["space_key"], "calendar")
+        self.assertEqual(last_route["action"], "calendar_create")
+
+    def test_natural_calendar_move_request_uses_move_handler(self):
+        with mock.patch.object(
+            self.adapter,
+            "_handle_calendar_move_from_text",
+            return_value="Calendar event moved: 2026-03-11 16:00 | dentist appointment",
+        ) as handler:
+            state = self.adapter.load_adapter_state()
+            self.adapter.process_updates(
+                [self._update(53, "move dentist appointment on my calendar to tomorrow 4pm")],
+                state=state,
+            )
+
+        handler.assert_called_once()
+        self.assertIn("Calendar event moved", str(self.client.sent_messages[-1]["text"]))
+        snapshot = self.backend.build_state()
+        last_route = snapshot["agent_runtime"]["activity"]["last_route"]
+        self.assertEqual(last_route["space_key"], "calendar")
+        self.assertEqual(last_route["action"], "calendar_move")
+
     def test_assistant_space_prefix_still_runs_supported_command(self):
         with mock.patch.object(self.adapter, "_handle_calendar_today", return_value="Calendar today\n- none") as handler:
             state = self.adapter.load_adapter_state()

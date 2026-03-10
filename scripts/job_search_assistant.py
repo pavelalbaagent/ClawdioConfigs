@@ -142,6 +142,20 @@ def env_get(name: str, env_file_values: dict[str, str]) -> str:
     return env_file_values.get(name, os.environ.get(name, "")).strip()
 
 
+def resolve_delivery_chat_id(config: dict[str, Any], env_values: dict[str, str]) -> str:
+    delivery = ensure_dict(config.get("delivery"))
+    telegram_cfg = ensure_dict(delivery.get("telegram"))
+    chat_id_env = str(telegram_cfg.get("chat_id_env") or "").strip()
+    if chat_id_env:
+        value = env_get(chat_id_env, env_values)
+        if value:
+            return value
+    fallback = env_get("TELEGRAM_ALLOWED_CHAT_ID", env_values)
+    if fallback:
+        return fallback
+    raise RuntimeError("missing Telegram delivery chat id")
+
+
 def normalize_text(text: str) -> str:
     text = unescape(text)
     text = re.sub(r"\s+", " ", text)
@@ -834,11 +848,9 @@ def main() -> int:
     if args.apply:
         env_values = load_env_file(args.env_file.expanduser().resolve()) if args.env_file else {}
         token = env_get("TELEGRAM_BOT_TOKEN", env_values)
-        chat_id = env_get("TELEGRAM_ALLOWED_CHAT_ID", env_values)
+        chat_id = resolve_delivery_chat_id(config, env_values)
         if not token:
             raise RuntimeError("missing TELEGRAM_BOT_TOKEN")
-        if not chat_id:
-            raise RuntimeError("missing TELEGRAM_ALLOWED_CHAT_ID")
         client = TelegramReportClient(token)
         responses = client.send_long_message(chat_id=chat_id, text=message)
         response = responses[0] if responses else {}

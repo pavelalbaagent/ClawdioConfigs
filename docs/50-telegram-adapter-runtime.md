@@ -57,6 +57,10 @@ Natural phrases now supported:
 6. `I'm starting my workout`
 7. `I did hammer curls 12 reps with 10kg each`
 8. `should i swap anything today if my elbow feels irritated?`
+9. `schedule dentist appointment tomorrow at 3pm`
+10. `add parent teacher meeting to my calendar for friday 5pm`
+11. `move dentist appointment on my calendar to tomorrow 4pm`
+12. `reschedule parent teacher meeting on my calendar to monday 6pm`
 
 Explicit grammar that still works:
 
@@ -173,7 +177,7 @@ systemctl --user status openclaw-telegram-adapter.service --no-pager
 
 1. no Telegram webhook mode
 2. no group/topic mode
-3. calendar support is read-first in chat; candidate editing stays in dashboard
+3. chat now supports natural-language calendar reads plus direct create/move actions from `assistant_main`; candidate editing still stays in dashboard for ambiguous cases
 4. if Calendar or personal-task providers are not configured yet, the adapter returns a clear unavailable message instead of failing
 5. personal-task support is simple create/list, not the full dashboard surface
 6. reminder/task/calendar linkage is still separate work

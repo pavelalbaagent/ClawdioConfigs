@@ -848,8 +848,8 @@ def ensure_gmail_project(workspace: dict[str, Any]) -> str:
             "id": "proj-gmail-inbox",
             "name": "Gmail Inbox",
             "status": "active",
-            "description": "Email-origin tasks promoted from the Gmail inbox processor.",
-            "owner": "pavel",
+            "description": "Assistant-owned inbox triage queue populated from the Gmail inbox processor.",
+            "owner": "assistant",
             "target_date": None,
             "progress_pct": 0,
             "created_at": now,
@@ -914,7 +914,7 @@ def promote_task_candidates(records: list[dict[str, Any]], workspace_path: Path)
             "title": task_title_for_record(record),
             "status": str((row or {}).get("status") or "todo"),
             "project_id": project_id,
-            "assignees": ["pavel"],
+            "assignees": ["assistant"],
             "priority": priority_from_record(record),
             "due_at": due_at,
             "notes": task_notes_for_record(record),
@@ -926,6 +926,8 @@ def promote_task_candidates(records: list[dict[str, Any]], workspace_path: Path)
             "updated_at": now,
             "source_message_id": record["message_id"],
             "source_thread_id": record["thread_id"],
+            "space_key": "general",
+            "owner_agent": "assistant",
         }
         if row:
             for index, task in enumerate(tasks):
@@ -979,6 +981,8 @@ def promote_calendar_candidates(records: list[dict[str, Any]], candidates_path: 
             "reason": action.get("reason"),
             "intent_tags": ensure_string_list(record.get("intent_tags")),
             "context_ts": record.get("message_ts"),
+            "space_key": "calendar",
+            "owner_agent": "assistant",
             "created_at": str((row or {}).get("created_at") or now),
             "updated_at": now,
         }

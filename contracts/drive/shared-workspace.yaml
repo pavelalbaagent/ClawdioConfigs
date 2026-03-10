@@ -19,6 +19,26 @@ folder_layout:
     purpose: Retired or completed project material.
   - name: 10_projects
     purpose: Project-specific subfolders created by human or agent.
+  - name: 11_agents
+    purpose: Agent-specific working folders for bounded drafts, scratch files, and intermediate context artifacts.
+    children:
+      - name: assistant
+        purpose: Assistant-owned inbox triage artifacts, summaries, and coordination scratch files.
+      - name: researcher
+        purpose: Research notes, comparisons, and AI-tools/job-search working material.
+      - name: builder
+        purpose: Coding design notes, specs, patch plans, and repo-linked exports.
+      - name: fitness_coach
+        purpose: Program exports, deload reviews, and coaching notes safe to share through Drive.
+      - name: ops_guard
+        purpose: Incident summaries, health review exports, and bounded operational reports.
+  - name: 12_shared_sources
+    purpose: Shared read-mostly reference material usable by multiple agents.
+    children:
+      - name: inbox_attachments
+        purpose: Attachments promoted from Gmail inbox processing for later review.
+      - name: ai_tools_reference
+        purpose: Shared AI tools research material and AIToolsDB-derived exports.
 
 collaboration_rules:
   human_can_create_top_level_folders: true

@@ -99,6 +99,11 @@ Default contract in config:
 3. empty-day behavior: still produce and send a report
 4. delivery channel: Telegram private operator chat
 
+Live default:
+
+1. deliver to the `researcher` surface via `TELEGRAM_RESEARCH_CHAT_ID`
+2. do not send the scheduled digest to the assistant main chat
+
 ## Report Presentation
 
 Telegram digest shape:

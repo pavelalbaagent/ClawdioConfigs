@@ -189,6 +189,69 @@ class JobSearchAssistantTests(unittest.TestCase):
             self.assertIn("Apply Today", payload["delivery"]["preview"])
             self.assertIn("AI Enablement Consultant", payload["delivery"]["preview"])
 
+    def test_publish_report_apply_prefers_research_chat_binding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "postings"
+            triage_dir = tmp_path / "triage"
+            summary_dir = tmp_path / "daily"
+            latest_status = tmp_path / "job-search-status.json"
+            config_path = tmp_path / "job_search.yaml"
+            env_path = tmp_path / "openclaw.env"
+
+            input_dir.mkdir()
+            (input_dir / "apply.txt").write_text(
+                """
+                AI Enablement Consultant
+
+                Global remote across LATAM including Ecuador. Looking for AI adoption,
+                workflow automation, stakeholder alignment, and Python.
+                """,
+                encoding="utf-8",
+            )
+
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("saved_postings_dir: data/job-search/inbox", f"saved_postings_dir: {input_dir}", 1)
+            config_text = config_text.replace("triage_dir: output/jobs/triage", f"triage_dir: {triage_dir}", 1)
+            config_text = config_text.replace("daily_summary_dir: output/jobs/daily", f"daily_summary_dir: {summary_dir}", 1)
+            config_text = config_text.replace(
+                "latest_status_file: data/job-search-daily-summary.json",
+                f"latest_status_file: {latest_status}",
+                1,
+            )
+            config_path.write_text(config_text, encoding="utf-8")
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "TELEGRAM_BOT_TOKEN=test-token",
+                        "TELEGRAM_ALLOWED_CHAT_ID=11111",
+                        "TELEGRAM_RESEARCH_CHAT_ID=22222",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            sent_chat_ids: list[str] = []
+            argv = [
+                str(SCRIPT),
+                "publish-report",
+                "--config",
+                str(config_path),
+                "--env-file",
+                str(env_path),
+                "--day-label",
+                "2026-03-09",
+                "--apply",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.object(jobs.TelegramReportClient, "send_long_message", autospec=True) as send_long:
+                    send_long.side_effect = lambda self, *, chat_id, text: sent_chat_ids.append(chat_id) or [{"message_id": 1}]
+                    exit_code = jobs.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(sent_chat_ids, ["22222"])
+
 
 if __name__ == "__main__":
     unittest.main()

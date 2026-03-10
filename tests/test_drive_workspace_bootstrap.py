@@ -42,6 +42,8 @@ class DriveWorkspaceBootstrapTests(unittest.TestCase):
         self.assertTrue(after["ok"])
         self.assertEqual(after["missing"], [])
         self.assertGreaterEqual(len(after["created"]), 1)
+        self.assertIn("11_agents", after["nested"])
+        self.assertEqual(after["nested"]["11_agents"]["missing"], [])
 
     def test_strict_fixture_mode_returns_non_zero_for_incomplete_workspace(self):
         fixture = {
@@ -80,6 +82,15 @@ class DriveWorkspaceBootstrapTests(unittest.TestCase):
                 {"id": "c4", "name": "03_reference", "mimeType": drive_runtime.FOLDER_MIME},
                 {"id": "c5", "name": "04_archive", "mimeType": drive_runtime.FOLDER_MIME},
                 {"id": "c6", "name": "10_projects", "mimeType": drive_runtime.FOLDER_MIME},
+                {"id": "c7", "name": "11_agents", "mimeType": drive_runtime.FOLDER_MIME},
+                {"id": "c8", "name": "12_shared_sources", "mimeType": drive_runtime.FOLDER_MIME},
+                {"id": "a1", "name": "assistant", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c7"]},
+                {"id": "a2", "name": "researcher", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c7"]},
+                {"id": "a3", "name": "builder", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c7"]},
+                {"id": "a4", "name": "fitness_coach", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c7"]},
+                {"id": "a5", "name": "ops_guard", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c7"]},
+                {"id": "s1", "name": "inbox_attachments", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c8"]},
+                {"id": "s2", "name": "ai_tools_reference", "mimeType": drive_runtime.FOLDER_MIME, "parents": ["c8"]},
             ],
         }
 
@@ -102,6 +113,7 @@ class DriveWorkspaceBootstrapTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
             payload = json.loads(status_path.read_text(encoding="utf-8"))
             self.assertTrue(payload["summary"]["ok"])
+            self.assertIn("nested", payload["summary"])
 
 
 if __name__ == "__main__":

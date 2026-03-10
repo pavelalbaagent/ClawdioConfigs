@@ -6,6 +6,18 @@ Last updated: 2026-03-07
 
 Make the agent's Gmail inbox a real operational inbox that can process every incoming message in scheduled batches.
 
+## Ownership model
+
+1. `assistant` owns inbox triage.
+2. Gmail promotions should first land in assistant-owned queues or calendar candidates.
+3. Assistant can then redirect follow-up work to:
+   - `researcher`
+   - `builder`
+   - `fitness_coach`
+   - project spaces
+
+This keeps inbox handling centralized and prevents email from becoming an unstructured parallel task system for every agent.
+
 ## Recommended model
 
 1. Use a dedicated Gmail account owned by the agent.
@@ -34,6 +46,12 @@ Make the agent's Gmail inbox a real operational inbox that can process every inc
    - calendar candidate
    - manual review
 5. Log the decision and resulting state.
+
+Promotion policy:
+
+1. task candidates enter the assistant-owned inbox queue first
+2. calendar candidates are tagged as assistant-owned until scheduled or redirected
+3. attachments destined for later review belong in the shared Drive workspace, not in agent-local state only
 
 ## Scope choice
 
@@ -73,6 +91,8 @@ Behavior:
 3. classifies messages with deterministic heuristics
 4. stores metadata, excerpts, attachments metadata, and decisions in SQLite
 5. applies only safe primary actions when `--apply` is explicitly passed
+6. promoted task candidates are assigned to `assistant` by default
+7. promoted calendar candidates are tagged for assistant review/redirect first
 
 ## Run commands
 
