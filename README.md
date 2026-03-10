@@ -59,6 +59,7 @@ This workspace is for rebuilding OpenClaw from scratch in a config-first, modula
 53. Multi-agent conversational runtime in [docs/56-multi-agent-chat-runtime.md](/Users/palba/Projects/Clawdio/docs/56-multi-agent-chat-runtime.md) and [assistant_chat_runtime.py](/Users/palba/Projects/Clawdio/scripts/assistant_chat_runtime.py).
 54. Memory sync + ops-guard review loops in [docs/57-ops-guard-and-memory-sync.md](/Users/palba/Projects/Clawdio/docs/57-ops-guard-and-memory-sync.md), [memory_sync_runner.py](/Users/palba/Projects/Clawdio/scripts/memory_sync_runner.py), and [ops_guard_review.py](/Users/palba/Projects/Clawdio/scripts/ops_guard_review.py).
 55. Fitness Coach runtime in [docs/58-fitness-runtime.md](/Users/palba/Projects/Clawdio/docs/58-fitness-runtime.md) and [fitness_runtime.py](/Users/palba/Projects/Clawdio/scripts/fitness_runtime.py), with Telegram and dashboard control surfaces backed by SQLite and markdown logs plus a conversational coaching layer for non-logging questions.
+56. AIToolsDB local knowledge-source scaffolding in [docs/59-aitoolsdb-knowledge-source.md](/Users/palba/Projects/Clawdio/docs/59-aitoolsdb-knowledge-source.md), [knowledge_sources.yaml](/Users/palba/Projects/Clawdio/config/knowledge_sources.yaml), [knowledge_source_search.py](/Users/palba/Projects/Clawdio/scripts/knowledge_source_search.py), and [ai_tools_digest.py](/Users/palba/Projects/Clawdio/scripts/ai_tools_digest.py).
 
 ## Suggested starting sequence
 

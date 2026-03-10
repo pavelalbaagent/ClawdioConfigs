@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenClaw AI Tools digest every day at 20:00 local time
+
+[Timer]
+OnCalendar=*-*-* 20:00:00
+AccuracySec=5min
+Persistent=true
+Unit=openclaw-ai-tools-digest.service
+
+[Install]
+WantedBy=timers.target

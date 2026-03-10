@@ -44,6 +44,7 @@ class AgentChatRuntimeTests(unittest.TestCase):
             "agents.yaml",
             "session_policy.yaml",
             "fitness_agent.yaml",
+            "knowledge_sources.yaml",
         ):
             shutil.copy(ROOT / "config" / name, self.root / "config" / name)
 
@@ -234,6 +235,66 @@ class AgentChatRuntimeTests(unittest.TestCase):
         self.assertIn("M1: Mon (Bench 1)", system_prompt)
         self.assertIn("A1 DB Incline Press: 4 x 10-15", system_prompt)
         self.assertIn("Session queue pointer:", system_prompt)
+
+    def test_resolve_chat_route_applies_agent_provider_model_override(self):
+        with mock.patch("assistant_chat_runtime.shutil.which", return_value="/usr/local/bin/codex"):
+            plan = assistant_chat_runtime.resolve_chat_route(
+                agent_id="builder",
+                situation="coding_and_integration",
+                models_path=self.root / "config" / "models.yaml",
+                agents_path=self.root / "config" / "agents.yaml",
+                env_values={},
+            )
+
+        self.assertEqual(plan["provider"], "openai_subscription_session")
+        self.assertEqual(plan["model"], "gpt-5.1-codex-mini")
+
+    def test_researcher_chat_can_use_local_knowledge_source_context(self):
+        corpus_root = self.root / "aitoolsdb" / "corpus" / "ai_tools"
+        corpus_root.mkdir(parents=True)
+        (corpus_root / "blog_OpenAI_News_Introducing_GPT-5_3-Codex.md").write_text(
+            "# Introducing GPT-5.3 Codex\n\nOpenAI released GPT-5.3 Codex for coding and reasoning workflows.\n",
+            encoding="utf-8",
+        )
+        knowledge_cfg = self.root / "config" / "knowledge_sources.yaml"
+        text = knowledge_cfg.read_text(encoding="utf-8")
+        text = text.replace("/opt/aitoolsdb/corpus/ai_tools", str(corpus_root), 1)
+        knowledge_cfg.write_text(text, encoding="utf-8")
+
+        runtime = AgentChatRuntime(
+            root=self.root,
+            backend=self.backend,
+            env_values={"GEMINI_API_KEY": "test-key"},
+            agent_id="researcher",
+        )
+        route = {"agent_id": "researcher", "space_key": "research", "route_mode": "bound_chat"}
+
+        with mock.patch(
+            "assistant_chat_runtime.resolve_chat_route",
+            return_value={
+                "lane": "L2_balanced",
+                "requested_lane": "L2_balanced",
+                "downgraded_from_lane": None,
+                "provider": "google_ai_studio_free",
+                "provider_cfg": {"transport": "google_generative_language"},
+                "model": "gemini-2.5-flash",
+                "max_output_tokens": 1200,
+            },
+        ), mock.patch(
+            "assistant_chat_runtime.invoke_chat_provider",
+            return_value={
+                "text": "Use GPT-5.3 Codex only when the coding workload justifies it.",
+                "prompt_tokens": 160,
+                "completion_tokens": 30,
+                "latency_ms": 70,
+            },
+        ) as provider_mock:
+            result = runtime.reply(text="What do we know about GPT-5.3 Codex?", route=route)
+
+        system_prompt = provider_mock.call_args.kwargs["system_prompt"]
+        self.assertIn("Relevant local knowledge sources:", system_prompt)
+        self.assertIn("GPT-5.3 Codex", system_prompt)
+        self.assertTrue(result["knowledge_context_used"])
 
 
 if __name__ == "__main__":

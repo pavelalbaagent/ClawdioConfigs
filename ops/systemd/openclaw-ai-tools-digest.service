@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw AI Tools Daily Digest
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/openclaw/openclaw.env
+ConditionPathExists=/opt/clawdio/scripts/ai_tools_digest.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/clawdio
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env python3 /opt/clawdio/scripts/ai_tools_digest.py --env-file /etc/openclaw/openclaw.env --apply
+
+[Install]
+WantedBy=default.target

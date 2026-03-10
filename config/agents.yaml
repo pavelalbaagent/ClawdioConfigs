@@ -14,6 +14,7 @@ agents:
       - braindump_runtime
       - gmail_digest_reader
       - drive_workspace_reader
+      - knowledge_source_reader
     owned_spaces:
       - general
       - reminders
@@ -25,6 +26,7 @@ agents:
       - answer_questions_about_personal_system_state
       - schedule_and_rearrange_items
       - convert_inputs_into_tasks_reminders_or_calendar_actions
+      - own_gmail_inbox_triage_and_redirect_promotions
       - act_as_default_front_door
     chat_routing:
       quick_read_write:
@@ -60,6 +62,7 @@ agents:
       - summarizer
       - gmail_digest_reader
       - drive_workspace_reader
+      - knowledge_source_reader
       - job_search_runtime
       - watchlists
     owned_spaces:
@@ -104,6 +107,7 @@ agents:
       - fitness_runtime
       - personal_task_runtime
       - calendar_runtime
+      - drive_workspace_reader
     owned_spaces:
       - fitness
     primary_responsibilities:
@@ -146,6 +150,8 @@ agents:
       - file_ops
       - github_runtime
       - repo_workspace
+      - drive_workspace_reader
+      - knowledge_source_reader
       - test_runner
     owned_spaces:
       - coding

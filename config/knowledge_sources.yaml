@@ -1,0 +1,53 @@
+knowledge_sources:
+  active_profile: default
+  profiles:
+    default:
+      enabled_sources:
+        - ai_tools_db
+
+  sources:
+    ai_tools_db:
+      enabled: true
+      kind: local_markdown_corpus
+      root_candidates:
+        - /opt/aitoolsdb/corpus/ai_tools
+        - /Users/palba/Projects/AIToolsDB/corpus/ai_tools
+      allowed_agents:
+        - assistant
+        - researcher
+        - builder
+      allowed_spaces:
+        - general
+        - research
+        - job-search
+        - coding
+      top_k: 4
+      excerpt_chars: 280
+      max_files_scan: 600
+      auto_query:
+        always_for_agents:
+          - researcher
+        keyword_hints:
+          - ai
+          - llm
+          - model
+          - models
+          - tool
+          - tools
+          - agent
+          - agents
+          - automation
+          - workflow
+          - codex
+          - gemini
+          - openai
+          - anthropic
+          - claude
+          - openrouter
+          - mcp
+          - n8n
+      digest:
+        enabled: true
+        chat_id_env: TELEGRAM_RESEARCH_CHAT_ID
+        max_items: 8
+        lookback_hours: 36

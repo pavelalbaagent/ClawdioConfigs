@@ -24,6 +24,7 @@ data/personal-task-runtime-status.json
 data/drive-workspace-status.json
 data/braindump-snapshot.json
 data/provider-smoke-status.json
+data/ai-tools-digest-status.json
 data/telegram-adapter-state.json
 data/agent-runtime-state.json
 data/*-chat-state.json

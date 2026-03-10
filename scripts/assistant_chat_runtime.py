@@ -19,6 +19,7 @@ from typing import Any
 import model_route_decider
 from env_file_utils import load_env_file
 import fitness_runtime
+import knowledge_source_search
 import openai_session_transport
 
 
@@ -30,6 +31,7 @@ from backend import DashboardBackend, ensure_dict, ensure_string_list, read_json
 
 DEFAULT_TELEMETRY_PATH = ROOT / "telemetry" / "model-calls.ndjson"
 DEFAULT_CHECKPOINT_PATH = ROOT / "telemetry" / "session-checkpoints.ndjson"
+DEFAULT_KNOWLEDGE_SOURCES_PATH = ROOT / "config" / "knowledge_sources.yaml"
 DEFAULT_AGENT_STATE_FILES = {
     "assistant": "assistant-chat-state.json",
     "researcher": "researcher-chat-state.json",
@@ -274,7 +276,7 @@ def resolve_chat_route(
     mode_cfg = ensure_dict(usage_modes.get(mode_name))
     situation_cfg = ensure_dict(decision_matrix.get(situation))
     agent_policy = resolve_agent_chat_policy(agents_data=agents_data, agent_id=agent_id, situation=situation)
-    agent_provider_models = ensure_string_dict(agent_policy.get("provider_models"))
+    agent_provider_models = model_route_decider.ensure_string_dict(agent_policy.get("provider_models"))
     preferred_lane = (
         str(agent_policy.get("preferred_lane", "")).strip()
         or str(situation_cfg.get("preferred_lane", "")).strip()
@@ -869,6 +871,7 @@ def build_system_prompt(
     backend: DashboardBackend,
     session_summary: str,
     memory_context: str,
+    knowledge_context: str,
 ) -> str:
     route_mode = str(route.get("route_mode") or "default_front_door")
     now_local = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
@@ -896,6 +899,8 @@ def build_system_prompt(
     instructions.append(build_space_snapshot(dashboard_snapshot, root=backend.root, agent_id=agent_id, space_key=space_key, route=route))
     if agent_id == "fitness_coach" or space_key == "fitness":
         instructions.append(build_fitness_program_brief(backend.root))
+    if knowledge_context.strip():
+        instructions.extend([knowledge_context.strip()])
     if memory_context.strip():
         instructions.extend([memory_context.strip()])
     if session_summary.strip():
@@ -928,6 +933,7 @@ class AgentChatRuntime:
         self.state_path = state_path or (self.root / "data" / default_state_name)
         self.telemetry_path = telemetry_path or DEFAULT_TELEMETRY_PATH
         self.checkpoint_path = checkpoint_path or DEFAULT_CHECKPOINT_PATH
+        self.knowledge_sources_path = self.root / "config" / "knowledge_sources.yaml"
         self.session_lifecycle = ensure_dict(ensure_dict(model_route_decider.load_yaml(self.session_policy_path)).get("session_lifecycle"))
         self.context_token_limit = int(self.session_lifecycle.get("summarize_when_context_tokens_over", 8500) or 8500)
         self.checkpoint_every_turns = int(self.session_lifecycle.get("checkpoint_every_turns", 20) or 20)
@@ -1120,6 +1126,23 @@ class AgentChatRuntime:
         mode = str(payload.get("mode") or active_profile).strip() or active_profile
         return format_memory_context(results, mode=mode)
 
+    def _knowledge_source_context(self, *, text: str, space_key: str) -> str:
+        if self.agent_id not in {"assistant", "researcher", "builder"}:
+            return ""
+        if not self.knowledge_sources_path.exists():
+            return ""
+        try:
+            groups = knowledge_source_search.search_enabled_sources(
+                config_path=self.knowledge_sources_path,
+                query=text,
+                agent_id=self.agent_id,
+                space_key=space_key,
+                top_k=3,
+            )
+        except Exception:
+            return ""
+        return knowledge_source_search.format_context_block(groups)
+
     def reply(self, *, text: str, route: dict[str, Any]) -> dict[str, Any]:
         route_agent = str(route.get("agent_id") or self.agent_id).strip().lower() or self.agent_id
         if route_agent != self.agent_id:
@@ -1138,6 +1161,7 @@ class AgentChatRuntime:
         space_state = self._space_state(state, space_key)
         session_summary, turns = self._prepare_history(space_key=space_key, space_state=space_state, user_text=text)
         memory_context = self._memory_context(text=text, route=route, space_key=space_key)
+        knowledge_context = self._knowledge_source_context(text=text, space_key=space_key)
         system_prompt = build_system_prompt(
             agent_id=self.agent_id,
             space_key=space_key,
@@ -1145,6 +1169,7 @@ class AgentChatRuntime:
             backend=self.backend,
             session_summary=session_summary,
             memory_context=memory_context,
+            knowledge_context=knowledge_context,
         )
         messages = [{"role": row["role"], "content": row["content"]} for row in turns]
         try:
@@ -1221,6 +1246,7 @@ class AgentChatRuntime:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "memory_context_used": bool(memory_context.strip()),
+            "knowledge_context_used": bool(knowledge_context.strip()),
         }
 
 

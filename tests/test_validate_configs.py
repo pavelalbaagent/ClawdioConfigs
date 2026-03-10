@@ -22,6 +22,7 @@ CONFIG_FILES = (
     "session_policy",
     "dashboard",
     "job_search",
+    "knowledge_sources",
 )
 
 

@@ -33,6 +33,7 @@ EXPECTED_CONFIGS = {
     "session_policy": CONFIG_DIR / "session_policy.yaml",
     "dashboard": CONFIG_DIR / "dashboard.yaml",
     "job_search": CONFIG_DIR / "job_search.yaml",
+    "knowledge_sources": CONFIG_DIR / "knowledge_sources.yaml",
 }
 
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done"}
@@ -802,6 +803,59 @@ def validate_job_search(data: dict[str, Any], errors: list[str], warnings: list[
         add_error(errors, "RANGE", "job_search.job_search.daily_summary.max_roles_per_section must be integer > 0")
 
 
+def validate_knowledge_sources(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
+    registry = require_dict(data.get("knowledge_sources"), errors, "knowledge_sources.knowledge_sources")
+    active_profile = str(registry.get("active_profile") or "").strip()
+    profiles = require_dict(registry.get("profiles"), errors, "knowledge_sources.knowledge_sources.profiles")
+    sources = require_dict(registry.get("sources"), errors, "knowledge_sources.knowledge_sources.sources")
+    if not active_profile:
+        add_error(errors, "REQ", "knowledge_sources.knowledge_sources.active_profile is required")
+    elif active_profile not in profiles:
+        add_error(errors, "REF", "knowledge_sources active_profile not found in profiles")
+
+    for profile_name, profile_row in profiles.items():
+        row = require_dict(profile_row, errors, f"knowledge_sources.knowledge_sources.profiles.{profile_name}")
+        enabled = validate_string_list(
+            row.get("enabled_sources"),
+            f"knowledge_sources.knowledge_sources.profiles.{profile_name}.enabled_sources",
+            errors,
+            allow_empty=False,
+        )
+        unknown = sorted(set(enabled) - set(sources.keys()))
+        if unknown:
+            add_error(
+                errors,
+                "REF",
+                f"knowledge_sources profile {profile_name} references unknown sources: {', '.join(unknown)}",
+            )
+
+    for source_name, source_row in sources.items():
+        row = require_dict(source_row, errors, f"knowledge_sources.knowledge_sources.sources.{source_name}")
+        if row.get("enabled") is not True and row.get("enabled") is not False:
+            add_error(errors, "TYPE", f"knowledge_sources.knowledge_sources.sources.{source_name}.enabled must be boolean")
+        roots = validate_string_list(
+            row.get("root_candidates"),
+            f"knowledge_sources.knowledge_sources.sources.{source_name}.root_candidates",
+            errors,
+            allow_empty=False,
+        )
+        if not roots:
+            add_error(errors, "REQ", f"knowledge_sources source {source_name} must define root_candidates")
+        top_k = row.get("top_k")
+        if top_k is not None and (not isinstance(top_k, int) or top_k <= 0):
+            add_error(errors, "RANGE", f"knowledge_sources.knowledge_sources.sources.{source_name}.top_k must be integer > 0")
+        max_files = row.get("max_files_scan")
+        if max_files is not None and (not isinstance(max_files, int) or max_files <= 0):
+            add_error(errors, "RANGE", f"knowledge_sources.knowledge_sources.sources.{source_name}.max_files_scan must be integer > 0")
+        digest = ensure_dict(row.get("digest"))
+        if digest:
+            if digest.get("enabled") is not True and digest.get("enabled") is not False:
+                add_error(errors, "TYPE", f"knowledge_sources.knowledge_sources.sources.{source_name}.digest.enabled must be boolean")
+            chat_env = digest.get("chat_id_env")
+            if chat_env is not None and not is_non_empty_str(chat_env):
+                add_error(errors, "TYPE", f"knowledge_sources.knowledge_sources.sources.{source_name}.digest.chat_id_env must be a non-empty string")
+
+
 def validate_security(data: dict[str, Any], errors: list[str], warnings: list[str]) -> None:
     audit = require_dict(data.get("audit"), errors, "security.audit")
     log_file = audit.get("log_file")
@@ -1245,6 +1299,8 @@ def main() -> int:
         validate_session_policy(require_dict(loaded["session_policy"], errors, "session_policy"), errors, warnings)
     if "job_search" in loaded:
         validate_job_search(require_dict(loaded["job_search"], errors, "job_search"), errors, warnings)
+    if "knowledge_sources" in loaded:
+        validate_knowledge_sources(require_dict(loaded["knowledge_sources"], errors, "knowledge_sources"), errors, warnings)
 
     if "agents" in loaded and "session_policy" in loaded:
         validate_spawn_alignment(
