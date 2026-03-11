@@ -16,8 +16,8 @@ Use a practical hybrid memory stack that balances quality and cost:
 2. Lane 2 (`semantic_embeddings`): embedding index over markdown chunks for retrieval.
 3. Lane 4 (`sqlite_state`): durable DB for chunks, embeddings, state keys, and recall logs.
 
-Primary config: [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml)
-Schema: [contracts/memory/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/memory/sqlite_schema.sql)
+Primary config: [config/memory.yaml](/Users/palba/Projects/Personal/Clawdio/config/memory.yaml)
+Schema: [contracts/memory/sqlite_schema.sql](/Users/palba/Projects/Personal/Clawdio/contracts/memory/sqlite_schema.sql)
 
 ## Profiles (Cost Toggles)
 
@@ -25,7 +25,7 @@ Schema: [contracts/memory/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contr
 2. `md_plus_embeddings`: lane 1 + lane 2.
 3. `hybrid_124`: lane 1 + lane 2 + lane 4 (default).
 
-Switch by editing `profiles.active_profile` in [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml).
+Switch by editing `profiles.active_profile` in [config/memory.yaml](/Users/palba/Projects/Personal/Clawdio/config/memory.yaml).
 
 ## Setup
 

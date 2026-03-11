@@ -30,7 +30,7 @@ Current non-conversational specialist roles:
 
 ## Main file
 
-1. [assistant_chat_runtime.py](/Users/palba/Projects/Clawdio/scripts/assistant_chat_runtime.py)
+1. [assistant_chat_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/assistant_chat_runtime.py)
 
 The file now hosts the generalized role-aware chat runtime used by:
 
@@ -64,7 +64,7 @@ It builds prompts from:
 4. latest checkpoint summary
 5. optional selective memory retrieval
 
-Checkpoint controls come from [session_policy.yaml](/Users/palba/Projects/Clawdio/config/session_policy.yaml).
+Checkpoint controls come from [session_policy.yaml](/Users/palba/Projects/Personal/Clawdio/config/session_policy.yaml).
 
 ## Memory behavior
 

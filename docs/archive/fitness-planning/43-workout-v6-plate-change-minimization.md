@@ -21,7 +21,7 @@ Last updated: 2026-03-05
 1. Historical export name: `Workout_v6_platechange_min.xlsx`
 2. Historical tab: `Proposed_v6_plate`
 3. Historical exports under `output/spreadsheet/` are no longer tracked as source-of-truth artifacts.
-4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
+4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Personal/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
 
 ## Efficiency rules
 

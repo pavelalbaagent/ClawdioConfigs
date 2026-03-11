@@ -6,7 +6,7 @@ Generate a deterministic VPS setup sequence without making live changes.
 
 ## Script
 
-1. [bootstrap_vps_dry_run.sh](/Users/palba/Projects/Clawdio/ops/scripts/bootstrap_vps_dry_run.sh)
+1. [bootstrap_vps_dry_run.sh](/Users/palba/Projects/Personal/Clawdio/ops/scripts/bootstrap_vps_dry_run.sh)
 
 ## Run
 

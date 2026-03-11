@@ -91,14 +91,14 @@ This lets the agent compute progression and weekly volume correctly without ambi
 
 ## Files added for this plan
 
-1. [config/fitness_agent.yaml](/Users/palba/Projects/Clawdio/config/fitness_agent.yaml)
-2. [contracts/fitness/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/fitness/sqlite_schema.sql)
-3. [docs/38-fitness-intake-questionnaire.md](/Users/palba/Projects/Clawdio/docs/38-fitness-intake-questionnaire.md)
+1. [config/fitness_agent.yaml](/Users/palba/Projects/Personal/Clawdio/config/fitness_agent.yaml)
+2. [contracts/fitness/sqlite_schema.sql](/Users/palba/Projects/Personal/Clawdio/contracts/fitness/sqlite_schema.sql)
+3. [docs/38-fitness-intake-questionnaire.md](/Users/palba/Projects/Personal/Clawdio/docs/38-fitness-intake-questionnaire.md)
 
 ## Current locked decisions
 
 1. The active queue is `M1`, `M2`, `M3`, `M4`, `O5` with Wednesday and Sunday as default rest anchors.
 2. Bench setup is capped at 2 days per week.
-3. The active program is maintained in [PROGRAM.md](/Users/palba/Projects/Clawdio/fitness/PROGRAM.md).
+3. The active program is maintained in [PROGRAM.md](/Users/palba/Projects/Personal/Clawdio/fitness/PROGRAM.md).
 4. Command style remains short-form first (`today`, `start workout`, `log ...`, `finish workout`).
 5. The remaining operational unknown is the empty barbell weight for clean `bb side` conversion.

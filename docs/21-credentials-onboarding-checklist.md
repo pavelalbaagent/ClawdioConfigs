@@ -6,12 +6,12 @@ Last updated: 2026-03-07
 
 Achieve fast onboarding with minimal moving parts, then progressively enable more integrations without breaking baseline operations.
 
-Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Clawdio/docs/23-provider-bundles-checklist.md).
+Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Personal/Clawdio/docs/23-provider-bundles-checklist.md).
 
 ## Phase A: Baseline (same day)
 
-1. Fill `.env` placeholders in local secure store from [.env.example](/Users/palba/Projects/Clawdio/.env.example).
-2. Configure `bootstrap_command_center` profile in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
+1. Fill `.env` placeholders in local secure store from [.env.example](/Users/palba/Projects/Personal/Clawdio/.env.example).
+2. Configure `bootstrap_command_center` profile in [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml).
 3. Set and verify:
 4. `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_ID`
 5. `OPENCLAW_DASHBOARD_TOKEN`
@@ -53,7 +53,7 @@ Bundle presets are documented in [docs/23-provider-bundles-checklist.md](/Users/
 
 1. Keep LinkedIn off until compliance path is confirmed.
 2. If needed later, add LinkedIn OAuth values and run manual-review-only mode first.
-3. Keep `addons_off` until baseline is stable, then enable one add-on profile at a time from [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml).
+3. Keep `addons_off` until baseline is stable, then enable one add-on profile at a time from [config/addons.yaml](/Users/palba/Projects/Personal/Clawdio/config/addons.yaml).
 
 ## Validation Gates
 

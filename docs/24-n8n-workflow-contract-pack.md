@@ -4,9 +4,9 @@ Last updated: 2026-03-02
 
 ## Files
 
-1. [workflow-contracts.yaml](/Users/palba/Projects/Clawdio/contracts/n8n/workflow-contracts.yaml)
-2. [webhook-envelope.schema.json](/Users/palba/Projects/Clawdio/contracts/n8n/webhook-envelope.schema.json)
-3. [workflow-result.schema.json](/Users/palba/Projects/Clawdio/contracts/n8n/workflow-result.schema.json)
+1. [workflow-contracts.yaml](/Users/palba/Projects/Personal/Clawdio/contracts/n8n/workflow-contracts.yaml)
+2. [webhook-envelope.schema.json](/Users/palba/Projects/Personal/Clawdio/contracts/n8n/webhook-envelope.schema.json)
+3. [workflow-result.schema.json](/Users/palba/Projects/Personal/Clawdio/contracts/n8n/workflow-result.schema.json)
 
 ## v1 Workflows
 
@@ -29,7 +29,7 @@ Last updated: 2026-03-02
 
 ## n8n Module Toggles
 
-Module toggles are in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml) under `integrations.n8n.modules`.
+Module toggles are in [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml) under `integrations.n8n.modules`.
 
 1. `inbox_router`
 2. `personal_reminders`

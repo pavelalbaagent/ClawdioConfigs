@@ -8,7 +8,7 @@ Always treat the repo as source of truth.
 
 Point the new thread to:
 
-1. [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md)
+1. [docs/52-development-threading-policy.md](/Users/palba/Projects/Personal/Clawdio/docs/52-development-threading-policy.md)
 2. the main module doc
 3. the main config/runtime files for that module
 
@@ -20,7 +20,7 @@ Use this when the change is small and stays inside one module.
 Continue Clawdio work on `<module>`.
 
 Use the repo as source of truth, especially:
-- [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md)
+- [docs/52-development-threading-policy.md](/Users/palba/Projects/Personal/Clawdio/docs/52-development-threading-policy.md)
 - <module doc>
 - <main files>
 
@@ -45,7 +45,7 @@ Use this for a real feature milestone.
 Continue Clawdio work on `<module>`.
 
 Use the repo as source of truth, especially:
-- [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md)
+- [docs/52-development-threading-policy.md](/Users/palba/Projects/Personal/Clawdio/docs/52-development-threading-policy.md)
 - <module doc>
 - <main files>
 
@@ -73,7 +73,7 @@ Use this when something broke.
 Investigate and fix a Clawdio issue in `<module>`.
 
 Use the repo as source of truth, especially:
-- [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md)
+- [docs/52-development-threading-policy.md](/Users/palba/Projects/Personal/Clawdio/docs/52-development-threading-policy.md)
 - <module doc>
 - <main files>
 
@@ -96,34 +96,34 @@ Goal:
 ## Best docs to point to by module
 
 1. Orchestration / general policy
-   - [README.md](/Users/palba/Projects/Clawdio/README.md)
-   - [docs/52-development-threading-policy.md](/Users/palba/Projects/Clawdio/docs/52-development-threading-policy.md)
-   - [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Clawdio/docs/40-runtime-status-matrix.md)
+   - [README.md](/Users/palba/Projects/Personal/Clawdio/README.md)
+   - [docs/52-development-threading-policy.md](/Users/palba/Projects/Personal/Clawdio/docs/52-development-threading-policy.md)
+   - [docs/40-runtime-status-matrix.md](/Users/palba/Projects/Personal/Clawdio/docs/40-runtime-status-matrix.md)
 2. Telegram
-   - [docs/50-telegram-adapter-runtime.md](/Users/palba/Projects/Clawdio/docs/50-telegram-adapter-runtime.md)
-   - [scripts/telegram_adapter.py](/Users/palba/Projects/Clawdio/scripts/telegram_adapter.py)
+   - [docs/50-telegram-adapter-runtime.md](/Users/palba/Projects/Personal/Clawdio/docs/50-telegram-adapter-runtime.md)
+   - [scripts/telegram_adapter.py](/Users/palba/Projects/Personal/Clawdio/scripts/telegram_adapter.py)
 3. Dashboard
-   - [docs/33-dashboard-control-plane.md](/Users/palba/Projects/Clawdio/docs/33-dashboard-control-plane.md)
-   - [dashboard/backend.py](/Users/palba/Projects/Clawdio/dashboard/backend.py)
-   - [dashboard/server.py](/Users/palba/Projects/Clawdio/dashboard/server.py)
+   - [docs/33-dashboard-control-plane.md](/Users/palba/Projects/Personal/Clawdio/docs/33-dashboard-control-plane.md)
+   - [dashboard/backend.py](/Users/palba/Projects/Personal/Clawdio/dashboard/backend.py)
+   - [dashboard/server.py](/Users/palba/Projects/Personal/Clawdio/dashboard/server.py)
 4. Model routing / providers
-   - [docs/34-model-routing-playbook.md](/Users/palba/Projects/Clawdio/docs/34-model-routing-playbook.md)
-   - [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Clawdio/docs/51-provider-smoke-checks.md)
-   - [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.yaml)
+   - [docs/34-model-routing-playbook.md](/Users/palba/Projects/Personal/Clawdio/docs/34-model-routing-playbook.md)
+   - [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Personal/Clawdio/docs/51-provider-smoke-checks.md)
+   - [config/models.yaml](/Users/palba/Projects/Personal/Clawdio/config/models.yaml)
 5. Memory
-   - [docs/29-memory-hybrid-124-runbook.md](/Users/palba/Projects/Clawdio/docs/29-memory-hybrid-124-runbook.md)
-   - [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml)
+   - [docs/29-memory-hybrid-124-runbook.md](/Users/palba/Projects/Personal/Clawdio/docs/29-memory-hybrid-124-runbook.md)
+   - [config/memory.yaml](/Users/palba/Projects/Personal/Clawdio/config/memory.yaml)
 6. Calendar
-   - [docs/48-google-calendar-runtime.md](/Users/palba/Projects/Clawdio/docs/48-google-calendar-runtime.md)
-   - [scripts/google_calendar_runtime.py](/Users/palba/Projects/Clawdio/scripts/google_calendar_runtime.py)
+   - [docs/48-google-calendar-runtime.md](/Users/palba/Projects/Personal/Clawdio/docs/48-google-calendar-runtime.md)
+   - [scripts/google_calendar_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/google_calendar_runtime.py)
 7. Tasks
-   - [docs/49-personal-task-runtime.md](/Users/palba/Projects/Clawdio/docs/49-personal-task-runtime.md)
-   - [scripts/personal_task_runtime.py](/Users/palba/Projects/Clawdio/scripts/personal_task_runtime.py)
+   - [docs/49-personal-task-runtime.md](/Users/palba/Projects/Personal/Clawdio/docs/49-personal-task-runtime.md)
+   - [scripts/personal_task_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/personal_task_runtime.py)
 8. Gmail / Drive
-   - [docs/43-gmail-inbox-processing-plan.md](/Users/palba/Projects/Clawdio/docs/43-gmail-inbox-processing-plan.md)
-   - [docs/44-drive-shared-workspace-plan.md](/Users/palba/Projects/Clawdio/docs/44-drive-shared-workspace-plan.md)
+   - [docs/43-gmail-inbox-processing-plan.md](/Users/palba/Projects/Personal/Clawdio/docs/43-gmail-inbox-processing-plan.md)
+   - [docs/44-drive-shared-workspace-plan.md](/Users/palba/Projects/Personal/Clawdio/docs/44-drive-shared-workspace-plan.md)
 9. Project spaces / thread separation
-   - [docs/47-project-spaces-and-session-agent-strategy.md](/Users/palba/Projects/Clawdio/docs/47-project-spaces-and-session-agent-strategy.md)
+   - [docs/47-project-spaces-and-session-agent-strategy.md](/Users/palba/Projects/Personal/Clawdio/docs/47-project-spaces-and-session-agent-strategy.md)
 
 ## Practical shortcut
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-03-07
 
-Use this backlog together with [docs/20-integration-connection-structure.md](/Users/palba/Projects/Clawdio/docs/20-integration-connection-structure.md) and [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
+Use this backlog together with [docs/20-integration-connection-structure.md](/Users/palba/Projects/Personal/Clawdio/docs/20-integration-connection-structure.md) and [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml).
 
 ## Tier 1: Immediate next unlocks after MVP
 

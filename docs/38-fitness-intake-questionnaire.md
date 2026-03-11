@@ -6,7 +6,7 @@ This intake served to lock `Program v1`. Keep it as a future-cycle review templa
 
 ## Current status
 
-1. Program v1 is already finalized in [PROGRAM.md](/Users/palba/Projects/Clawdio/fitness/PROGRAM.md).
+1. Program v1 is already finalized in [PROGRAM.md](/Users/palba/Projects/Personal/Clawdio/fitness/PROGRAM.md).
 2. Use this questionnaire only when you want to redesign the next 12-week cycle or capture new constraints.
 
 ## 1) Objective and constraints

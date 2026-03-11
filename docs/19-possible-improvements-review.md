@@ -39,8 +39,8 @@ Source reviewed:
 
 ## Changes applied from this review
 
-1. Sub-agent policy was strengthened in [docs/04-agent-ops-and-subagents.md](/Users/palba/Projects/Clawdio/docs/04-agent-ops-and-subagents.md).
-2. Security baseline gained untrusted-content and context-aware exposure rules in [docs/05-security-baseline.md](/Users/palba/Projects/Clawdio/docs/05-security-baseline.md).
+1. Sub-agent policy was strengthened in [docs/04-agent-ops-and-subagents.md](/Users/palba/Projects/Personal/Clawdio/docs/04-agent-ops-and-subagents.md).
+2. Security baseline gained untrusted-content and context-aware exposure rules in [docs/05-security-baseline.md](/Users/palba/Projects/Personal/Clawdio/docs/05-security-baseline.md).
 
 ## Recommendation
 

@@ -64,13 +64,13 @@ Official source:
 
 ## Contract source
 
-1. [contracts/drive/shared-workspace.yaml](/Users/palba/Projects/Clawdio/contracts/drive/shared-workspace.yaml)
+1. [contracts/drive/shared-workspace.yaml](/Users/palba/Projects/Personal/Clawdio/contracts/drive/shared-workspace.yaml)
 
 ## Current runtime
 
 The current runtime exists and is safe by default:
 
-1. [scripts/drive_workspace_bootstrap.py](/Users/palba/Projects/Clawdio/scripts/drive_workspace_bootstrap.py)
+1. [scripts/drive_workspace_bootstrap.py](/Users/palba/Projects/Personal/Clawdio/scripts/drive_workspace_bootstrap.py)
 
 Behavior:
 

@@ -35,7 +35,7 @@ Use this as the first post-MVP expansion bundle:
 9. Gmail runs as a scheduled inbox-processing lane, not a chat-style email command channel.
 10. Drive uses one shared root folder, ideally created by you and shared with the agent account.
 
-For staged optionalization, use profile presets in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml):
+For staged optionalization, use profile presets in [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml):
 
 1. `bootstrap_core`
 2. `bootstrap_minimal`

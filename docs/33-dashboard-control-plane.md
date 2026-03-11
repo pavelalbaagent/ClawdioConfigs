@@ -20,13 +20,13 @@ Run a local dashboard that gives you a manual-first control plane for OpenClaw:
 
 ## Files
 
-1. Server: [dashboard/server.py](/Users/palba/Projects/Clawdio/dashboard/server.py)
-2. Backend helpers: [dashboard/backend.py](/Users/palba/Projects/Clawdio/dashboard/backend.py)
-3. Main UI: [dashboard/static/index.html](/Users/palba/Projects/Clawdio/dashboard/static/index.html)
-4. Login UI: [dashboard/static/login.html](/Users/palba/Projects/Clawdio/dashboard/static/login.html)
-5. UI scripts: [dashboard/static/app.js](/Users/palba/Projects/Clawdio/dashboard/static/app.js), [dashboard/static/login.js](/Users/palba/Projects/Clawdio/dashboard/static/login.js)
-6. UI styles: [dashboard/static/styles.css](/Users/palba/Projects/Clawdio/dashboard/static/styles.css)
-7. Dashboard config: [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml)
+1. Server: [dashboard/server.py](/Users/palba/Projects/Personal/Clawdio/dashboard/server.py)
+2. Backend helpers: [dashboard/backend.py](/Users/palba/Projects/Personal/Clawdio/dashboard/backend.py)
+3. Main UI: [dashboard/static/index.html](/Users/palba/Projects/Personal/Clawdio/dashboard/static/index.html)
+4. Login UI: [dashboard/static/login.html](/Users/palba/Projects/Personal/Clawdio/dashboard/static/login.html)
+5. UI scripts: [dashboard/static/app.js](/Users/palba/Projects/Personal/Clawdio/dashboard/static/app.js), [dashboard/static/login.js](/Users/palba/Projects/Personal/Clawdio/dashboard/static/login.js)
+6. UI styles: [dashboard/static/styles.css](/Users/palba/Projects/Personal/Clawdio/dashboard/static/styles.css)
+7. Dashboard config: [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml)
 8. Local project/task store: `data/dashboard-workspace.json` (auto-created)
 
 ## Run Locally
@@ -48,9 +48,9 @@ export OPENCLAW_DASHBOARD_TOKEN='<strong-random-token>'
 ```
 
 2. Open dashboard URL and login at `/login.html`.
-3. If you want temporary local-dev credentials instead, explicitly set `dashboard.auth.allow_generated_token: true` in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
+3. If you want temporary local-dev credentials instead, explicitly set `dashboard.auth.allow_generated_token: true` in [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml).
 
-Auth settings live in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml):
+Auth settings live in [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml):
 
 1. `dashboard.auth.require_token`
 2. `dashboard.auth.token_env_key`
@@ -71,12 +71,12 @@ The VPS deployment uses loopback port `18890` by default so it can coexist with 
 
 ## What It Controls
 
-1. Profile switching calls [scripts/set_active_profiles.py](/Users/palba/Projects/Clawdio/scripts/set_active_profiles.py).
-2. Integration toggles update [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
-3. Memory module toggles update [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml).
-4. n8n module toggles update `integrations.n8n.modules` in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml).
-5. Routing mode updates `routing_overrides.active_mode` in [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml).
-6. Adapter/auth flags update [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
+1. Profile switching calls [scripts/set_active_profiles.py](/Users/palba/Projects/Personal/Clawdio/scripts/set_active_profiles.py).
+2. Integration toggles update [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml).
+3. Memory module toggles update [config/memory.yaml](/Users/palba/Projects/Personal/Clawdio/config/memory.yaml).
+4. n8n module toggles update `integrations.n8n.modules` in [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml).
+5. Routing mode updates `routing_overrides.active_mode` in [config/agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml).
+6. Adapter/auth flags update [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml).
 7. Projects/tasks updates `data/dashboard-workspace.json`.
 8. Provider smoke checks write `data/provider-smoke-status.json`.
 9. Agent runtime visibility reads `data/agent-runtime-state.json`.
@@ -84,12 +84,12 @@ The VPS deployment uses loopback port `18890` by default so it can coexist with 
 11. Ops-guard status reads `data/continuous-improvement-status.json`.
 12. Memory sync status reads `data/memory-sync-status.json`.
 13. Knowledge-librarian consolidation status reads `data/knowledge-librarian-status.json`.
-14. Shared directives read [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md).
-15. Shared findings read [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md).
+14. Shared directives read [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_DIRECTIVES.md).
+15. Shared findings read [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_FINDINGS.md).
 
 ## Preset Packs
 
-Preset packs are in `dashboard.presets` in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
+Preset packs are in `dashboard.presets` in [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml).
 
 Each preset can define:
 
@@ -130,7 +130,7 @@ Project capabilities:
 2. Update project status.
 3. Track computed progress from project task completion.
 
-Task templates are configured in `dashboard.task_templates` in [config/dashboard.yaml](/Users/palba/Projects/Clawdio/config/dashboard.yaml).
+Task templates are configured in `dashboard.task_templates` in [config/dashboard.yaml](/Users/palba/Projects/Personal/Clawdio/config/dashboard.yaml).
 
 ## Exports
 
@@ -168,8 +168,8 @@ Dashboard now shows a provider wiring/routing panel with:
 
 Dashboard now shows:
 
-1. visible agents and internal roles from [agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml)
-2. default spaces and owned spaces from [session_policy.yaml](/Users/palba/Projects/Clawdio/config/session_policy.yaml)
+1. visible agents and internal roles from [agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml)
+2. default spaces and owned spaces from [session_policy.yaml](/Users/palba/Projects/Personal/Clawdio/config/session_policy.yaml)
 3. the last routed interaction (`agent + space + route mode + source`)
 4. recent route counts by agent/space
 5. continuous-improvement governance settings
@@ -198,8 +198,8 @@ Live probe API:
 
 1. Local model calls from `telemetry/model-calls*.ndjson` (if enabled).
 2. Existing markdown indicators:
-- [telemetry/model-usage-latest.md](/Users/palba/Projects/Clawdio/telemetry/model-usage-latest.md)
-- [telemetry/ops-snapshot.md](/Users/palba/Projects/Clawdio/telemetry/ops-snapshot.md)
+- [telemetry/model-usage-latest.md](/Users/palba/Projects/Personal/Clawdio/telemetry/model-usage-latest.md)
+- [telemetry/ops-snapshot.md](/Users/palba/Projects/Personal/Clawdio/telemetry/ops-snapshot.md)
 3. Codexbar adapter (optional) via:
 - `codexbar cost --format json --provider <provider>`
 - `codexbar usage --format json --provider <provider>`

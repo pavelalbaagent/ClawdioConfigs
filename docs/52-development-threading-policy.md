@@ -66,7 +66,7 @@ Stay in the same thread if:
 
 ## Project-space alignment
 
-This should match the project-space policy in [docs/47-project-spaces-and-session-agent-strategy.md](/Users/palba/Projects/Clawdio/docs/47-project-spaces-and-session-agent-strategy.md):
+This should match the project-space policy in [docs/47-project-spaces-and-session-agent-strategy.md](/Users/palba/Projects/Personal/Clawdio/docs/47-project-spaces-and-session-agent-strategy.md):
 
 1. new ongoing project -> new project space
 2. project space -> usually a separate session/thread
@@ -82,5 +82,5 @@ This should match the project-space policy in [docs/47-project-spaces-and-sessio
 
 Use:
 
-1. [docs/templates/feature-thread-kickoff.md](/Users/palba/Projects/Clawdio/docs/templates/feature-thread-kickoff.md)
-2. [docs/templates/thread-starters.md](/Users/palba/Projects/Clawdio/docs/templates/thread-starters.md)
+1. [docs/templates/feature-thread-kickoff.md](/Users/palba/Projects/Personal/Clawdio/docs/templates/feature-thread-kickoff.md)
+2. [docs/templates/thread-starters.md](/Users/palba/Projects/Personal/Clawdio/docs/templates/thread-starters.md)

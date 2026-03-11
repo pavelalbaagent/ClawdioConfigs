@@ -21,7 +21,7 @@ Current runtime covers:
 
 ## Files
 
-1. Runtime script: [personal_task_runtime.py](/Users/palba/Projects/Clawdio/scripts/personal_task_runtime.py)
+1. Runtime script: [personal_task_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/personal_task_runtime.py)
 2. Runtime status snapshot: `data/personal-task-runtime-status.json`
 
 ## Why Todoist First

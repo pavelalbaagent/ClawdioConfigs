@@ -18,7 +18,7 @@ Your current stack is modular enough to run in staged mode. The safest optionali
 
 ## Stage Presets (Integrations)
 
-Defined in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml):
+Defined in [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml):
 
 1. `bootstrap_core`: web browsing only. Lowest-friction fallback cutover.
 2. `bootstrap_minimal`: web browsing plus Google Calendar.
@@ -31,7 +31,7 @@ Defined in [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integ
 
 ## Memory Presets
 
-Defined in [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml):
+Defined in [config/memory.yaml](/Users/palba/Projects/Personal/Clawdio/config/memory.yaml):
 
 1. `md_only`: cheapest, most stable baseline.
 2. `md_plus_embeddings`: semantic recall enabled.
@@ -39,7 +39,7 @@ Defined in [config/memory.yaml](/Users/palba/Projects/Clawdio/config/memory.yaml
 
 ## Add-on Presets (External Skills)
 
-Defined in [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml):
+Defined in [config/addons.yaml](/Users/palba/Projects/Personal/Clawdio/config/addons.yaml):
 
 1. `addons_off`: baseline, all external skill add-ons disabled.
 2. `addons_core_recommended`: deterministic utility add-ons (`markdown_converter`, `video_transcript_downloader`, `summarize`, `model_usage`, `github`, `gemini`).

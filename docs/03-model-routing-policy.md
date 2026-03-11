@@ -21,7 +21,7 @@ Use deterministic routing so cost stays controlled and quality only scales up wh
 
 ## Task/Situation Matrix
 
-Policy source of truth: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.yaml) (`routing.decision_matrix`).
+Policy source of truth: [config/models.yaml](/Users/palba/Projects/Personal/Clawdio/config/models.yaml) (`routing.decision_matrix`).
 
 | Situation | Preferred lane | Provider preference | Fallbacks | Approval |
 |---|---|---|---|---|
@@ -51,13 +51,13 @@ Configured under `routing.usage_modes`:
 
 ## Related Config
 
-1. Agent-level overrides: [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml) (`routing_overrides`).
-2. Environment keys: [.env.example](/Users/palba/Projects/Clawdio/.env.example).
-3. Telemetry reporting: [docs/16-model-telemetry.md](/Users/palba/Projects/Clawdio/docs/16-model-telemetry.md).
+1. Agent-level overrides: [config/agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml) (`routing_overrides`).
+2. Environment keys: [.env.example](/Users/palba/Projects/Personal/Clawdio/.env.example).
+3. Telemetry reporting: [docs/16-model-telemetry.md](/Users/palba/Projects/Personal/Clawdio/docs/16-model-telemetry.md).
 
 ## Quick Resolver CLI
 
-Use [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py) to resolve lane/provider/fallback decisions from config:
+Use [model_route_decider.py](/Users/palba/Projects/Personal/Clawdio/scripts/model_route_decider.py) to resolve lane/provider/fallback decisions from config:
 
 ```bash
 python3 scripts/model_route_decider.py --situation coding_and_integration --json

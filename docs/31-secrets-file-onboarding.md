@@ -53,7 +53,7 @@ BRAVE_SEARCH_API_KEY=...
 
 ## Optional add-on keys
 
-If you enable add-on profiles in [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml), common optional keys include:
+If you enable add-on profiles in [config/addons.yaml](/Users/palba/Projects/Personal/Clawdio/config/addons.yaml), common optional keys include:
 
 1. `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APP_TOKEN`
 2. `TRELLO_API_KEY`, `TRELLO_TOKEN`, `TRELLO_DEFAULT_BOARD_ID`

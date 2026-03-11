@@ -18,7 +18,7 @@ This runtime now covers:
 
 ## Files
 
-1. Runtime script: [google_calendar_runtime.py](/Users/palba/Projects/Clawdio/scripts/google_calendar_runtime.py)
+1. Runtime script: [google_calendar_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/google_calendar_runtime.py)
 2. Candidate queue: `data/calendar-candidates.json`
 3. Runtime status snapshot: `data/calendar-runtime-status.json`
 

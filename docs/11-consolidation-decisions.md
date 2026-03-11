@@ -50,9 +50,9 @@ Path at consolidation time: `salvage/vps-20260302/consolidated/archive-reference
 
 1. Historical `REMINDERS.md` was removed from the consolidated archive.
 2. Reminder behavior was preserved as a clean deterministic spec:
-3. [docs/12-reminder-v2-spec.md](/Users/palba/Projects/Clawdio/docs/12-reminder-v2-spec.md)
+3. [docs/12-reminder-v2-spec.md](/Users/palba/Projects/Personal/Clawdio/docs/12-reminder-v2-spec.md)
 4. A deterministic state-machine helper was added:
-5. [reminder_state_machine.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_state_machine.py)
+5. [reminder_state_machine.py](/Users/palba/Projects/Personal/Clawdio/ops/scripts/reminder_state_machine.py)
 6. `SLACK_STRUCTURE.md` was kept and rewritten as platform-agnostic.
 
 ## Current status after cleanup

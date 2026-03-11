@@ -123,7 +123,7 @@ Why:
 
 Schema:
 
-1. [contracts/braindump/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/braindump/sqlite_schema.sql)
+1. [contracts/braindump/sqlite_schema.sql](/Users/palba/Projects/Personal/Clawdio/contracts/braindump/sqlite_schema.sql)
 
 ## Best review behavior
 
@@ -169,7 +169,7 @@ It is a better fit than:
 
 The local runtime now exists in:
 
-1. [braindump_app.py](/Users/palba/Projects/Clawdio/scripts/braindump_app.py)
+1. [braindump_app.py](/Users/palba/Projects/Personal/Clawdio/scripts/braindump_app.py)
 
 Current commands:
 

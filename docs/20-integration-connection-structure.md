@@ -8,12 +8,12 @@ Define one stable integration map so onboarding is simple, services are optional
 
 ## Control Plane
 
-1. Central config: [config/integrations.yaml](/Users/palba/Projects/Clawdio/config/integrations.yaml)
-2. Secret template: [.env.example](/Users/palba/Projects/Clawdio/.env.example)
-3. Required-env checker: [scripts/check_env_requirements.py](/Users/palba/Projects/Clawdio/scripts/check_env_requirements.py)
-4. Global validator: [scripts/validate_configs.py](/Users/palba/Projects/Clawdio/scripts/validate_configs.py)
-5. Provider bundle presets: [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Clawdio/docs/23-provider-bundles-checklist.md)
-6. n8n workflow contracts: [docs/24-n8n-workflow-contract-pack.md](/Users/palba/Projects/Clawdio/docs/24-n8n-workflow-contract-pack.md)
+1. Central config: [config/integrations.yaml](/Users/palba/Projects/Personal/Clawdio/config/integrations.yaml)
+2. Secret template: [.env.example](/Users/palba/Projects/Personal/Clawdio/.env.example)
+3. Required-env checker: [scripts/check_env_requirements.py](/Users/palba/Projects/Personal/Clawdio/scripts/check_env_requirements.py)
+4. Global validator: [scripts/validate_configs.py](/Users/palba/Projects/Personal/Clawdio/scripts/validate_configs.py)
+5. Provider bundle presets: [docs/23-provider-bundles-checklist.md](/Users/palba/Projects/Personal/Clawdio/docs/23-provider-bundles-checklist.md)
+6. n8n workflow contracts: [docs/24-n8n-workflow-contract-pack.md](/Users/palba/Projects/Personal/Clawdio/docs/24-n8n-workflow-contract-pack.md)
 
 ## Profiles
 
@@ -28,8 +28,8 @@ Define one stable integration map so onboarding is simple, services are optional
 ## Integration Modules
 
 1. `web_browsing`: search/open/extract actions. Keep write actions disabled.
-2. `gmail`: scheduled inbox triage, classify, archive/trash/keep, draft, and send-with-approval. Contract: [docs/43-gmail-inbox-processing-plan.md](/Users/palba/Projects/Clawdio/docs/43-gmail-inbox-processing-plan.md).
-3. `drive`: read/write only within a shared human-owned root folder, with project subfolder creation and approval-gated sharing. Contract: [docs/44-drive-shared-workspace-plan.md](/Users/palba/Projects/Clawdio/docs/44-drive-shared-workspace-plan.md).
+2. `gmail`: scheduled inbox triage, classify, archive/trash/keep, draft, and send-with-approval. Contract: [docs/43-gmail-inbox-processing-plan.md](/Users/palba/Projects/Personal/Clawdio/docs/43-gmail-inbox-processing-plan.md).
+3. `drive`: read/write only within a shared human-owned root folder, with project subfolder creation and approval-gated sharing. Contract: [docs/44-drive-shared-workspace-plan.md](/Users/palba/Projects/Personal/Clawdio/docs/44-drive-shared-workspace-plan.md).
 4. `github`: issues/PR/code read, controlled writes for repo workflows.
 5. `personal_task_manager`: your reminders/tasks (`todoist`, `google_tasks`, or `asana`).
 6. `agent_task_manager`: agent work queue (`asana`, `github_projects`, or `linear`).

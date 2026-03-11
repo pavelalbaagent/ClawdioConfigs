@@ -5,7 +5,7 @@ Last updated: 2026-03-10
 ## Source Of Truth
 
 1. This file is the canonical workout plan.
-2. Spreadsheet reference lives at [Workout_plan_reference.xlsx](/Users/palba/Projects/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
+2. Spreadsheet reference lives at [Workout_plan_reference.xlsx](/Users/palba/Projects/Personal/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
 3. Historical workbook exports under `output/spreadsheet/` are not canonical.
 
 ## Objective
@@ -107,7 +107,7 @@ dumbbells only
 2. Barbell loads default to `bb total`.
 3. For myorep exercises in this trial, each of the 3 programmed sets is its own cluster.
 4. Myoreps should be logged as activation plus mini-sets.
-5. Keep exercise names consistent with [EXERCISE_LIBRARY.md](/Users/palba/Projects/Clawdio/fitness/EXERCISE_LIBRARY.md).
+5. Keep exercise names consistent with [EXERCISE_LIBRARY.md](/Users/palba/Projects/Personal/Clawdio/fitness/EXERCISE_LIBRARY.md).
 
 ## Open Items
 

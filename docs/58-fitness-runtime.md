@@ -14,7 +14,7 @@ Make `fitness_coach` a hybrid specialist surface:
 
 Main file:
 
-1. [fitness_runtime.py](/Users/palba/Projects/Clawdio/scripts/fitness_runtime.py)
+1. [fitness_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/fitness_runtime.py)
 
 Core commands:
 
@@ -30,7 +30,7 @@ Core commands:
 ## Storage
 
 1. SQLite DB:
-   - [contracts/fitness/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/fitness/sqlite_schema.sql)
+   - [contracts/fitness/sqlite_schema.sql](/Users/palba/Projects/Personal/Clawdio/contracts/fitness/sqlite_schema.sql)
    - default path: `.memory/fitness.db`
 2. Runtime status snapshot:
    - `data/fitness-runtime-status.json`
@@ -40,11 +40,11 @@ Core commands:
 ## Current behavior
 
 1. Canonical program syncs from:
-   - [PROGRAM.md](/Users/palba/Projects/Clawdio/fitness/PROGRAM.md)
-   - [ATHLETE_PROFILE.md](/Users/palba/Projects/Clawdio/fitness/ATHLETE_PROFILE.md)
-   - [EXERCISE_LIBRARY.md](/Users/palba/Projects/Clawdio/fitness/EXERCISE_LIBRARY.md)
-   - [RULES.md](/Users/palba/Projects/Clawdio/fitness/RULES.md)
-   - [SESSION_QUEUE.md](/Users/palba/Projects/Clawdio/fitness/SESSION_QUEUE.md)
+   - [PROGRAM.md](/Users/palba/Projects/Personal/Clawdio/fitness/PROGRAM.md)
+   - [ATHLETE_PROFILE.md](/Users/palba/Projects/Personal/Clawdio/fitness/ATHLETE_PROFILE.md)
+   - [EXERCISE_LIBRARY.md](/Users/palba/Projects/Personal/Clawdio/fitness/EXERCISE_LIBRARY.md)
+   - [RULES.md](/Users/palba/Projects/Personal/Clawdio/fitness/RULES.md)
+   - [SESSION_QUEUE.md](/Users/palba/Projects/Personal/Clawdio/fitness/SESSION_QUEUE.md)
 2. Queue rolls forward through `M1` to `M4`.
 3. `O5` is optional and can be started explicitly.
 4. Dumbbells default to `each`.

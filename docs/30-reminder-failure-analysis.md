@@ -42,7 +42,7 @@ Why did scheduled WhatsApp reports/digests work while one-shot reminders like "r
 3. Invalid time inputs now return structured `invalid_time` errors instead of tracebacks.
 4. Tests added for relative create and invalid-time error handling.
 5. Added scheduler adapter guard:
-6. [ops/scripts/reminder_scheduler_adapter.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_scheduler_adapter.py)
+6. [ops/scripts/reminder_scheduler_adapter.py](/Users/palba/Projects/Personal/Clawdio/ops/scripts/reminder_scheduler_adapter.py)
 7. Main-session due jobs are rejected if payload kind is not `systemEvent`.
 
 ## Prevention checklist for the new architecture

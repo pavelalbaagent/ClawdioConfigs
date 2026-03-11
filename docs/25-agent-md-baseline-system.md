@@ -22,10 +22,10 @@ Start every agent workspace with the same strong, low-token continuity system.
 
 ## Source of Truth
 
-1. Templates: [baselines/agent_md/](/Users/palba/Projects/Clawdio/baselines/agent_md)
-2. Validation schema: [config/agent_md_baseline.yaml](/Users/palba/Projects/Clawdio/config/agent_md_baseline.yaml)
-3. Bootstrap script: [scripts/bootstrap_agent_md.py](/Users/palba/Projects/Clawdio/scripts/bootstrap_agent_md.py)
-4. Validation script: [scripts/validate_agent_md.py](/Users/palba/Projects/Clawdio/scripts/validate_agent_md.py)
+1. Templates: [baselines/agent_md/](/Users/palba/Projects/Personal/Clawdio/baselines/agent_md)
+2. Validation schema: [config/agent_md_baseline.yaml](/Users/palba/Projects/Personal/Clawdio/config/agent_md_baseline.yaml)
+3. Bootstrap script: [scripts/bootstrap_agent_md.py](/Users/palba/Projects/Personal/Clawdio/scripts/bootstrap_agent_md.py)
+4. Validation script: [scripts/validate_agent_md.py](/Users/palba/Projects/Personal/Clawdio/scripts/validate_agent_md.py)
 
 ## Lifecycle Rules
 

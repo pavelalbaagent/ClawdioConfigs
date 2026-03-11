@@ -21,7 +21,7 @@ Last updated: 2026-03-05
 1. Historical export name: `Workout_v5_efficiency_2benchdays.xlsx`
 2. Historical tab: `Proposed_v5_eff`
 3. Historical exports under `output/spreadsheet/` are no longer tracked as source-of-truth artifacts.
-4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
+4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Personal/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
 
 ## Target weekly volume (v5)
 

@@ -8,7 +8,7 @@ Keep external skills as profile-driven add-ons so they can be enabled/disabled w
 
 ## Config Source
 
-- [config/addons.yaml](/Users/palba/Projects/Clawdio/config/addons.yaml)
+- [config/addons.yaml](/Users/palba/Projects/Personal/Clawdio/config/addons.yaml)
 
 Structure:
 

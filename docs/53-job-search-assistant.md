@@ -20,14 +20,14 @@ This module is not for:
 
 ## Files
 
-1. Runtime script: [job_search_assistant.py](/Users/palba/Projects/Clawdio/scripts/job_search_assistant.py)
-2. Module config: [job_search.yaml](/Users/palba/Projects/Clawdio/config/job_search.yaml)
+1. Runtime script: [job_search_assistant.py](/Users/palba/Projects/Personal/Clawdio/scripts/job_search_assistant.py)
+2. Module config: [job_search.yaml](/Users/palba/Projects/Personal/Clawdio/config/job_search.yaml)
 3. Latest daily status snapshot: `data/job-search-daily-summary.json`
-4. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Clawdio/scripts/research_flow_runtime.py)
-5. VPS report service: [openclaw-job-search-report.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-job-search-report.service)
-6. VPS report timer: [openclaw-job-search-report.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-job-search-report.timer)
-7. Discovery worker: [job_posting_discovery.py](/Users/palba/Projects/Clawdio/scripts/job_posting_discovery.py)
-8. Discovery runbook: [61-job-posting-discovery.md](/Users/palba/Projects/Clawdio/docs/61-job-posting-discovery.md)
+4. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/research_flow_runtime.py)
+5. VPS report service: [openclaw-job-search-report.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-job-search-report.service)
+6. VPS report timer: [openclaw-job-search-report.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-job-search-report.timer)
+7. Discovery worker: [job_posting_discovery.py](/Users/palba/Projects/Personal/Clawdio/scripts/job_posting_discovery.py)
+8. Discovery runbook: [61-job-posting-discovery.md](/Users/palba/Projects/Personal/Clawdio/docs/61-job-posting-discovery.md)
 
 ## Safety Model
 

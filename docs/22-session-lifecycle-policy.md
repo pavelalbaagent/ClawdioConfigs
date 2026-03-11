@@ -4,7 +4,7 @@ Last updated: 2026-03-02
 
 ## Control File
 
-Session behavior is defined in [config/session_policy.yaml](/Users/palba/Projects/Clawdio/config/session_policy.yaml).
+Session behavior is defined in [config/session_policy.yaml](/Users/palba/Projects/Personal/Clawdio/config/session_policy.yaml).
 
 ## Core Rules
 

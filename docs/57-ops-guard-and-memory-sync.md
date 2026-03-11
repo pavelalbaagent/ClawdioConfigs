@@ -15,15 +15,15 @@ Two supporting processes do that:
 
 Main file:
 
-1. [memory_sync_runner.py](/Users/palba/Projects/Clawdio/scripts/memory_sync_runner.py)
+1. [memory_sync_runner.py](/Users/palba/Projects/Personal/Clawdio/scripts/memory_sync_runner.py)
 
 Purpose:
 
 1. run the `knowledge_librarian` consolidation step for the latest bounded review outputs
 2. update shared governance memory files:
-   - [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md)
-   - [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md)
-3. run [memory_index_sync.py](/Users/palba/Projects/Clawdio/scripts/memory_index_sync.py)
+   - [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_DIRECTIVES.md)
+   - [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_FINDINGS.md)
+3. run [memory_index_sync.py](/Users/palba/Projects/Personal/Clawdio/scripts/memory_index_sync.py)
 4. persist a dashboard-readable snapshot to `data/memory-sync-status.json`
 5. persist consolidation status to `data/knowledge-librarian-status.json`
 6. serialize concurrent sync attempts so timer-driven and manual runs do not collide at the SQLite layer
@@ -38,7 +38,7 @@ python3 scripts/memory_sync_runner.py --env-file secrets/openclaw.env --json
 
 Main file:
 
-1. [ops_guard_review.py](/Users/palba/Projects/Clawdio/scripts/ops_guard_review.py)
+1. [ops_guard_review.py](/Users/palba/Projects/Personal/Clawdio/scripts/ops_guard_review.py)
 
 Supported modes:
 
@@ -83,8 +83,8 @@ The review loop currently checks:
 
 Outputs:
 
-1. shared directives in [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Clawdio/memory/SHARED_DIRECTIVES.md)
-2. recent shared findings in [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Clawdio/memory/SHARED_FINDINGS.md)
+1. shared directives in [memory/SHARED_DIRECTIVES.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_DIRECTIVES.md)
+2. recent shared findings in [memory/SHARED_FINDINGS.md](/Users/palba/Projects/Personal/Clawdio/memory/SHARED_FINDINGS.md)
 3. machine-readable consolidation status in `data/knowledge-librarian-status.json`
 
 Promotion rule:
@@ -97,12 +97,12 @@ Promotion rule:
 
 Systemd units:
 
-1. [openclaw-memory-sync.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-memory-sync.service)
-2. [openclaw-memory-sync.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-memory-sync.timer)
-3. [openclaw-ops-guard-review.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ops-guard-review.service)
-4. [openclaw-ops-guard-review.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ops-guard-review.timer)
-5. [openclaw-ops-guard-architecture-review.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ops-guard-architecture-review.service)
-6. [openclaw-ops-guard-architecture-review.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ops-guard-architecture-review.timer)
+1. [openclaw-memory-sync.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-memory-sync.service)
+2. [openclaw-memory-sync.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-memory-sync.timer)
+3. [openclaw-ops-guard-review.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ops-guard-review.service)
+4. [openclaw-ops-guard-review.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ops-guard-review.timer)
+5. [openclaw-ops-guard-architecture-review.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ops-guard-architecture-review.service)
+6. [openclaw-ops-guard-architecture-review.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ops-guard-architecture-review.timer)
 
 ## Design rule
 

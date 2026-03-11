@@ -6,12 +6,12 @@ Use one canonical inbound-event shape across Slack, Telegram, WhatsApp, email, a
 
 ## Canonical schema
 
-1. Schema file: [canonical-event.schema.json](/Users/palba/Projects/Clawdio/contracts/canonical-event.schema.json)
+1. Schema file: [canonical-event.schema.json](/Users/palba/Projects/Personal/Clawdio/contracts/canonical-event.schema.json)
 2. Required fields: `platform`, `channel_id`, `user_id`, `message_id`, `text`, `ts_utc`.
 
 ## Normalization helper
 
-1. Script: [normalize_event.py](/Users/palba/Projects/Clawdio/scripts/normalize_event.py)
+1. Script: [normalize_event.py](/Users/palba/Projects/Personal/Clawdio/scripts/normalize_event.py)
 2. Converts raw payloads into canonical format.
 3. Supports `slack`, `telegram`, `whatsapp`, `email`, and `web`.
 

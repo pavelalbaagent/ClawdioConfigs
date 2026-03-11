@@ -2,12 +2,12 @@
 
 ## Included checks
 
-1. Config validator: [validate_configs.py](/Users/palba/Projects/Clawdio/scripts/validate_configs.py)
-2. Secret scanner: [scan_secrets.py](/Users/palba/Projects/Clawdio/scripts/scan_secrets.py)
+1. Config validator: [validate_configs.py](/Users/palba/Projects/Personal/Clawdio/scripts/validate_configs.py)
+2. Secret scanner: [scan_secrets.py](/Users/palba/Projects/Personal/Clawdio/scripts/scan_secrets.py)
 
 ## Pre-commit hook
 
-1. Hook path: [.githooks/pre-commit](/Users/palba/Projects/Clawdio/.githooks/pre-commit)
+1. Hook path: [.githooks/pre-commit](/Users/palba/Projects/Personal/Clawdio/.githooks/pre-commit)
 2. Enable once:
 
 ```bash

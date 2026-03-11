@@ -19,7 +19,7 @@ The adapter is intentionally thin, but it is no longer command-only:
 
 Main file:
 
-1. [telegram_adapter.py](/Users/palba/Projects/Clawdio/scripts/telegram_adapter.py)
+1. [telegram_adapter.py](/Users/palba/Projects/Personal/Clawdio/scripts/telegram_adapter.py)
 
 Current responsibilities:
 
@@ -117,7 +117,7 @@ Current behavior:
 
 ## Telegram Surface Binding
 
-Bindings live in [channels.yaml](/Users/palba/Projects/Clawdio/config/channels.yaml) under `channels.telegram.chat_bindings`.
+Bindings live in [channels.yaml](/Users/palba/Projects/Personal/Clawdio/config/channels.yaml) under `channels.telegram.chat_bindings`.
 
 Current planned surfaces:
 
@@ -141,7 +141,7 @@ Optional env vars:
    - VPS target: `/var/lib/openclaw/telegram-adapter-state.json`
    - includes update offset, reminder reply links, compatibility focus state if used, and morning-briefing delivery metadata
 2. Reminder state:
-   - config-driven via [reminders.yaml](/Users/palba/Projects/Clawdio/config/reminders.yaml)
+   - config-driven via [reminders.yaml](/Users/palba/Projects/Personal/Clawdio/config/reminders.yaml)
    - VPS target: `/var/lib/openclaw/reminders-state.json`
 3. Agent runtime activity:
    - local default: `data/agent-runtime-state.json`
@@ -166,7 +166,7 @@ python3 scripts/telegram_adapter.py --env-file secrets/openclaw.env
 
 User-mode systemd unit:
 
-1. [openclaw-telegram-adapter.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-telegram-adapter.service)
+1. [openclaw-telegram-adapter.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-telegram-adapter.service)
 
 Planned activation:
 

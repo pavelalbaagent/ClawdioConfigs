@@ -25,8 +25,8 @@ It is not a LinkedIn session bot.
 
 ## Files
 
-1. Runtime: [job_posting_discovery.py](/Users/palba/Projects/Clawdio/scripts/job_posting_discovery.py)
-2. Config: [job_search.yaml](/Users/palba/Projects/Clawdio/config/job_search.yaml)
+1. Runtime: [job_posting_discovery.py](/Users/palba/Projects/Personal/Clawdio/scripts/job_posting_discovery.py)
+2. Config: [job_search.yaml](/Users/palba/Projects/Personal/Clawdio/config/job_search.yaml)
 3. Status snapshot: `data/job-search-discovery-status.json`
 4. Dedupe state: `data/job-search-discovery-state.json`
 5. Inbox target: `data/job-search/inbox`

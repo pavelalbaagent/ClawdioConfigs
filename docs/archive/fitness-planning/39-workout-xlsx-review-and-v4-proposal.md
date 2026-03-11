@@ -49,7 +49,7 @@ An original comparison workbook export was generated during this iteration with 
 1. Historical export name: `Workout_v4_proposed.xlsx`
 2. Historical tab: `Proposed_v4`
 3. Historical exports under `output/spreadsheet/` are no longer tracked as source-of-truth artifacts.
-4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
+4. The current reference workbook is [Workout_plan_reference.xlsx](/Users/palba/Projects/Personal/Clawdio/fitness/reference/Workout_plan_reference.xlsx).
 
 This tab includes:
 

@@ -8,7 +8,7 @@ This playbook keeps routing deterministic and cheap by default, while preserving
 
 ## Agent Defaults
 
-Policy source: [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml) (`routing_overrides.agent_task_matrix`).
+Policy source: [config/agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml) (`routing_overrides.agent_task_matrix`).
 
 1. `coordinator`: `L1` for triage/planning, `L2` for ambiguity, `L3` for architecture decisions.
 2. `researcher`: `L1` for collection, `L2` for synthesis, `L3` only for high-impact recommendations.
@@ -17,7 +17,7 @@ Policy source: [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.
 
 ## Situation-Based Routing
 
-Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.yaml) (`routing.decision_matrix`).
+Policy source: [config/models.yaml](/Users/palba/Projects/Personal/Clawdio/config/models.yaml) (`routing.decision_matrix`).
 
 1. Deterministic workflow tasks -> `L0_no_model`.
 2. Quick transformations and short summaries -> `L1_low_cost`.
@@ -36,7 +36,7 @@ Policy source: [config/models.yaml](/Users/palba/Projects/Clawdio/config/models.
 
 ## Agent-Specific Chat Bias
 
-Chat runtimes now honor per-agent provider preferences from [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml) (`agents.*.chat_routing`).
+Chat runtimes now honor per-agent provider preferences from [config/agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml) (`agents.*.chat_routing`).
 
 Recommended reading of the current policy:
 
@@ -80,7 +80,7 @@ Treat Anthropic as reserve capacity:
 
 ## Operating Modes
 
-Switch mode by editing `routing_overrides.active_mode` in [config/agents.yaml](/Users/palba/Projects/Clawdio/config/agents.yaml):
+Switch mode by editing `routing_overrides.active_mode` in [config/agents.yaml](/Users/palba/Projects/Personal/Clawdio/config/agents.yaml):
 
 1. `strict_cost`: for high-volume low-risk periods.
 2. `balanced_default`: daily default.
@@ -122,9 +122,9 @@ These route targets are controlled by this repo configuration, not inferred from
 
 Use:
 
-1. [provider_smoke_check.py](/Users/palba/Projects/Clawdio/scripts/provider_smoke_check.py)
-2. [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Clawdio/docs/51-provider-smoke-checks.md)
-3. [model_route_decider.py](/Users/palba/Projects/Clawdio/scripts/model_route_decider.py)
+1. [provider_smoke_check.py](/Users/palba/Projects/Personal/Clawdio/scripts/provider_smoke_check.py)
+2. [docs/51-provider-smoke-checks.md](/Users/palba/Projects/Personal/Clawdio/docs/51-provider-smoke-checks.md)
+3. [model_route_decider.py](/Users/palba/Projects/Personal/Clawdio/scripts/model_route_decider.py)
 
 Examples:
 

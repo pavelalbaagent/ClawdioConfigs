@@ -2,6 +2,8 @@
 
 Last updated: 2026-03-03
 
+Historical note: `YTIngest` is archived and superseded. Keep this runbook only as a record of the old transcript-ingestion flow; `Clawdio` should not treat `YTIngest` as an active dependency.
+
 ## Goal
 
 Enable deterministic transcript ingest on VPS with clear fallbacks, minimal token cost, and easy on/off control.
@@ -25,7 +27,7 @@ npm install
 ```
 
 Scope change now in code:
-- [auth.js](/Users/palba/Projects/YTIngest/src/auth.js):37 uses `https://www.googleapis.com/auth/youtube.force-ssl`.
+- archived `YTIngest` file `src/auth.js` uses `https://www.googleapis.com/auth/youtube.force-ssl`.
 
 ## 2) Install transcript prerequisites
 
@@ -49,8 +51,7 @@ ffmpeg -version | head -n 1
 
 ## 3) Configure `.env`
 
-Use or update:
-- [YTIngest .env.example](/Users/palba/Projects/YTIngest/.env.example)
+Use or update the archived `YTIngest` `.env.example`.
 
 Minimum transcript settings:
 

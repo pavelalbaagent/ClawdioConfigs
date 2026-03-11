@@ -14,7 +14,7 @@ Separate three states that were previously mixed together:
 
 Main file:
 
-1. [provider_smoke_check.py](/Users/palba/Projects/Clawdio/scripts/provider_smoke_check.py)
+1. [provider_smoke_check.py](/Users/palba/Projects/Personal/Clawdio/scripts/provider_smoke_check.py)
 
 Snapshot output:
 

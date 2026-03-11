@@ -75,14 +75,14 @@ Official source:
 
 ## Contract source
 
-1. [contracts/gmail/inbox-processing-rules.yaml](/Users/palba/Projects/Clawdio/contracts/gmail/inbox-processing-rules.yaml)
+1. [contracts/gmail/inbox-processing-rules.yaml](/Users/palba/Projects/Personal/Clawdio/contracts/gmail/inbox-processing-rules.yaml)
 
 ## Current runtime
 
 The current runtime exists and is intentionally deterministic-first:
 
-1. [scripts/gmail_inbox_processor.py](/Users/palba/Projects/Clawdio/scripts/gmail_inbox_processor.py)
-2. [contracts/gmail/sqlite_schema.sql](/Users/palba/Projects/Clawdio/contracts/gmail/sqlite_schema.sql)
+1. [scripts/gmail_inbox_processor.py](/Users/palba/Projects/Personal/Clawdio/scripts/gmail_inbox_processor.py)
+2. [contracts/gmail/sqlite_schema.sql](/Users/palba/Projects/Personal/Clawdio/contracts/gmail/sqlite_schema.sql)
 
 Behavior:
 
@@ -142,5 +142,5 @@ SQLite state location defaults to:
 
 User-mode systemd templates now exist for scheduled batch runs:
 
-1. [openclaw-gmail-processor.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-gmail-processor.service)
-2. [openclaw-gmail-processor.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-gmail-processor.timer)
+1. [openclaw-gmail-processor.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-gmail-processor.service)
+2. [openclaw-gmail-processor.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-gmail-processor.timer)

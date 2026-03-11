@@ -1,10 +1,12 @@
-# AIToolsDB Knowledge Source
+# AI Tools Knowledge Source
 
 Last updated: 2026-03-10
 
 ## Goal
 
-Use the local `AIToolsDB` corpus as a read-only knowledge source for `assistant`, `researcher`, and `builder`.
+Use the local AI-tools corpus as a read-only knowledge source for `assistant`, `researcher`, and `builder`.
+
+The source id remains `ai_tools_db` for compatibility, but the canonical local corpus now lives in `KnowledgeCorpus`.
 
 This is not a second memory system. It is a bounded local retrieval source for AI-tools and model ecosystem questions.
 
@@ -16,21 +18,23 @@ This is not a second memory system. It is a bounded local retrieval source for A
 
 ## Current config
 
-1. [knowledge_sources.yaml](/Users/palba/Projects/Clawdio/config/knowledge_sources.yaml)
+1. [knowledge_sources.yaml](/Users/palba/Projects/Personal/Clawdio/config/knowledge_sources.yaml)
 
 Default source:
 
 1. `ai_tools_db`
 2. root candidates:
-   - `/opt/clawdio/external/AIToolsDB/corpus/ai_tools`
-   - `/opt/aitoolsdb/corpus/ai_tools`
-   - `/Users/palba/Projects/AIToolsDB/corpus/ai_tools`
+   - `/opt/clawdio/external/KnowledgeCorpus/data/raw`
+   - `/opt/clawdio/external/AIToolsDB/corpus/ai_tools` (legacy fallback)
+   - `/opt/knowledgecorpus/data/raw`
+   - `/opt/aitoolsdb/corpus/ai_tools` (legacy fallback)
+   - `../../KnowledgeCorpus/data/raw` (local dev path relative to `config/knowledge_sources.yaml`)
 
 ## Current runtime
 
-1. Search helper: [knowledge_source_search.py](/Users/palba/Projects/Clawdio/scripts/knowledge_source_search.py)
-2. Daily digest: [ai_tools_digest.py](/Users/palba/Projects/Clawdio/scripts/ai_tools_digest.py)
-3. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Clawdio/scripts/research_flow_runtime.py)
+1. Search helper: [knowledge_source_search.py](/Users/palba/Projects/Personal/Clawdio/scripts/knowledge_source_search.py)
+2. Daily digest: [ai_tools_digest.py](/Users/palba/Projects/Personal/Clawdio/scripts/ai_tools_digest.py)
+3. ResearchFlow orchestrator: [research_flow_runtime.py](/Users/palba/Projects/Personal/Clawdio/scripts/research_flow_runtime.py)
 
 ## Agent usage
 
@@ -92,13 +96,17 @@ Research Telegram surface:
 
 Systemd units:
 
-1. [openclaw-ai-tools-digest.service](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ai-tools-digest.service)
-2. [openclaw-ai-tools-digest.timer](/Users/palba/Projects/Clawdio/ops/systemd/openclaw-ai-tools-digest.timer)
+1. [openclaw-ai-tools-digest.service](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ai-tools-digest.service)
+2. [openclaw-ai-tools-digest.timer](/Users/palba/Projects/Personal/Clawdio/ops/systemd/openclaw-ai-tools-digest.timer)
 
 ## Deployment note
 
-To use this on the VPS, sync the corpus to:
+Preferred VPS sync target:
 
 1. `/opt/clawdio/external/AIToolsDB/corpus/ai_tools`
 
-That keeps the OpenClaw app repo separate from the larger research corpus while still allowing local retrieval.
+Canonical target going forward:
+
+1. `/opt/clawdio/external/KnowledgeCorpus/data/raw`
+
+The legacy `AIToolsDB` path is still listed as a fallback so the runtime does not break during deployment cleanup.

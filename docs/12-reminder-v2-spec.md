@@ -52,9 +52,9 @@ Replace reminder-history logs with a deterministic reminder workflow.
 
 A deterministic state-machine helper is provided at:
 
-1. [ops/scripts/reminder_state_machine.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_state_machine.py)
+1. [ops/scripts/reminder_state_machine.py](/Users/palba/Projects/Personal/Clawdio/ops/scripts/reminder_state_machine.py)
 2. Scheduler adapter guard (enforces `systemEvent` for main-session due jobs):
-3. [ops/scripts/reminder_scheduler_adapter.py](/Users/palba/Projects/Clawdio/ops/scripts/reminder_scheduler_adapter.py)
+3. [ops/scripts/reminder_scheduler_adapter.py](/Users/palba/Projects/Personal/Clawdio/ops/scripts/reminder_scheduler_adapter.py)
 
 ## Guard usage
 

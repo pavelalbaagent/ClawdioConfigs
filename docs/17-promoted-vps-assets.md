@@ -7,11 +7,11 @@ Keep only the recovered VPS assets that still add unique value after promotion a
 ## Canonical targets
 
 1. Recovered scripts/systemd templates:
-[ops/recovered/vps-20260302](/Users/palba/Projects/Clawdio/ops/recovered/vps-20260302)
+[ops/recovered/vps-20260302](/Users/palba/Projects/Personal/Clawdio/ops/recovered/vps-20260302)
 2. Derived historical config reference:
-[openclaw-v1-derived.yaml](/Users/palba/Projects/Clawdio/config/recovered/openclaw-v1-derived.yaml)
+[openclaw-v1-derived.yaml](/Users/palba/Projects/Personal/Clawdio/config/recovered/openclaw-v1-derived.yaml)
 3. Watchlist seed config:
-[config/watchlist.yaml](/Users/palba/Projects/Clawdio/config/watchlist.yaml)
+[config/watchlist.yaml](/Users/palba/Projects/Personal/Clawdio/config/watchlist.yaml)
 
 ## Notes
 
